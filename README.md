@@ -105,7 +105,9 @@ Structure: `src/domain` (pure logic: connection presentation, freshness, debrief
 `src/styles/tokens.css`. See [`docs/ui/design-system.md`](docs/ui/design-system.md) and the
 screenshots in [`docs/screenshots/s1-03/`](docs/screenshots/s1-03/).
 
-Linux smoke test harness (Xvfb, not a Windows test): `scripts/ui-smoke-linux.sh`.
+Linux smoke test harnesses (Xvfb, not a Windows test): `scripts/ui-smoke-linux.sh` (pages/states) and
+`scripts/lifecycle-smoke-linux.sh` (full recorded flight with close/reopen/resume/complete, ~17 min).
+Screenshots: [`docs/screenshots/s1-03/`](docs/screenshots/s1-03/), [`docs/screenshots/s1-04/`](docs/screenshots/s1-04/).
 
 ## Flight lifecycle & local persistence (S1-04)
 

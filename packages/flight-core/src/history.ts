@@ -109,9 +109,12 @@ export function phaseSpans(events: RecordedFlightEvent[], endedAtUtc: string | n
     if (!changes) continue;
     const last = spans[spans.length - 1];
     if (last && last.phase === e.toPhase) continue;
-    if (last) last.toUtc = e.occurredAtUtc;
+    // An interruption starts at the last recorded telemetry (`since`), not when it was noticed.
+    const since = e.kind === "flight.interrupted" && typeof e.details.since === "string" ? e.details.since : null;
+    const at = since && (!last || since >= last.fromUtc) ? since : e.occurredAtUtc;
+    if (last) last.toUtc = at;
     if (e.toPhase === "COMPLETED") break;
-    spans.push({ phase: e.toPhase, fromUtc: e.occurredAtUtc, toUtc: null });
+    spans.push({ phase: e.toPhase, fromUtc: at, toUtc: null });
   }
   const last = spans[spans.length - 1];
   if (last && last.toUtc === null && endedAtUtc) last.toUtc = endedAtUtc;

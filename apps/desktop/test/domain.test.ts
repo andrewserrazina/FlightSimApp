@@ -90,7 +90,7 @@ describe("buildDebrief", () => {
       { seq: 1, kind: "flight.started", occurredAtUtc: "2026-10-10T21:00:00.000Z", source: "user", fromPhase: null, toPhase: "NOT_STARTED", details: {} },
       { seq: 2, kind: "phase.changed", occurredAtUtc: "2026-10-10T21:00:01.000Z", source: "detected", fromPhase: "NOT_STARTED", toPhase: "PREPARING", details: { reason: "initial" } },
       { seq: 3, kind: "phase.changed", occurredAtUtc: "2026-10-10T21:02:03.000Z", source: "detected", fromPhase: "PREPARING", toPhase: "CLIMB", details: {} },
-      { seq: 4, kind: "flight.interrupted", occurredAtUtc: "2026-10-10T21:10:00.000Z", source: "system", fromPhase: "CLIMB", toPhase: "INTERRUPTED", details: { cause: "app_closed" } },
+      { seq: 4, kind: "flight.interrupted", occurredAtUtc: "2026-10-10T21:10:00.000Z", source: "system", fromPhase: "CLIMB", toPhase: "INTERRUPTED", details: { cause: "app_closed", since: "2026-10-10T21:09:50.000Z" } },
       { seq: 5, kind: "flight.resumed", occurredAtUtc: "2026-10-10T21:15:00.000Z", source: "user", fromPhase: "INTERRUPTED", toPhase: "CLIMB", details: {} },
       { seq: 6, kind: "flight.completed", occurredAtUtc: "2026-10-10T21:30:00.000Z", source: "user", fromPhase: "CLIMB", toPhase: "COMPLETED", details: { completion: "arrival_confirmed" } },
     ],
@@ -132,8 +132,8 @@ describe("buildDebrief", () => {
   it("derives observed phases, interruptions and availability from the record", () => {
     expect(observedPhases(detail).map((p) => [p.label, p.durationS])).toEqual([
       ["Preparing", 122],
-      ["Climb", 477],
-      ["Interrupted", 300],
+      ["Climb", 467], // ends at the last recorded telemetry, not when the restart noticed it
+      ["Interrupted", 310],
       ["Climb", 900],
     ]);
     expect(interruptionLines(detail)[0]).toMatchObject({ cause: "App closed", resolution: "Resumed by pilot", durationS: 312 });

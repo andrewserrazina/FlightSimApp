@@ -150,7 +150,7 @@ function Timeline({ detail }: { detail: FlightDetail }) {
         <h3 id="events-h" className="subsection__title">
           Operational timeline
         </h3>
-        <div className="table-wrap table-wrap--scroll" tabIndex={0} aria-label="Flight events">
+        <div className="table-wrap">
           <table className="table table--compact">
             <thead>
               <tr>
