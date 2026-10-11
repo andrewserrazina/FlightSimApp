@@ -48,9 +48,9 @@ public enum SimConnectSdkStatus
 {
     /// <summary>Mock adapter: no SDK involved.</summary>
     NotApplicable,
-    /// <summary>Bridge was compiled without the SDK; MSFS adapters report sdk_unavailable.</summary>
+    /// <summary>SimConnect.dll is not available to the bridge; MSFS adapters report sdk_unavailable.</summary>
     NotBuilt,
-    /// <summary>Compiled against the SDK but this integration has not been runtime-verified.</summary>
+    /// <summary>SimConnect.dll loaded, but this integration has not been runtime-verified.</summary>
     Unverified,
     Available,
 }

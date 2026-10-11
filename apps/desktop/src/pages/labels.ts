@@ -10,8 +10,8 @@ export const SIMULATOR_SHORT: Record<SimulatorId, string> = { mock: "Mock (demo)
 
 export const SDK_LABEL: Record<SimConnectSdkStatus, string> = {
   not_applicable: "Not applicable (mock adapter)",
-  not_built: "Not included in this build",
-  unverified: "Included, not runtime-verified",
+  not_built: "SimConnect.dll not found",
+  unverified: "SimConnect.dll loaded, not runtime-verified",
   available: "Available",
 };
 

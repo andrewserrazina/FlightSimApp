@@ -13,7 +13,7 @@
     "adapter": { "$ref": "common.schema.json#/$defs/simulator_id" },
     "connection_state": { "$ref": "common.schema.json#/$defs/connection_state_name" },
     "simconnect_sdk": {
-      "description": "not_applicable = mock adapter; not_built = bridge compiled without the MSFS SDK; unverified = compiled against the SDK but not runtime-verified in this build.",
+      "description": "not_applicable = mock adapter; not_built = SimConnect.dll not available to the bridge (MSFS adapters report sdk_unavailable); unverified = SimConnect.dll loaded but the integration is not runtime-verified.",
       "enum": ["not_applicable", "not_built", "unverified", "available"]
     },
     "last_frame_at": { "oneOf": [{ "$ref": "common.schema.json#/$defs/utc_timestamp" }, { "type": "null" }] },
