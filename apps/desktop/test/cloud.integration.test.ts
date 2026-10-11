@@ -156,4 +156,52 @@ describe("desktop auth + sync against the local Supabase stack", () => {
     expect(auth.getView().status).toBe("verification_required");
     expect(auth.getView().error).toBeTruthy();
   });
+
+  it("removes PKCE verifiers from secure storage once signed in (S1-06)", async () => {
+    const kc = new MemoryKeychain();
+    const auth = await authWith(kc);
+    const e3 = uniqueEmail("prune");
+    await auth.signUp(e3, password);
+    expect(Object.keys(JSON.parse(kc.value!)).some((k) => k.endsWith("-code-verifier"))).toBe(true);
+    await auth.verifyEmail(await mailedCode(e3, "verification"));
+    await settle();
+    expect(Object.keys(JSON.parse(kc.value!))).toEqual(["flightsim-auth"]);
+  });
+
+  it("refreshes an expired access token at startup; offline it keeps the stored session", async () => {
+    const kc = new MemoryKeychain();
+    const auth = await authWith(kc);
+    const e4 = uniqueEmail("expired");
+    await auth.signUp(e4, password);
+    await auth.verifyEmail(await mailedCode(e4, "verification"));
+    await settle();
+    const expire = () => {
+      const entry = JSON.parse(kc.value!) as Record<string, string>;
+      const sessionObj = JSON.parse(entry["flightsim-auth"]!) as { access_token: string; expires_at: number };
+      sessionObj.expires_at = Math.floor(Date.now() / 1000) - 120;
+      entry["flightsim-auth"] = JSON.stringify(sessionObj);
+      kc.value = JSON.stringify(entry);
+      return sessionObj.access_token;
+    };
+    // Offline first: an expired token with no network must not sign the user out or wipe the keychain.
+    expire();
+    const offline = new AuthService({ url: "http://127.0.0.1:59998", anonKey: ANON_KEY }, await createSecureSessionStorage(kc));
+    services.push(offline);
+    const started = Date.now();
+    await offline.init();
+    offline.client?.auth.stopAutoRefresh();
+    expect(Date.now() - started).toBeLessThan(10_000); // startup is not held hostage by retries
+    expect(offline.getView()).toMatchObject({ status: "signed_in", offline: true });
+    await settle();
+    expect(JSON.parse(kc.value!)["flightsim-auth"]).toBeTruthy();
+    // Online: the expired token is refreshed transparently.
+    const oldToken = expire();
+    const online = await authWith(kc);
+    await settle();
+    expect(online.getView().status).toBe("signed_in");
+    const refreshed = JSON.parse(JSON.parse(kc.value!)["flightsim-auth"]) as { access_token: string; expires_at: number };
+    expect(refreshed.access_token).not.toBe(oldToken);
+    expect(refreshed.expires_at).toBeGreaterThan(Date.now() / 1000);
+  }, 60_000);
 });
+

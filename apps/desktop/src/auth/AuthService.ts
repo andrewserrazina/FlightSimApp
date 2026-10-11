@@ -39,6 +39,9 @@ export function authErrorMessage(e: unknown): string {
   return "The account request failed. Try again.";
 }
 
+const STORAGE_KEY = "flightsim-auth";
+const INIT_TIMEOUT_MS = 6_000;
+
 const toUser = (s: Session | null) => (s?.user ? { id: s.user.id, email: s.user.email ?? "" } : null);
 
 /**
@@ -58,7 +61,7 @@ export class AuthService {
       ? createClient(config.url, config.anonKey, {
           auth: {
             storage: storage ?? undefined,
-            storageKey: "flightsim-auth",
+            storageKey: STORAGE_KEY,
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: false,
@@ -98,13 +101,43 @@ export class AuthService {
     let offline = false;
     try {
       // Reads the stored session; refreshes it if expired. Works offline with a still-valid token.
-      const { data, error } = await this.client.auth.getSession();
-      if (error && isAuthRetryableFetchError(error)) offline = true;
-      user = toUser(data.session);
+      // With an expired token and no network supabase-js keeps retrying for ~25 s; don't make the
+      // UI wait for that: show the stored account as signed in (offline) and let the background
+      // refresh settle it (a rejected refresh later surfaces as "Session expired").
+      const result = await Promise.race([this.client.auth.getSession(), new Promise<"timeout">((r) => setTimeout(() => r("timeout"), INIT_TIMEOUT_MS))]);
+      if (result === "timeout") {
+        user = await this.storedUser();
+        offline = true;
+      } else {
+        if (result.error && isAuthRetryableFetchError(result.error)) offline = true;
+        user = toUser(result.data.session);
+      }
     } catch (e) {
       offline = isAuthRetryableFetchError(e);
     }
     this.dispatch({ type: "initialized", user, persistent: this.storage?.persistent ?? false, offline });
+    await this.pruneVerifiers(); // entries saved by S1-05 builds still carry them
+  }
+
+  /**
+   * PKCE code verifiers are only needed to exchange an emailed *link* for a session. This app uses
+   * typed codes, so once a session exists they are dead weight in the keychain: remove them.
+   */
+  private async pruneVerifiers() {
+    if (this.view.status !== "signed_in") return;
+    await this.storage?.prune((key) => key.endsWith("-code-verifier")).catch(() => {});
+  }
+
+  /** Account of the stored session (id + email only), for offline startup. Never exposes tokens. */
+  private async storedUser(): Promise<{ id: string; email: string } | null> {
+    try {
+      const raw = await this.storage?.getItem(STORAGE_KEY);
+      const parsed = raw ? (JSON.parse(raw) as { user?: { id?: unknown; email?: unknown } } | null) : null;
+      const id = parsed?.user?.id;
+      return typeof id === "string" && id.length > 0 ? { id, email: typeof parsed?.user?.email === "string" ? parsed.user.email : "" } : null;
+    } catch {
+      return null;
+    }
   }
 
   private async run(fn: (c: SupabaseClient) => Promise<void>) {
@@ -112,6 +145,7 @@ export class AuthService {
     this.dispatch({ type: "busy" });
     try {
       await fn(this.client);
+      await this.pruneVerifiers();
     } catch (e) {
       if (isAuthRetryableFetchError(e)) this.dispatch({ type: "offline", offline: true });
       this.dispatch({ type: "failed", error: authErrorMessage(e) });

@@ -25,12 +25,29 @@ public sealed record RawMsfsSample(
 
 public sealed record SimConnectOpenInfo(string ApplicationName, string Version);
 
+public enum SimulatorStateKind
+{
+    /// <summary>"Sim" system event / state: Active=true while the user is in a flight, false in menus/loading.</summary>
+    InFlight,
+    /// <summary>"Pause" system event: Active=true while paused.</summary>
+    Paused,
+    /// <summary>"AircraftLoaded" system event; Detail = aircraft file name (no path).</summary>
+    AircraftLoaded,
+    /// <summary>The simulator rejected a SimVar; Detail names it. That value is reported as unavailable.</summary>
+    DatumRejected,
+    /// <summary>A data block had an unexpected size and was dropped (reported once per connection).</summary>
+    LayoutMismatch,
+}
+
+public sealed record SimulatorStateChange(SimulatorStateKind Kind, bool? Active, string? Detail);
+
 public interface ISimConnectCallbacks
 {
     void OnOpen(SimConnectOpenInfo info);
     void OnQuit();
     void OnSample(RawMsfsSample sample);
     void OnException(uint exceptionCode);
+    void OnSimulatorState(SimulatorStateChange change);
 }
 
 /// <summary>

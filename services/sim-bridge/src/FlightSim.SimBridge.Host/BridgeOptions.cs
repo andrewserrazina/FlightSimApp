@@ -2,17 +2,20 @@ using FlightSim.SimBridge.Contracts;
 
 namespace FlightSim.SimBridge.Host;
 
-internal sealed record BridgeOptions(SimulatorId Adapter, string PipeName, bool DevTokenFromEnv, bool MockNoFuel, int MockStartOffsetSeconds = 0)
+internal sealed record BridgeOptions(SimulatorId Adapter, string PipeName, bool DevTokenFromEnv, bool MockNoFuel, int MockStartOffsetSeconds = 0, int ProbeSeconds = 0, string? ProbeOut = null)
 {
     public const string DevTokenEnvVar = "FLIGHTSIM_BRIDGE_DEV_TOKEN";
 
     public const string Usage = """
         flightsim-sim-bridge --adapter <mock|msfs2020|msfs2024> --pipe-name <name> [--dev-token-from-env] [--mock-no-fuel] [--mock-start-offset-s <0-86400>]
+        flightsim-sim-bridge --adapter <mock|msfs2020|msfs2024> --probe <seconds 1-86400> [--probe-out <file.jsonl>]
 
           The per-session token is read from the FIRST LINE OF STDIN (the desktop shell writes it).
           The bridge exits when stdin closes, so it never outlives its parent.
           --dev-token-from-env  read the token from FLIGHTSIM_BRIDGE_DEV_TOKEN instead (manual testing only).
         On ready, one JSON line is written to stdout: {"event":"ready","pipe_name":"...","adapter":"..."}
+          --probe  simulator validation: no pipe, no token; records wire messages + raw SimConnect values
+                   and simulator state to a JSONL file for the given number of seconds, then exits.
         """;
 
     public static BridgeOptions Parse(IReadOnlyList<string> args)
@@ -21,6 +24,8 @@ internal sealed record BridgeOptions(SimulatorId Adapter, string PipeName, bool 
         string? pipe = null;
         bool devToken = false, noFuel = false;
         var offset = 0;
+        var probe = 0;
+        string? probeOut = null;
         for (var i = 0; i < args.Count; i++)
         {
             switch (args[i])
@@ -49,6 +54,16 @@ internal sealed record BridgeOptions(SimulatorId Adapter, string PipeName, bool 
                         throw new ArgumentException("--mock-start-offset-s must be an integer 0-86400.");
                     }
                     break;
+                case "--probe" when i + 1 < args.Count:
+                    if (!int.TryParse(args[++i], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out probe) || probe < 1 || probe > 86400)
+                    {
+                        throw new ArgumentException("--probe must be an integer number of seconds 1-86400.");
+                    }
+                    break;
+                case "--probe-out" when i + 1 < args.Count:
+                    probeOut = args[++i];
+                    if (string.IsNullOrWhiteSpace(probeOut)) throw new ArgumentException("--probe-out needs a file path.");
+                    break;
                 default:
                     throw new ArgumentException($"Unknown or incomplete argument '{args[i]}'.");
             }
@@ -59,6 +74,7 @@ internal sealed record BridgeOptions(SimulatorId Adapter, string PipeName, bool 
         {
             throw new ArgumentException("--pipe-name may contain only letters, digits, '-' and '_' (max 64).");
         }
-        return new BridgeOptions(adapter.Value, pipe, devToken, noFuel, offset);
+        if (probeOut is not null && probe == 0) throw new ArgumentException("--probe-out requires --probe.");
+        return new BridgeOptions(adapter.Value, pipe, devToken, noFuel, offset, probe, probeOut);
     }
 }

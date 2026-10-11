@@ -25,6 +25,13 @@ using var loggers = LoggerFactory.Create(b => b
     .SetMinimumLevel(LogLevel.Information));
 var log = loggers.CreateLogger("bridge");
 
+if (options.ProbeSeconds > 0)
+{
+    using var probeStop = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; probeStop.Cancel(); };
+    return await Probe.RunAsync(options, loggers, probeStop.Token).ConfigureAwait(false);
+}
+
 BridgeToken token;
 try
 {

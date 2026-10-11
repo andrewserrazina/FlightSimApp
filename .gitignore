@@ -36,3 +36,4 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 ui-smoke-out/
+apps/desktop/src-tauri/tauri.upgrade-test.conf.json

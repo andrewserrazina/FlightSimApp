@@ -14,6 +14,17 @@ public class HostOptionsTests
     }
 
     [Fact]
+    public void Parses_probe_mode()
+    {
+        var o = BridgeOptions.Parse(["--adapter", "msfs2020", "--probe", "600", "--probe-out", "probe.jsonl"]);
+        Assert.Equal((600, "probe.jsonl"), (o.ProbeSeconds, o.ProbeOut));
+        Assert.Equal(0, BridgeOptions.Parse(["--adapter", "mock"]).ProbeSeconds);
+        Assert.Throws<ArgumentException>(() => BridgeOptions.Parse(["--adapter", "mock", "--probe", "0"]));
+        Assert.Throws<ArgumentException>(() => BridgeOptions.Parse(["--adapter", "mock", "--probe", "86401"]));
+        Assert.Throws<ArgumentException>(() => BridgeOptions.Parse(["--adapter", "mock", "--probe-out", "x.jsonl"]));
+    }
+
+    [Fact]
     public void Parses_mock_start_offset()
     {
         Assert.Equal(420, BridgeOptions.Parse(["--adapter", "mock", "--mock-start-offset-s", "420"]).MockStartOffsetSeconds);

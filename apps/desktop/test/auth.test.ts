@@ -192,3 +192,92 @@ describe("secure session storage ordering", () => {
     expect(stored).toBeNull();
   });
 });
+
+describe("secure session storage hardening (S1-06)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const backendWith = (value: string | null, over: Partial<SecureBackend> = {}): SecureBackend & { value: string | null } => {
+    const b: SecureBackend & { value: string | null } = {
+      value,
+      available: async () => true,
+      get: async (): Promise<string | null> => b.value,
+      set: async (v: string) => void (b.value = v),
+      remove: async () => void (b.value = null),
+      ...over,
+    };
+    return b;
+  };
+
+  it.each([
+    ["truncated JSON", '{"flightsim-auth":"{\\"access_tok'],
+    ["the 25-byte null value", '{"flightsim-auth":"null"}'.slice(0, 24)],
+    ["JSON null", "null"],
+    ["array", '["flightsim-auth"]'],
+    ["number", "25"],
+    ["nested object", '{"flightsim-auth":{"access_token":"x"}}'],
+    ["mixed value types", '{"flightsim-auth":"ok","n":1}'],
+    ["empty string", ""],
+  ])("ignores a malformed entry (%s) as 'no session' and never surfaces it", async (_label, raw) => {
+    const s = await createSecureSessionStorage(backendWith(raw));
+    expect(s.persistent).toBe(true);
+    expect(await s.getItem("flightsim-auth")).toBeNull();
+  });
+
+  it("accepts a well-formed entry, including the literal string 'null' that supabase-js treats as no session", async () => {
+    const s = await createSecureSessionStorage(backendWith('{"flightsim-auth":"null"}'));
+    expect(await s.getItem("flightsim-auth")).toBe("null");
+  });
+
+  it("a malformed entry is replaced by the next write", async () => {
+    const b = backendWith("{garbage");
+    const s = await createSecureSessionStorage(b);
+    await s.setItem("flightsim-auth", "fresh");
+    expect(JSON.parse(b.value!)).toEqual({ "flightsim-auth": "fresh" });
+  });
+
+  it("a read failure at startup falls back to memory-only without throwing", async () => {
+    const s = await createSecureSessionStorage(backendWith(null, { get: async () => Promise.reject(new Error("access denied")) }));
+    expect(s.persistent).toBe(false);
+    await s.setItem("k", "v");
+    expect(await s.getItem("k")).toBe("v");
+  });
+
+  it("recovers on the next launch once secure storage is accessible again", async () => {
+    const b = backendWith(null);
+    let ok = false;
+    b.available = async () => ok;
+    const first = await createSecureSessionStorage(b);
+    expect(first.persistent).toBe(false);
+    await first.setItem("flightsim-auth", "memory-only");
+    expect(b.value).toBeNull(); // nothing written while unavailable
+    ok = true;
+    const second = await createSecureSessionStorage(b);
+    expect(second.persistent).toBe(true);
+    await second.setItem("flightsim-auth", "persisted");
+    expect(JSON.parse(b.value!)).toEqual({ "flightsim-auth": "persisted" });
+  });
+
+  it("replaces a stale session completely", async () => {
+    const b = backendWith('{"flightsim-auth":"old-session","flightsim-auth-code-verifier":"v"}');
+    const s = await createSecureSessionStorage(b);
+    await s.setItem("flightsim-auth", "new-session");
+    await s.prune((k) => k.endsWith("-code-verifier"));
+    expect(JSON.parse(b.value!)).toEqual({ "flightsim-auth": "new-session" });
+  });
+
+  it("prune removes only matching keys in one write and is a no-op when nothing matches", async () => {
+    let writes = 0;
+    const b = backendWith('{"flightsim-auth":"s","a-code-verifier":"1","flightsim-auth-flows-code-verifier":"[]"}');
+    const set = b.set;
+    b.set = async (v) => {
+      writes++;
+      await set(v);
+    };
+    const s = await createSecureSessionStorage(b);
+    await s.prune((k) => k.endsWith("-code-verifier"));
+    expect(writes).toBe(1);
+    expect(JSON.parse(b.value!)).toEqual({ "flightsim-auth": "s" });
+    await s.prune((k) => k.endsWith("-code-verifier"));
+    expect(writes).toBe(1);
+  });
+});

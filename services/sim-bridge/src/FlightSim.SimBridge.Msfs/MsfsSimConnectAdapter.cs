@@ -14,12 +14,13 @@ namespace FlightSim.SimBridge.Msfs;
 /// request per tick) rather than per-frame, which keeps the rate independent of sim FPS.
 /// </summary>
 /// <remarks>
-/// Runtime status: compiles and is exercised in tests against a fake <see cref="ISimConnectClient"/>.
+/// Runtime status: compiles everywhere and is exercised in tests against fakes of both
+/// <see cref="ISimConnectClient"/> and the native API (<see cref="Native.ISimConnectApi"/>).
 /// NOT verified against a real MSFS 2020 or 2024 install — see docs/compatibility/msfs-telemetry.md.
 /// </remarks>
 public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
 {
-    private const string ApplicationName = "FlightSimApp";
+    private const string ApplicationName = "Turnline (FlightSimApp)";
     private readonly IMsfsCompatibilityProfile _profile;
     private readonly ISimConnectClientFactory _factory;
     private readonly TimeProvider _time;
@@ -30,6 +31,12 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
 
     private ISimConnectClient? _client;
     private Connection? _connection;
+
+    /// <summary>
+    /// Optional diagnostics sink (probe mode): raw samples and simulator state changes, raised on the
+    /// SimConnect owner thread. Never set in normal operation.
+    /// </summary>
+    public Action<MsfsDiagnostic>? Diagnostics { get; set; }
 
     public MsfsSimConnectAdapter(IMsfsCompatibilityProfile profile, ISimConnectClientFactory? factory = null,
         TimeProvider? timeProvider = null, ILogger<MsfsSimConnectAdapter>? logger = null,
@@ -65,7 +72,7 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
     public async Task<AdapterConnection> ConnectAsync(CancellationToken cancellationToken)
     {
         await DisconnectAsync(cancellationToken).ConfigureAwait(false);
-        var connection = new Connection();
+        var connection = new Connection(_log, d => Diagnostics?.Invoke(d with { At = _time.GetUtcNow() }));
         await _owner.InvokeAsync(() =>
         {
             var client = _factory.Open(ApplicationName, connection);
@@ -173,8 +180,12 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
     }
 
     /// <summary>Per-connection callback sink. Callbacks arrive on the owner thread.</summary>
-    private sealed class Connection : ISimConnectCallbacks
+    private sealed class Connection(ILogger log, Action<MsfsDiagnostic> diagnostics) : ISimConnectCallbacks
     {
+        // Unknown until MSFS reports it; samples flow unless the simulator explicitly says it is not
+        // in a flight (main menu / loading), where SimConnect values do not describe a real aircraft.
+        private bool _inFlight = true;
+
         private readonly TaskCompletionSource<SimConnectOpenInfo> _opened = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly Channel<RawMsfsSample> _samples = Channel.CreateBounded<RawMsfsSample>(
             new BoundedChannelOptions(8) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true, SingleWriter = true });
@@ -186,10 +197,41 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
 
         public void OnQuit() => Fail(new SimulatorUnavailableException(Reason.Codes.ConnectionLost, "Simulator closed the SimConnect connection."));
 
-        public void OnSample(RawMsfsSample sample) => _samples.Writer.TryWrite(sample);
+        public void OnSample(RawMsfsSample sample)
+        {
+            diagnostics(new MsfsDiagnostic("raw_sample", default, Raw: sample, Dropped: !_inFlight));
+            if (_inFlight) _samples.Writer.TryWrite(sample);
+        }
+
+        public void OnSimulatorState(SimulatorStateChange change)
+        {
+            diagnostics(new MsfsDiagnostic("simulator_state", default, State: change));
+            switch (change.Kind)
+            {
+                case SimulatorStateKind.InFlight when change.Active is { } active && active != _inFlight:
+                    _inFlight = active;
+                    log.LogInformation(active ? "MSFS reports a flight in progress; telemetry resumed." : "MSFS reports no flight in progress (menu/loading); telemetry withheld.");
+                    break;
+                case SimulatorStateKind.Paused:
+                    log.LogInformation("MSFS pause state: {Paused}. Telemetry continues (values frozen while paused).", change.Active);
+                    break;
+                case SimulatorStateKind.AircraftLoaded:
+                    log.LogInformation("MSFS aircraft loaded: {File}", change.Detail);
+                    break;
+                case SimulatorStateKind.DatumRejected:
+                    log.LogWarning("MSFS rejected SimVar {Detail}; it is reported as unavailable.", change.Detail);
+                    break;
+                case SimulatorStateKind.LayoutMismatch:
+                    log.LogWarning("Dropped SimConnect telemetry block with unexpected size: {Detail}", change.Detail);
+                    break;
+                default:
+                    break;
+            }
+        }
 
         public void OnException(uint exceptionCode)
         {
+            diagnostics(new MsfsDiagnostic("simconnect_exception", default, ExceptionCode: exceptionCode));
             // SimConnect exceptions refer to a specific request; they do not end the connection.
             // Surfaced via missing/unavailable readings rather than terminating the stream.
         }
@@ -202,3 +244,7 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
         }
     }
 }
+
+/// <summary>Probe-mode diagnostic record (raw values and simulator state; no secrets, no file paths).</summary>
+public sealed record MsfsDiagnostic(string Kind, DateTimeOffset At, RawMsfsSample? Raw = null, bool? Dropped = null,
+    SimulatorStateChange? State = null, uint? ExceptionCode = null);

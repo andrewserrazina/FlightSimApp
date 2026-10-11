@@ -13,7 +13,10 @@ public class MockAdapterTests
     {
         var output = new CollectingOutput();
         await using var adapter = new MockSimulatorAdapter(Fast);
-        var session = new BridgeSession(adapter, output, TestSamples.FastOptions);
+        // Staleness is covered deterministically elsewhere; here a CI scheduling stall must not be able
+        // to insert a legitimate STALE transition into the asserted state sequence.
+        var options = TestSamples.FastOptions with { StaleAfter = TimeSpan.FromSeconds(10), LostAfter = TimeSpan.FromSeconds(20) };
+        var session = new BridgeSession(adapter, output, options);
         using var cts = new CancellationTokenSource();
         var run = session.RunAsync(cts.Token);
 

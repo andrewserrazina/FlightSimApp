@@ -44,6 +44,22 @@ public class SimConnectOwnerThreadTests
     }
 
     [Fact]
+    public async Task Messages_are_pumped_without_a_signal_even_while_work_keeps_arriving()
+    {
+        using var owner = new SimConnectOwnerThread();
+        using var neverSignalled = new ManualResetEvent(false);
+        var pumps = 0;
+        await owner.InvokeAsync(() => owner.SetMessagePump(neverSignalled, () => Interlocked.Increment(ref pumps)));
+        var until = DateTime.UtcNow.AddMilliseconds(1200);
+        while (DateTime.UtcNow < until)
+        {
+            await owner.InvokeAsync(() => { }); // continuous work, as with 20 ms sample requests
+            await Task.Delay(10);
+        }
+        Assert.True(Volatile.Read(ref pumps) >= 2, $"expected fallback pumps, got {pumps}");
+    }
+
+    [Fact]
     public void Message_pump_can_only_be_set_on_owner_thread()
     {
         using var owner = new SimConnectOwnerThread();

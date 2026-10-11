@@ -17,6 +17,25 @@ export interface SessionStorageAdapter {
   removeItem(key: string): Promise<void>;
   /** True when items persist in OS secure storage across restarts. */
   readonly persistent: boolean;
+  /** Remove every key matching `predicate` (one secure write). */
+  prune(predicate: (key: string) => boolean): Promise<void>;
+}
+
+/**
+ * Only a JSON object whose values are all strings is accepted from the secure store. Anything else
+ * (truncated JSON, null, arrays, numbers, nested objects — e.g. a damaged or foreign entry) is
+ * ignored as "no session": it is never handed to supabase-js and is replaced by the next write.
+ */
+export function parseSecureEntry(raw: string | null | undefined): Record<string, string> {
+  if (!raw) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const entries = Object.entries(parsed as Record<string, unknown>);
+    return entries.every(([, v]) => typeof v === "string") ? (Object.fromEntries(entries) as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
 }
 
 /** All keys supabase-js uses are packed into one secure entry (JSON map). */
@@ -26,11 +45,7 @@ export async function createSecureSessionStorage(backend: SecureBackend | null):
   if (backend) {
     try {
       persistent = await backend.available();
-      if (persistent) {
-        const raw = await backend.get();
-        const parsed = raw ? (JSON.parse(raw) as unknown) : {};
-        cache = parsed && typeof parsed === "object" ? (parsed as Record<string, string>) : {};
-      }
+      if (persistent) cache = parseSecureEntry(await backend.get());
     } catch {
       persistent = false;
       cache = {};
@@ -62,6 +77,12 @@ export async function createSecureSessionStorage(backend: SecureBackend | null):
     },
     removeItem: async (key) => {
       delete cache[key];
+      await flush();
+    },
+    prune: async (predicate) => {
+      const doomed = Object.keys(cache).filter(predicate);
+      if (doomed.length === 0) return;
+      doomed.forEach((k) => delete cache[k]);
       await flush();
     },
   };

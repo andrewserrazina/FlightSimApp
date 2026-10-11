@@ -25,6 +25,7 @@ jobs:
 
   bridge:
     strategy:
+      fail-fast: false # a failure on one OS must not hide the other OS's result
       matrix:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
@@ -35,14 +36,44 @@ jobs:
           dotnet-version: 8.0.x
       - run: dotnet build services/sim-bridge/FlightSim.SimBridge.sln -c Release
       - run: dotnet test services/sim-bridge/FlightSim.SimBridge.sln -c Release --no-build
+      - name: Publish Windows sidecar (self-contained single file)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: pwsh scripts/build-sidecar.ps1
+      - name: Probe the published sidecar (mock frames; MSFS without SimConnect.dll)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exe = "apps/desktop/src-tauri/binaries/flightsim-sim-bridge-x86_64-pc-windows-msvc.exe"
+          & $exe --adapter mock --probe 4 --probe-out probe-mock.jsonl
+          $frames = @(Get-Content probe-mock.jsonl | Where-Object { $_ -match '"type":"telemetry.frame"' }).Count
+          if ($frames -lt 3) { throw "expected mock telemetry frames, got $frames" }
+          & $exe --adapter msfs2024 --probe 3 --probe-out probe-msfs.jsonl
+          $header = Get-Content probe-msfs.jsonl -First 1 | ConvertFrom-Json
+          if ($header.simconnect_sdk -ne "not_built" -or $header.simconnect_dll_loaded) { throw "unexpected SimConnect status: $($header | ConvertTo-Json -Compress)" }
+          if (-not (Select-String -Path probe-msfs.jsonl -Pattern '"code":"sdk_unavailable"' -Quiet)) { throw "MSFS adapter did not report sdk_unavailable" }
+          Write-Host "mock frames: $frames; msfs2024 without SimConnect.dll -> sdk_unavailable (expected)"
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: windows-sidecar
+          path: |
+            apps/desktop/src-tauri/binaries/flightsim-sim-bridge-x86_64-pc-windows-msvc.exe
+            probe-*.jsonl
 
   desktop-shell:
     runs-on: windows-latest
+    env:
+      # The Windows Credential Manager round-trip must run here; a skip fails the job.
+      FLIGHTSIM_REQUIRE_SECURE_STORAGE: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -54,4 +85,84 @@ jobs:
       - working-directory: apps/desktop/src-tauri
         run: cargo clippy --all-targets -- -D warnings
       - working-directory: apps/desktop/src-tauri
-        run: cargo test
+        run: cargo test -- --nocapture
+
+  cloud-integration:
+    # Security gate: real Postgres RLS, GoTrue auth and desktop sync E2E against an isolated,
+    # throwaway local Supabase stack. Only local-only test credentials (infra/supabase-local) exist here.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r --filter "./packages/**" build
+      - name: Start local Supabase stack (Postgres, GoTrue, PostgREST, Mailpit) and apply migrations
+        run: infra/supabase-local/up.sh
+      - name: RLS and auth security tests
+        run: pnpm --filter @flightsim/cloud test:integration
+      - name: Desktop auth + sync end-to-end tests
+        run: pnpm --filter @flightsim/desktop test:integration
+      - name: Stack logs on failure
+        if: failure()
+        working-directory: infra/supabase-local
+        run: |
+          docker compose -p flightsim-supabase-local logs --tail 100 auth rest || true
+          tail -50 gateway.log || true
+      - name: Stop stack
+        if: always()
+        run: infra/supabase-local/down.sh
+
+  windows-installer:
+    # Internal, unsigned NSIS installer + real-app smoke on Windows (WebView2, sidecar, named pipe,
+    # SQLite in %APPDATA%, restart, upgrade, uninstall). No MSFS on the runner.
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r --filter "./packages/**" build
+      - name: Publish sidecar
+        shell: pwsh
+        run: pwsh scripts/build-sidecar.ps1
+      - name: Build installer 0.1.0
+        shell: pwsh
+        run: |
+          pnpm --filter @flightsim/desktop tauri build --config src-tauri/tauri.bundle.conf.json
+          New-Item -ItemType Directory -Force installers | Out-Null
+          Copy-Item apps/desktop/src-tauri/target/release/bundle/nsis/*_0.1.0_x64-setup.exe installers/
+      - name: Build installer 0.1.1 (upgrade test only; same identifier)
+        shell: pwsh
+        run: |
+          '{"version":"0.1.1","bundle":{"externalBin":["binaries/flightsim-sim-bridge"]}}' | Set-Content -Encoding utf8 apps/desktop/src-tauri/tauri.upgrade-test.conf.json
+          pnpm --filter @flightsim/desktop tauri build --config src-tauri/tauri.upgrade-test.conf.json
+          Copy-Item apps/desktop/src-tauri/target/release/bundle/nsis/*_0.1.1_x64-setup.exe installers/
+      - name: Installer + app smoke
+        shell: pwsh
+        run: |
+          $i0 = (Get-ChildItem installers/*_0.1.0_x64-setup.exe).FullName
+          $i1 = (Get-ChildItem installers/*_0.1.1_x64-setup.exe).FullName
+          pwsh scripts/windows-smoke.ps1 -Installer $i0 -UpgradeInstaller $i1 -OutDir smoke-out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-installer-and-smoke
+          path: |
+            installers/*_0.1.0_x64-setup.exe
+            smoke-out/

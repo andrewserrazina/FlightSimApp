@@ -75,8 +75,12 @@ public sealed class SimConnectOwnerThread : IDisposable
         _workReady.Set();
     }
 
+    /// <summary>Fallback pump interval: messages are dispatched at least this often even without a signal.</summary>
+    internal static readonly TimeSpan FallbackPumpInterval = TimeSpan.FromMilliseconds(250);
+
     private void Run()
     {
+        var sinceLastPump = System.Diagnostics.Stopwatch.StartNew();
         while (!_stopping || _work.Count > 0)
         {
             while (_work.TryTake(out var item)) item();
@@ -84,9 +88,12 @@ public sealed class SimConnectOwnerThread : IDisposable
 
             var messageReady = _messageReady;
             var handles = messageReady is null ? new WaitHandle[] { _workReady } : [_workReady, messageReady];
-            var signalled = WaitHandle.WaitAny(handles, TimeSpan.FromMilliseconds(250));
-            if (signalled == 1)
+            var signalled = WaitHandle.WaitAny(handles, FallbackPumpInterval);
+            // Pump when SimConnect signals, and at least every FallbackPumpInterval whatever woke us:
+            // GetNextDispatch is cheap and a missed signal must never stall telemetry.
+            if (signalled == 1 || sinceLastPump.Elapsed >= FallbackPumpInterval)
             {
+                sinceLastPump.Restart();
                 _onMessageReady?.Invoke();
             }
         }
