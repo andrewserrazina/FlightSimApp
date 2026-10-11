@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>FlightSim.SimBridge.Msfs</RootNamespace>
+    <Description>MSFS 2020/2024 SimConnect adapter. Builds without the MSFS SDK; the real SimConnect client is compiled only when SimConnectSdkDir is supplied.</Description>
+  </PropertyGroup>
+
+  <!--
+    Optional MSFS SDK integration (Windows x64 only). Pass the SDK's "SimConnect SDK" folder:
+      dotnet build -c Release -p:SimConnectSdkDir="C:\MSFS 2024 SDK\SimConnect SDK"
+    Without it, MSFS adapters compile against SdkNotBuiltClientFactory and report sdk_unavailable.
+  -->
+  <PropertyGroup Condition="'$(SimConnectSdkDir)' != '' And Exists('$(SimConnectSdkDir)\lib\managed\Microsoft.FlightSimulator.SimConnect.dll')">
+    <DefineConstants>$(DefineConstants);FLIGHTSIM_SIMCONNECT_SDK</DefineConstants>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+  <ItemGroup Condition="$(DefineConstants.Contains('FLIGHTSIM_SIMCONNECT_SDK'))">
+    <Reference Include="Microsoft.FlightSimulator.SimConnect">
+      <HintPath>$(SimConnectSdkDir)\lib\managed\Microsoft.FlightSimulator.SimConnect.dll</HintPath>
+    </Reference>
+    <None Include="$(SimConnectSdkDir)\lib\SimConnect.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FlightSim.SimBridge.Core\FlightSim.SimBridge.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="FlightSim.SimBridge.Tests" />
+  </ItemGroup>
+</Project>

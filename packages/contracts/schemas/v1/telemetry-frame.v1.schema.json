@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.flightsimapp.invalid/v1/telemetry-frame.v1.schema.json",
+  "title": "TelemetryFrameV1",
+  "description": "One sampled set of simulator readings. Every reading is always present; a reading the simulator/aircraft cannot supply has quality 'unavailable' and value null. Unavailable is never encoded as zero.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "schema_version", "session_id", "seq", "observed_at", "simulator", "simulator_version", "aircraft", "readings"],
+  "properties": {
+    "schema": { "const": "flightsim.telemetry.frame" },
+    "schema_version": { "const": 1 },
+    "session_id": { "$ref": "common.schema.json#/$defs/uuid" },
+    "seq": { "$ref": "common.schema.json#/$defs/session_seq" },
+    "observed_at": { "$ref": "common.schema.json#/$defs/utc_timestamp" },
+    "simulator": { "$ref": "common.schema.json#/$defs/simulator_id" },
+    "simulator_version": { "type": ["string", "null"], "maxLength": 64 },
+    "aircraft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "icao_type"],
+      "properties": {
+        "title": { "$ref": "#/$defs/reading_text" },
+        "icao_type": { "$ref": "#/$defs/reading_text" }
+      }
+    },
+    "readings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "on_ground", "lat_deg", "lon_deg", "indicated_altitude_ft", "pressure_altitude_ft",
+        "radio_altitude_ft", "indicated_airspeed_kt", "ground_speed_kt", "vertical_speed_fpm",
+        "heading_true_deg", "total_fuel_kg", "engine_count", "engines_running_count", "parking_brake_set"
+      ],
+      "properties": {
+        "on_ground": { "$ref": "#/$defs/reading_bool" },
+        "lat_deg": { "$ref": "#/$defs/reading_deg", "properties": { "value": { "minimum": -90, "maximum": 90 } } },
+        "lon_deg": { "$ref": "#/$defs/reading_deg", "properties": { "value": { "minimum": -180, "maximum": 180 } } },
+        "indicated_altitude_ft": { "$ref": "#/$defs/reading_ft" },
+        "pressure_altitude_ft": { "$ref": "#/$defs/reading_ft" },
+        "radio_altitude_ft": { "$ref": "#/$defs/reading_ft" },
+        "indicated_airspeed_kt": { "$ref": "#/$defs/reading_kt", "properties": { "value": { "minimum": 0 } } },
+        "ground_speed_kt": { "$ref": "#/$defs/reading_kt", "properties": { "value": { "minimum": 0 } } },
+        "vertical_speed_fpm": { "$ref": "#/$defs/reading_fpm" },
+        "heading_true_deg": { "$ref": "#/$defs/reading_deg", "properties": { "value": { "minimum": 0, "exclusiveMaximum": 360 } } },
+        "total_fuel_kg": { "$ref": "#/$defs/reading_kg", "properties": { "value": { "minimum": 0 } } },
+        "engine_count": { "$ref": "#/$defs/reading_count" },
+        "engines_running_count": { "$ref": "#/$defs/reading_count" },
+        "parking_brake_set": { "$ref": "#/$defs/reading_bool" }
+      }
+    }
+  },
+  "$defs": {
+    "quality": {
+      "description": "ok = measured; estimated = derived/converted with reduced confidence; unavailable = not supplied by this simulator/aircraft.",
+      "enum": ["ok", "estimated", "unavailable"]
+    },
+    "reading_base": {
+      "type": "object",
+      "required": ["value", "unit", "quality"],
+      "properties": {
+        "unit": { "type": "string" },
+        "quality": { "$ref": "#/$defs/quality" }
+      },
+      "if": { "properties": { "quality": { "const": "unavailable" } } },
+      "then": { "properties": { "value": { "type": "null" } } },
+      "else": { "properties": { "value": { "not": { "type": "null" } } } }
+    },
+    "reading_number": {
+      "$ref": "#/$defs/reading_base",
+      "properties": { "value": { "type": ["number", "null"] } }
+    },
+    "reading_ft": { "$ref": "#/$defs/reading_number", "properties": { "unit": { "const": "ft" } }, "unevaluatedProperties": false },
+    "reading_kt": { "$ref": "#/$defs/reading_number", "properties": { "unit": { "const": "kt" } }, "unevaluatedProperties": false },
+    "reading_fpm": { "$ref": "#/$defs/reading_number", "properties": { "unit": { "const": "fpm" } }, "unevaluatedProperties": false },
+    "reading_deg": { "$ref": "#/$defs/reading_number", "properties": { "unit": { "const": "deg" } }, "unevaluatedProperties": false },
+    "reading_kg": { "$ref": "#/$defs/reading_number", "properties": { "unit": { "const": "kg" } }, "unevaluatedProperties": false },
+    "reading_count": {
+      "$ref": "#/$defs/reading_base",
+      "properties": { "value": { "type": ["integer", "null"], "minimum": 0, "maximum": 16 }, "unit": { "const": "count" } },
+      "unevaluatedProperties": false
+    },
+    "reading_bool": {
+      "$ref": "#/$defs/reading_base",
+      "properties": { "value": { "type": ["boolean", "null"] }, "unit": { "const": "bool" } },
+      "unevaluatedProperties": false
+    },
+    "reading_text": {
+      "$ref": "#/$defs/reading_base",
+      "properties": { "value": { "type": ["string", "null"], "maxLength": 256 }, "unit": { "const": "text" } },
+      "unevaluatedProperties": false
+    }
+  }
+}

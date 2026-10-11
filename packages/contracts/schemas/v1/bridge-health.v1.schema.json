@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.flightsimapp.invalid/v1/bridge-health.v1.schema.json",
+  "title": "BridgeHealthV1",
+  "description": "Diagnostics snapshot of the sim-bridge sidecar. Contains no identifiers or secrets.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "bridge_version", "protocol_version", "adapter", "connection_state", "simconnect_sdk", "last_frame_at", "frames_emitted", "frames_rejected", "uptime_s"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "bridge_version": { "type": "string", "maxLength": 64 },
+    "protocol_version": { "type": "integer", "minimum": 1 },
+    "adapter": { "$ref": "common.schema.json#/$defs/simulator_id" },
+    "connection_state": { "$ref": "common.schema.json#/$defs/connection_state_name" },
+    "simconnect_sdk": {
+      "description": "not_applicable = mock adapter; not_built = bridge compiled without the MSFS SDK; unverified = compiled against the SDK but not runtime-verified in this build.",
+      "enum": ["not_applicable", "not_built", "unverified", "available"]
+    },
+    "last_frame_at": { "oneOf": [{ "$ref": "common.schema.json#/$defs/utc_timestamp" }, { "type": "null" }] },
+    "frames_emitted": { "type": "integer", "minimum": 0 },
+    "frames_rejected": { "type": "integer", "minimum": 0 },
+    "uptime_s": { "type": "number", "minimum": 0 }
+  }
+}

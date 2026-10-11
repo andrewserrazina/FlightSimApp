@@ -1,0 +1,17 @@
+{
+  "protocol": "flightsim.bridge",
+  "protocol_version": 1,
+  "type": "connection.state",
+  "data": {
+    "schema_version": 1,
+    "state": "RECONNECTING",
+    "simulator": "msfs2024",
+    "since": "2026-10-10T21:00:05Z",
+    "attempt": 3,
+    "next_retry_at": "2026-10-10T21:00:13Z",
+    "reason": {
+      "code": "simulator_not_running",
+      "message": "MSFS is not running"
+    }
+  }
+}

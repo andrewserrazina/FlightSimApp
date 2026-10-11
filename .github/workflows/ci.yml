@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @flightsim/contracts build
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm --filter @flightsim/desktop build
+
+  bridge:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet build services/sim-bridge/FlightSim.SimBridge.sln -c Release
+      - run: dotnet test services/sim-bridge/FlightSim.SimBridge.sln -c Release --no-build
+
+  desktop-shell:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @flightsim/contracts build
+      - run: pnpm --filter @flightsim/desktop build
+      - working-directory: apps/desktop/src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+      - working-directory: apps/desktop/src-tauri
+        run: cargo test

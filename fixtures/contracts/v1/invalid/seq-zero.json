@@ -1,0 +1,98 @@
+{
+  "protocol": "flightsim.bridge",
+  "protocol_version": 1,
+  "type": "telemetry.frame",
+  "data": {
+    "schema": "flightsim.telemetry.frame",
+    "schema_version": 1,
+    "session_id": "7d1c6a52-2f1e-4b8a-9c0d-3e5f6a7b8c9d",
+    "seq": 0,
+    "observed_at": "2026-10-10T21:00:00.000Z",
+    "simulator": "mock",
+    "simulator_version": null,
+    "aircraft": {
+      "title": {
+        "value": "Mock Twinjet (demo data)",
+        "unit": "text",
+        "quality": "ok"
+      },
+      "icao_type": {
+        "value": "A20N",
+        "unit": "text",
+        "quality": "ok"
+      }
+    },
+    "readings": {
+      "on_ground": {
+        "value": true,
+        "unit": "bool",
+        "quality": "ok"
+      },
+      "lat_deg": {
+        "value": 47.4502,
+        "unit": "deg",
+        "quality": "ok"
+      },
+      "lon_deg": {
+        "value": -122.3088,
+        "unit": "deg",
+        "quality": "ok"
+      },
+      "indicated_altitude_ft": {
+        "value": 433,
+        "unit": "ft",
+        "quality": "ok"
+      },
+      "pressure_altitude_ft": {
+        "value": 420,
+        "unit": "ft",
+        "quality": "ok"
+      },
+      "radio_altitude_ft": {
+        "value": 0,
+        "unit": "ft",
+        "quality": "ok"
+      },
+      "indicated_airspeed_kt": {
+        "value": 0,
+        "unit": "kt",
+        "quality": "ok"
+      },
+      "ground_speed_kt": {
+        "value": 0,
+        "unit": "kt",
+        "quality": "ok"
+      },
+      "vertical_speed_fpm": {
+        "value": 0,
+        "unit": "fpm",
+        "quality": "ok"
+      },
+      "heading_true_deg": {
+        "value": 179.5,
+        "unit": "deg",
+        "quality": "ok"
+      },
+      "total_fuel_kg": {
+        "value": 5120,
+        "unit": "kg",
+        "quality": "ok"
+      },
+      "engine_count": {
+        "value": 2,
+        "unit": "count",
+        "quality": "ok"
+      },
+      "engines_running_count": {
+        "value": 0,
+        "unit": "count",
+        "quality": "ok"
+      },
+      "parking_brake_set": {
+        "value": true,
+        "unit": "bool",
+        "quality": "ok"
+      }
+    }
+  }
+}

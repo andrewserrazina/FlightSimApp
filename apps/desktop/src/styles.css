@@ -1,0 +1,46 @@
+/* OCC-inspired, restrained: dark navy, high-contrast data, amber reserved for operational alerts. */
+:root {
+  --bg: #0b1426;
+  --panel: #111d35;
+  --panel-border: #1f2f50;
+  --text: #e8eef9;
+  --muted: #9fb0cc;
+  --ok: #3ddc97;
+  --warn: #ffb020;
+  --alert: #ff6b5e;
+  --focus: #7cc4ff;
+  color-scheme: dark;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  background: var(--bg);
+  color: var(--text);
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.app { padding: 20px 24px; max-width: 1200px; margin: 0 auto; }
+.app-header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+.app-header h1 { font-size: 1.25rem; font-weight: 600; letter-spacing: 0.04em; margin: 0; }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.panel { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 6px; padding: 16px; }
+.panel h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+.status { display: flex; align-items: center; gap: 10px; font-size: 1.15rem; font-weight: 600; }
+.status-dot { width: 12px; height: 12px; border-radius: 50%; background: currentColor; }
+.status-ok { color: var(--ok); }
+.status-warn { color: var(--warn); }
+.status-alert { color: var(--alert); }
+.status-text { color: var(--text); }
+.detail { color: var(--muted); margin: 8px 0 0; }
+.detail-alert { color: var(--alert); }
+.button { margin-top: 12px; background: transparent; color: var(--text); border: 1px solid var(--muted); border-radius: 4px; padding: 6px 14px; font: inherit; cursor: pointer; }
+.button:hover { border-color: var(--text); }
+.tag { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; padding: 2px 8px; border-radius: 3px; }
+.tag-warn { color: #1a1200; background: var(--warn); }
+.readings, .diagnostics { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin: 12px 0 0; }
+.readings dt, .diagnostics dt { color: var(--muted); font-size: 0.8rem; }
+.readings dd { margin: 2px 0 0; font-size: 1.3rem; font-variant-numeric: tabular-nums; font-weight: 600; }
+.diagnostics dd { margin: 2px 0 0; font-variant-numeric: tabular-nums; }
+.unit { font-size: 0.8rem; color: var(--muted); font-weight: 400; }
+.reading.is-unavailable dd { color: var(--muted); font-size: 0.95rem; font-weight: 400; font-style: italic; }
+.is-stale .readings dd { opacity: 0.55; }
