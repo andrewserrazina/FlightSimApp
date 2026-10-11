@@ -361,8 +361,17 @@ fn disabling_keeps_the_binding_and_never_touches_flights() {
     assert!(!st.enabled);
     assert_eq!(st.bound_account_id.as_deref(), Some("acct-a"));
     assert_eq!(s.list_flights(10, 0).unwrap().len(), 1);
-    let opted = st.opted_in_at_utc.clone();
-    assert_eq!(s.sync_enable("acct-a", "a").unwrap().opted_in_at_utc, opted, "same account keeps its opt-in");
+    // A flight completed while sync was off was never consented to.
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    s.commit(&completed("while-off", &now_utc())).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    let again = s.sync_enable("acct-a", "a").unwrap();
+    assert!(again.opted_in_at_utc > st.opted_in_at_utc, "re-enabling restarts the opt-in clock");
+    assert_eq!(s.sync_enqueue_after_opt_in("acct-a").unwrap(), 0, "flight completed while off is not queued");
+    assert_eq!(s.sync_local_only_ids().unwrap(), ["while-off"]);
+    assert_eq!(s.sync_due("acct-a", "2999-12-31T00:00:00Z", 10).unwrap().len(), 1, "already-queued flight resumes");
+    // Enabling while already enabled keeps the opt-in.
+    assert_eq!(s.sync_enable("acct-a", "a").unwrap().opted_in_at_utc, again.opted_in_at_utc);
 }
 
 #[test]

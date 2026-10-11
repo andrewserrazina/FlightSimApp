@@ -101,15 +101,20 @@ impl Store {
         )?)
     }
 
-    /// Enable sync for `account_id`. Binding to a different account than before starts a fresh
-    /// opt-in (new `opted_in_at`); flights queued for the previous account keep their account.
+    /// Enable sync for `account_id`. Binding to a different account, or re-enabling after sync was
+    /// turned off, starts a fresh opt-in (new `opted_in_at`); flights queued for a previous account
+    /// keep their account.
     pub fn sync_enable(&mut self, account_id: &str, account_label: &str) -> Result<SyncSettingsOut, StoreError> {
         check_id("accountId", account_id)?;
         let label: String = account_label.chars().take(128).collect();
         let current = self.sync_settings()?;
         let now = now_utc();
-        if current.bound_account_id.as_deref() == Some(account_id) {
-            self.conn.execute("UPDATE sync_settings SET enabled = 1, bound_account_label = ?1, updated_at_utc = ?2 WHERE id = 1", params![label, now])?;
+        if current.bound_account_id.as_deref() == Some(account_id) && current.enabled {
+            self.conn.execute("UPDATE sync_settings SET bound_account_label = ?1, updated_at_utc = ?2 WHERE id = 1", params![label, now])?;
+        } else if current.bound_account_id.as_deref() == Some(account_id) {
+            // Re-enabling after a pause: flights completed while sync was off were not consented to.
+            // Restart the opt-in clock; already-queued flights keep their consent and resume.
+            self.conn.execute("UPDATE sync_settings SET enabled = 1, bound_account_label = ?1, opted_in_at_utc = ?2, updated_at_utc = ?2 WHERE id = 1", params![label, now])?;
         } else {
             self.conn.execute(
                 "UPDATE sync_settings SET enabled = 1, bound_account_id = ?1, bound_account_label = ?2, opted_in_at_utc = ?3, last_success_at_utc = NULL, updated_at_utc = ?3 WHERE id = 1",

@@ -9,8 +9,7 @@ export type SyncBlock =
   | "disabled"
   | "signed_out"
   | "session_expired"
-  | "other_account" // signed in as a different account than the one sync is bound to
-  | "offline";
+  | "other_account"; // signed in as a different account than the one sync is bound to
 
 export interface SyncView {
   ready: boolean;
@@ -18,6 +17,8 @@ export interface SyncView {
   overview: SyncOverview | null;
   running: boolean;
   block: SyncBlock | null;
+  /** The last upload attempt could not reach the cloud. Not a block: backoff keeps retrying. */
+  offline: boolean;
   lastRunAtUtc: string | null;
   lastError: string | null;
 }
@@ -49,7 +50,7 @@ export interface SyncEngineDeps {
  * and never on the UI/telemetry path.
  */
 export class SyncEngine {
-  private view: SyncView = { ready: false, settings: null, overview: null, running: false, block: null, lastRunAtUtc: null, lastError: null };
+  private view: SyncView = { ready: false, settings: null, overview: null, running: false, block: null, offline: false, lastRunAtUtc: null, lastError: null };
   private listeners = new Set<() => void>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private runPromise: Promise<void> | null = null;
@@ -129,7 +130,6 @@ export class SyncEngine {
     if (auth.status === "session_expired") return "session_expired";
     if (auth.status !== "signed_in" || !auth.user) return "signed_out";
     if (auth.user.id !== settings.boundAccountId) return "other_account";
-    if (auth.offline && this.view.block === "offline") return "offline";
     return null;
   }
 
@@ -168,7 +168,6 @@ export class SyncEngine {
     const s = this.view.settings;
     if (!this.deps.local || !s?.boundAccountId) return;
     await this.deps.local.retryFailed(s.boundAccountId);
-    if (this.view.block === "offline") this.update({ block: null });
     await this.refresh();
     this.kick();
   }
@@ -213,6 +212,10 @@ export class SyncEngine {
     const { local, cloud } = this.deps;
     if (!local || !cloud) return;
     await this.refresh();
+    const s = this.view.settings;
+    // Queue flights completed since opting in (idempotent, local only; covers any path that closed
+    // a flight, including while signed out or offline). Queued flights stay bound to that account.
+    if (s?.enabled && s.boundAccountId && (await local.enqueueAfterOptIn(s.boundAccountId)) > 0) await this.refresh();
     const block = this.computeBlock();
     this.update({ block });
     if (block) return;
@@ -244,7 +247,7 @@ export class SyncEngine {
       }
       await local!.mark({ flightId, accountId: account, state: "synced", attempts: attempts + 1, lastError: null, cloudEventCount: held.eventCount, cloudInterruptionCount: held.interruptionCount });
       this.deps.auth.setOffline(false);
-      this.update({ lastError: null, block: null });
+      this.update({ lastError: null, offline: false });
       return "ok";
     } catch (e) {
       if (e instanceof NotSyncableError) {
@@ -267,12 +270,9 @@ export class SyncEngine {
         } else {
           await local!.mark({ flightId, accountId: account, state: "retry_pending", attempts: next, nextAttemptAtUtc: this.iso(this.now() + retryDelayMs(next, this.random)), lastError: c.message });
         }
-        if (/reached/.test(c.message)) {
-          this.deps.auth.setOffline(true);
-          this.update({ block: "offline", lastError: c.message });
-        } else {
-          this.update({ lastError: c.message });
-        }
+        const offline = c.network === true;
+        if (offline) this.deps.auth.setOffline(true);
+        this.update({ offline, lastError: c.message });
         return "stop"; // back off; do not hammer a failing service
       }
       await local!.mark({ flightId, accountId: account, state: "failed", attempts: attempts + 1, lastError: c.message });

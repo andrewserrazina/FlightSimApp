@@ -94,6 +94,8 @@ export interface RecorderDeps {
   config?: Partial<RecorderConfig>;
   now?: () => number;
   newId?: () => string;
+  /** Called after a flight is durably closed (completed/aborted/discarded). Must not throw or block. */
+  onFlightClosed?: (status: "completed" | "aborted" | "discarded") => void;
 }
 
 /**
@@ -106,6 +108,7 @@ export class FlightRecorder {
   private readonly config: RecorderConfig;
   private readonly now: () => number;
   private readonly newId: () => string;
+  private readonly onFlightClosed: RecorderDeps["onFlightClosed"];
   private listeners = new Set<() => void>();
   private view: RecorderView;
   private timers: Array<ReturnType<typeof setInterval>> = [];
@@ -128,6 +131,7 @@ export class FlightRecorder {
     this.config = { ...DEFAULT_RECORDER_CONFIG, ...deps.config };
     this.now = deps.now ?? Date.now;
     this.newId = deps.newId ?? (() => crypto.randomUUID());
+    this.onFlightClosed = deps.onFlightClosed;
     this.view = {
       initialized: false,
       store: deps.store ? { state: "loading" } : { state: "absent" },
@@ -570,6 +574,11 @@ export class FlightRecorder {
       const s = this.view.lifecycle.status;
       if (result.ok && (s === "completed" || s === "aborted" || s === "discarded") && this.store) {
         void this.store.prune(this.config.keepDetailedFlights).catch(() => {});
+        try {
+          this.onFlightClosed?.(s);
+        } catch {
+          // A failing listener (e.g. cloud sync) must never affect local recording.
+        }
       }
       return result;
     });

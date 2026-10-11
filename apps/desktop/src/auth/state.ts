@@ -65,7 +65,7 @@ export function authReducer(s: AuthView, e: AuthEvent): AuthView {
       return { ...s, status: "recovery_code_sent", pendingEmail: e.email, busy: false, error: null, message: "If an account exists for that email, a reset code has been sent." };
     case "signed_out":
       // A sign-out the user did not ask for (refresh token revoked/expired) is shown as an expired session.
-      return { ...s, status: e.byUser || s.status !== "signed_in" ? "signed_out" : "session_expired", user: null, pendingEmail: null, busy: false, message: e.byUser ? "Signed out. Local flights stay on this computer." : null };
+      return { ...s, status: !e.byUser && (s.status === "signed_in" || s.status === "session_expired") ? "session_expired" : "signed_out", user: null, pendingEmail: null, busy: false, message: e.byUser ? "Signed out. Local flights stay on this computer." : null };
     case "offline":
       return { ...s, offline: e.offline };
     case "failed":

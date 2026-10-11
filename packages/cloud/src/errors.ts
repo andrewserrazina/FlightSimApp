@@ -10,6 +10,8 @@ export interface ClassifiedError {
   kind: CloudErrorKind;
   /** Safe to show and to store: never contains tokens or request bodies. */
   message: string;
+  /** True when the service could not be reached at all (likely offline). */
+  network?: boolean;
 }
 
 const SAFE_MAX = 200;
@@ -25,7 +27,7 @@ export function classifyCloudError(e: unknown): ClassifiedError {
   const status = typeof o.status === "number" ? o.status : undefined;
   const code = typeof o.code === "string" ? o.code : undefined;
   const msg = clean(typeof o.message === "string" ? o.message : String(e));
-  if (o.name === "TypeError" || /fetch failed|network|ECONN|ETIMEDOUT|Failed to fetch|Load failed/i.test(msg)) return { kind: "transient", message: "The cloud service could not be reached." };
+  if (o.name === "TypeError" || /fetch failed|network|ECONN|ETIMEDOUT|Failed to fetch|Load failed/i.test(msg)) return { kind: "transient", message: "The cloud service could not be reached.", network: true };
   if (status === 401 || code === "PGRST301" || code === "PGRST302" || code === "28000" || /JWT expired|invalid JWT|session/i.test(msg)) return { kind: "auth", message: "Your session has expired. Sign in again to continue synchronising." };
   if (status === 429 || status === 408 || (status !== undefined && status >= 500) || code === "57014" || code === "53300") return { kind: "transient", message: `The cloud service is temporarily unavailable (${status ?? code}).` };
   if (code === "42501" || status === 403) return { kind: "permanent", message: "The cloud refused this record (permission denied)." };

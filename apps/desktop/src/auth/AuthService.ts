@@ -197,9 +197,36 @@ export class AuthService {
     });
   }
 
-  /** Called by the sync engine when the cloud rejects the session (expired/revoked). */
+  /**
+   * The cloud rejected the access token. Try one refresh; if the refresh token itself is rejected
+   * the session is over (expired/revoked) and the user must sign in again. Network failures keep
+   * the session (offline is not expiry).
+   */
+  async refreshAfterRejection(): Promise<boolean> {
+    if (!this.client || this.view.status !== "signed_in") return false;
+    try {
+      const { data, error } = await this.client.auth.refreshSession();
+      if (!error && data.session) return true;
+      if (error && isAuthRetryableFetchError(error)) {
+        this.setOffline(true);
+        return false;
+      }
+    } catch (e) {
+      if (isAuthRetryableFetchError(e)) {
+        this.setOffline(true);
+        return false;
+      }
+    }
+    this.sessionRejected();
+    return false;
+  }
+
+  /** Called when the cloud rejects the session for good (expired/revoked). */
   sessionRejected() {
-    if (this.view.status === "signed_in") this.dispatch({ type: "signed_out", byUser: false });
+    if (this.view.status !== "signed_in") return;
+    this.dispatch({ type: "signed_out", byUser: false });
+    // Purge the dead session material from secure storage (local only; no network needed).
+    void this.client?.auth.signOut({ scope: "local" }).catch(() => {});
   }
 
   setOffline(offline: boolean) {
