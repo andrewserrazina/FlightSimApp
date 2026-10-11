@@ -8,6 +8,9 @@ import { describeFreshness, telemetryFreshness } from "../domain/freshness";
 import { usePreferences } from "../preferences/PreferencesContext";
 import { RETENTION_MAX, RETENTION_MIN, STALE_MAX_S, STALE_MIN_S } from "../preferences/preferences";
 import { useRecorderView } from "../recording/RecorderContext";
+import { AccountPanel } from "../cloud/AccountPanel";
+import { useAuthView, useCloud, useSyncView } from "../cloud/CloudContext";
+import { CloudSyncPanel } from "../cloud/CloudSyncPanel";
 import { Button } from "../ui/Button";
 import { CheckboxField, NumberField, SelectField } from "../ui/Fields";
 import { utcDateTime } from "../ui/format";
@@ -26,7 +29,10 @@ export function SettingsPage() {
   const p = presentConnection(state);
   const freshness = telemetryFreshness(state, now, preferences.staleWarningSeconds * 1000);
   const recorder = useRecorderView();
-  const report = JSON.stringify(buildDiagnosticsReport(state, preferences, now, __APP_VERSION__, recorder), null, 2);
+  const cloud = useCloud();
+  const authView = useAuthView();
+  const syncView = useSyncView();
+  const report = JSON.stringify(buildDiagnosticsReport(state, preferences, now, __APP_VERSION__, recorder, cloud ? { auth: authView, sync: syncView } : undefined), null, 2);
   const store = recorder.store;
 
   async function copyReport() {
@@ -41,6 +47,8 @@ export function SettingsPage() {
   return (
     <div className="page">
       <div className="grid grid--settings">
+        <AccountPanel />
+        <CloudSyncPanel />
         <Panel title="Simulator connection">
           <CheckboxField
             label="Mock mode (demo data)"

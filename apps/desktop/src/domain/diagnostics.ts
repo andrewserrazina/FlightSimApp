@@ -1,3 +1,5 @@
+import type { AuthView } from "../auth/state";
+import type { SyncView } from "../sync/SyncEngine";
 import type { BridgeViewState } from "../bridge/types";
 import type { Preferences } from "../preferences/preferences";
 import type { RecorderView } from "../recording/FlightRecorder";
@@ -8,11 +10,17 @@ export function redactId(id: string | null): string | null {
   return id ? `${id.slice(0, 4)}…${id.slice(-4)}` : null;
 }
 
+/** Cloud status for diagnostics: states and counts only — never tokens, emails or account ids. */
+export interface CloudDiagnostics {
+  auth: AuthView;
+  sync: SyncView;
+}
+
 /**
  * Troubleshooting report. Contains no secrets: the webview never has the bridge token, and
  * identifiers are shortened. Telemetry values are deliberately excluded.
  */
-export function buildDiagnosticsReport(state: BridgeViewState, prefs: Preferences, nowMs: number, appVersion: string, recorder?: RecorderView) {
+export function buildDiagnosticsReport(state: BridgeViewState, prefs: Preferences, nowMs: number, appVersion: string, recorder?: RecorderView, cloud?: CloudDiagnostics) {
   const freshness = telemetryFreshness(state, nowMs, prefs.staleWarningSeconds * 1000);
   return {
     generated_at_utc: new Date(nowMs).toISOString(),
@@ -53,6 +61,19 @@ export function buildDiagnosticsReport(state: BridgeViewState, prefs: Preference
           pending_items: recorder.pendingItems,
           write_error: recorder.writeError,
           dropped_samples: recorder.droppedSamples,
+        }
+      : null,
+    cloud: cloud
+      ? {
+          auth: cloud.auth.status,
+          session_storage: cloud.auth.status === "signed_in" ? (cloud.auth.persistent ? "secure_store" : "memory") : null,
+          offline: cloud.auth.offline || cloud.sync.offline,
+          sync_enabled: cloud.sync.settings?.enabled ?? false,
+          sync_block: cloud.sync.block,
+          sync_bound_to_current_account: cloud.sync.settings?.boundAccountId && cloud.auth.user ? cloud.sync.settings.boundAccountId === cloud.auth.user.id : null,
+          sync_counts: cloud.sync.overview,
+          sync_last_success_utc: cloud.sync.settings?.lastSuccessAtUtc ?? null,
+          sync_last_error: cloud.sync.lastError,
         }
       : null,
     recent_connection_events: state.connectionLog.slice(-20),

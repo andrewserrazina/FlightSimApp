@@ -9,6 +9,7 @@ import type { KeyValueStorage } from "./preferences/preferences";
 import { FlightRecorder, type RecorderConfig } from "./recording/FlightRecorder";
 import { RecorderProvider } from "./recording/RecorderContext";
 import type { FlightStore } from "./recording/types";
+import { CloudProvider, type CloudServices } from "./cloud/CloudContext";
 
 export interface AppProps {
   transport: BridgeTransport | null;
@@ -21,6 +22,8 @@ export interface AppProps {
   recorderConfig?: Partial<RecorderConfig>;
   /** Injected recorder (tests); created from `store` otherwise. */
   recorder?: FlightRecorder;
+  /** Optional cloud account + sync services (null = local-only build). Started by the caller. */
+  cloud?: CloudServices | null;
 }
 
 function RetentionSync({ recorder }: { recorder: FlightRecorder }) {
@@ -29,8 +32,17 @@ function RetentionSync({ recorder }: { recorder: FlightRecorder }) {
   return null;
 }
 
-export function App({ transport, storage, store = null, history, initialPage, recorderConfig, recorder: injected }: AppProps) {
-  const [recorder] = useState(() => injected ?? new FlightRecorder({ store, ...(recorderConfig ? { config: recorderConfig } : {}) }));
+export function App({ transport, storage, store = null, history, initialPage, recorderConfig, recorder: injected, cloud = null }: AppProps) {
+  const [recorder] = useState(
+    () =>
+      injected ??
+      new FlightRecorder({
+        store,
+        ...(recorderConfig ? { config: recorderConfig } : {}),
+        // Cloud sync only ever learns that a flight closed; it never sits on the recording path.
+        ...(cloud ? { onFlightClosed: () => cloud.sync.notifyFlightClosed() } : {}),
+      }),
+  );
   const repository = useMemo(() => history ?? (store ? createStoreHistoryRepository(store) : noStoreRepository), [history, store]);
 
   useEffect(() => {
@@ -39,6 +51,7 @@ export function App({ transport, storage, store = null, history, initialPage, re
   }, [recorder]);
 
   return (
+    <CloudProvider cloud={cloud}>
     <PreferencesProvider storage={storage}>
       <RecorderProvider recorder={recorder}>
         <RetentionSync recorder={recorder} />
@@ -49,5 +62,6 @@ export function App({ transport, storage, store = null, history, initialPage, re
         </BridgeProvider>
       </RecorderProvider>
     </PreferencesProvider>
+    </CloudProvider>
   );
 }

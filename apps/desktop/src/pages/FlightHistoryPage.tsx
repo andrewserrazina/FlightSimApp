@@ -10,6 +10,8 @@ import { utcDateTime } from "../ui/format";
 import { Panel } from "../ui/Panel";
 import { Tag } from "../ui/Tag";
 import { STATUS_LABEL } from "./labels";
+import { useCloud, useSyncView } from "../cloud/CloudContext";
+import { flightCloudBadge } from "../cloud/presentation";
 
 type LoadState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "loaded"; flights: FlightSummary[] };
 
@@ -20,6 +22,11 @@ export function FlightHistoryPage({ navigate }: { navigate: NavigateFn }) {
   const { historyRevision } = useRecorderView();
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
+  const cloud = useCloud();
+  const syncView = useSyncView();
+  const boundAccountId = syncView.settings?.boundAccountId ?? null;
+  // Reload when local sync bookkeeping changes so cloud badges stay current.
+  const syncKey = cloud ? JSON.stringify(syncView.overview) : "";
 
   useEffect(() => {
     const controller = new AbortController();
@@ -34,7 +41,7 @@ export function FlightHistoryPage({ navigate }: { navigate: NavigateFn }) {
         if (!controller.signal.aborted) setLoad({ kind: "error", message: e instanceof Error ? e.message : String(e) });
       });
     return () => controller.abort();
-  }, [repo, attempt, historyRevision]);
+  }, [repo, attempt, historyRevision, syncKey]);
 
   const retry = () => {
     setLoad({ kind: "loading" });
@@ -72,6 +79,7 @@ export function FlightHistoryPage({ navigate }: { navigate: NavigateFn }) {
                   <th scope="col">Session time</th>
                   <th scope="col">Airborne time</th>
                   <th scope="col">Status</th>
+                  {cloud && <th scope="col">Cloud</th>}
                   <th scope="col">
                     <span className="visually-hidden">Actions</span>
                   </th>
@@ -106,6 +114,20 @@ export function FlightHistoryPage({ navigate }: { navigate: NavigateFn }) {
                         <Tag tone={STATUS_TONE[f.status] ?? "neutral"}>{STATUS_LABEL[f.status] ?? f.status}</Tag>
                         {f.interruptionCount > 0 && <span className="muted-inline"> · {f.interruptionCount} interruption{f.interruptionCount > 1 ? "s" : ""}</span>}
                       </td>
+                      {cloud && (
+                        <td>
+                          {(() => {
+                            const b = flightCloudBadge(f, boundAccountId);
+                            return b ? (
+                              <Tag tone={b.tone} title={b.title}>
+                                {b.label}
+                              </Tag>
+                            ) : (
+                              <span className="muted-inline">—</span>
+                            );
+                          })()}
+                        </td>
+                      )}
                       <td>
                         <Button variant="quiet" onClick={() => navigate("debrief", { debriefFlightId: f.id })} aria-label={`Open debrief for flight started ${utcDateTime(f.startedAtUtc)}`}>
                           Debrief

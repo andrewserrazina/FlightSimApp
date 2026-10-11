@@ -7,6 +7,8 @@ import pkg from "./package.json" with { type: "json" };
 export default defineConfig({
   plugins: [react()],
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  // Read .env from the repository root (see /.env.example). Only VITE_* values reach the bundle.
+  envDir: "../..",
   clearScreen: false,
   envPrefix: ["VITE_"],
   server: {

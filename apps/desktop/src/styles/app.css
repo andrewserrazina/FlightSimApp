@@ -240,3 +240,8 @@ code.mono { font-size: var(--text-sm); overflow-wrap: anywhere; }
 .phase-list__name { font-weight: 600; }
 .phase-list__time, .phase-list__dur { color: var(--text-muted); font-size: var(--text-sm); }
 .plain-list { margin: 0; padding-left: var(--space-5); color: var(--text-secondary); }
+
+/* Cloud account & sync (S1-05) */
+.form-error { color: var(--status-alert); margin-top: var(--space-3); }
+.sync-explainer { margin: 0 0 var(--space-3); padding-left: 1.2em; }
+.sync-explainer li { margin-bottom: var(--space-1); }

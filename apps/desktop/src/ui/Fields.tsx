@@ -78,3 +78,56 @@ export function NumberField({ label, description, value, min, max, unit, onCommi
     </div>
   );
 }
+
+export function TextField({
+  label,
+  description,
+  value,
+  onChange,
+  type = "text",
+  autoComplete,
+  inputMode,
+  required,
+  disabled,
+  maxLength,
+}: {
+  label: string;
+  description?: ReactNode;
+  value: string;
+  onChange(v: string): void;
+  type?: "text" | "email" | "password";
+  autoComplete?: string;
+  inputMode?: "text" | "email" | "numeric";
+  required?: boolean;
+  disabled?: boolean;
+  maxLength?: number;
+}) {
+  const id = useId();
+  return (
+    <div className="field">
+      <label htmlFor={id} className="field__label">
+        {label}
+      </label>
+      <input
+        id={id}
+        className="field__control"
+        type={type}
+        value={value}
+        autoComplete={autoComplete}
+        inputMode={inputMode}
+        required={required}
+        disabled={disabled}
+        maxLength={maxLength}
+        spellCheck={false}
+        autoCapitalize="off"
+        onChange={(e) => onChange(e.currentTarget.value)}
+        aria-describedby={description ? `${id}-d` : undefined}
+      />
+      {description && (
+        <p id={`${id}-d`} className="field__description">
+          {description}
+        </p>
+      )}
+    </div>
+  );
+}
