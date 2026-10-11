@@ -17,6 +17,14 @@ public sealed record PipeServerOptions
     /// <summary>Outbound queue per client. Oldest messages are dropped if the client stalls.</summary>
     public int OutboundQueueCapacity { get; init; } = 256;
     public int MaxMalformedMessages { get; init; } = 5;
+    /// <summary>
+    /// A write that does not complete within this time drops the client. Windows pipe buffers are
+    /// small: a client that stops reading would otherwise block the writer forever (and with it the
+    /// error/close path), wedging the bridge so it never accepts a reconnect.
+    /// </summary>
+    public TimeSpan WriteTimeout { get; init; } = TimeSpan.FromSeconds(5);
+    /// <summary>Budget for the best-effort error message sent just before closing a client.</summary>
+    public TimeSpan CloseWriteTimeout { get; init; } = TimeSpan.FromSeconds(1);
 }
 
 /// <summary>
@@ -256,14 +264,23 @@ public sealed class NamedPipeBridgeServer : IBridgeOutput
 
     private static BridgeEnvelope Error(string code, string message) => new(MessageTypes.Error, new Reason(code, message));
 
-    private static async Task WriteAsync(Stream pipe, SemaphoreSlim writeLock, BridgeEnvelope message, CancellationToken cancellationToken)
+    private Task WriteAsync(Stream pipe, SemaphoreSlim writeLock, BridgeEnvelope message, CancellationToken cancellationToken) =>
+        WriteWithDeadlineAsync(pipe, writeLock, message, _options.WriteTimeout, cancellationToken);
+
+    /// <summary>
+    /// Serialised write with a deadline covering both the lock wait and the pipe write. On timeout an
+    /// <see cref="OperationCanceledException"/> ends the caller's loop and the client is dropped.
+    /// </summary>
+    internal static async Task WriteWithDeadlineAsync(Stream pipe, SemaphoreSlim writeLock, BridgeEnvelope message, TimeSpan timeout, CancellationToken cancellationToken)
     {
         var bytes = Encoding.UTF8.GetBytes(BridgeJson.Serialize(message) + "\n");
-        await writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(timeout);
+        await writeLock.WaitAsync(deadline.Token).ConfigureAwait(false);
         try
         {
-            await pipe.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
-            await pipe.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await pipe.WriteAsync(bytes, deadline.Token).ConfigureAwait(false);
+            await pipe.FlushAsync(deadline.Token).ConfigureAwait(false);
         }
         finally
         {
@@ -271,15 +288,16 @@ public sealed class NamedPipeBridgeServer : IBridgeOutput
         }
     }
 
-    private static async Task TryWriteAsync(Stream pipe, SemaphoreSlim writeLock, BridgeEnvelope message, CancellationToken cancellationToken)
+    /// <summary>Best-effort farewell message: never blocks the close path longer than <see cref="PipeServerOptions.CloseWriteTimeout"/>.</summary>
+    private async Task TryWriteAsync(Stream pipe, SemaphoreSlim writeLock, BridgeEnvelope message, CancellationToken cancellationToken)
     {
         try
         {
-            await WriteAsync(pipe, writeLock, message, cancellationToken).ConfigureAwait(false);
+            await WriteWithDeadlineAsync(pipe, writeLock, message, _options.CloseWriteTimeout, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or ObjectDisposedException or OperationCanceledException)
         {
-            // Peer already gone.
+            // Peer already gone or not draining.
         }
     }
 
