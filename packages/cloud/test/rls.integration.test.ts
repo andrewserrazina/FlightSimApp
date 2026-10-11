@@ -222,6 +222,34 @@ describe("catalog-level guarantees", () => {
     expect(anonGrants).toEqual([]);
   });
 
+  it("generic rule: any public table without policies grants nothing to anon/authenticated (covers future tables)", async () => {
+    const rows = await sql<{ relname: string; grantee: string; privilege_type: string }>(
+      `select c.relname, g.grantee, g.privilege_type
+         from pg_class c join pg_namespace n on n.oid = c.relnamespace
+         join information_schema.role_table_grants g on g.table_schema = 'public' and g.table_name = c.relname
+        where n.nspname = 'public' and c.relkind = 'r' and g.grantee in ('anon','authenticated')
+          and not exists (select 1 from pg_policies p where p.schemaname = 'public' and p.tablename = c.relname)`,
+    );
+    expect(rows).toEqual([]);
+  });
+
+  it("no client role holds TRUNCATE, REFERENCES or TRIGGER on any public table (TRUNCATE bypasses RLS)", async () => {
+    const rows = await sql("select table_name, grantee, privilege_type from information_schema.role_table_grants where table_schema = 'public' and grantee in ('anon','authenticated') and privilege_type in ('TRUNCATE','REFERENCES','TRIGGER')");
+    expect(rows).toEqual([]);
+  });
+
+  it("the marketing waitlist (0003) is service-role only: clients can neither read nor write it", async () => {
+    const anon = client();
+    expect((await anon.from("turnline_waitlist").select("id")).error?.code).toBe("42501");
+    const ins = await anon.from("turnline_waitlist").insert({ email: "x@example.test", consented_at: new Date().toISOString(), verification_hash: "h", verification_expires_at: new Date().toISOString() });
+    expect(ins.error?.code).toBe("42501");
+    const user = await createVerifiedUser("waitlist");
+    expect((await user.db.from("turnline_waitlist").select("id")).error?.code).toBe("42501");
+    const service = client(signJwt({ iss: "supabase-local", role: "service_role", iat: 1_700_000_000, exp: 2_000_000_000 }));
+    const ok = await service.from("turnline_waitlist").insert({ email: `w-${randomUUID()}@example.test`, consented_at: new Date().toISOString(), verification_hash: "h", verification_expires_at: new Date().toISOString() });
+    expect(ok.error).toBeNull();
+  });
+
   it("no SECURITY DEFINER function in public is executable by clients", async () => {
     const rows = await sql<{ proname: string }>(
       "select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prosecdef and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute'))",

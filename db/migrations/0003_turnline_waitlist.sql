@@ -24,9 +24,10 @@ create unique index if not exists waitlist_email_unique on public.turnline_waitl
 create index if not exists waitlist_confirmed_idx on public.turnline_waitlist(confirmed_at) where unsubscribed_at is null;
 alter table public.turnline_waitlist enable row level security;
 alter table public.turnline_waitlist force row level security;
-revoke all on schema marketing from public, anon, authenticated;
-revoke all on all tables in schema marketing from public, anon, authenticated;
--- Only the Edge Function's service role uses this table. No end-user RLS policies.
-grant usage on schema marketing to service_role;
+-- Only the Edge Function's service role uses this table. No end-user RLS policies, and no client
+-- privileges at all (Supabase grants public-schema tables to anon/authenticated by default).
+-- S1-06: the original lines revoked on a `marketing` schema that is never created, so this migration
+-- failed to apply; replaced with the equivalent table-level revoke.
+revoke all on public.turnline_waitlist from public, anon, authenticated;
 grant select,insert,update on public.turnline_waitlist to service_role;
 -- All subscriber exports must filter: confirmed_at is not null AND unsubscribed_at is null.
