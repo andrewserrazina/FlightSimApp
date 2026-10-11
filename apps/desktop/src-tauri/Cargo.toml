@@ -20,6 +20,8 @@ serde_json = "1"
 tokio = { version = "1", features = ["process", "io-util", "net", "time", "sync", "macros", "rt-multi-thread"] }
 getrandom = "0.2"
 base64 = "0.22"
+# SQLite compiled in (no system library needed on Windows). Used only by the local flight store.
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 [profile.release]
 strip = true

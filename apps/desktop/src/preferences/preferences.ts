@@ -11,11 +11,15 @@ export interface Preferences {
   staleWarningSeconds: number;
   /** Show local time next to UTC (UTC is always shown). */
   showLocalTime: boolean;
+  /** Retention: keep detailed track samples for this many most recent flights. */
+  keepDetailedFlights: number;
 }
 
 export const STORAGE_KEY = "flightsim.preferences.v1";
 export const STALE_MIN_S = 2;
 export const STALE_MAX_S = 30;
+export const RETENTION_MIN = 5;
+export const RETENTION_MAX = 1000;
 
 export const DEFAULT_PREFERENCES: Preferences = {
   schemaVersion: 1,
@@ -23,6 +27,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   simulator: "msfs2024",
   staleWarningSeconds: 3,
   showLocalTime: false,
+  keepDetailedFlights: 100,
 };
 
 /** Accept only well-formed fields; anything else falls back to the default for that field. */
@@ -36,6 +41,10 @@ export function parsePreferences(raw: unknown): Preferences {
     staleWarningSeconds:
       typeof stale === "number" && Number.isInteger(stale) && stale >= STALE_MIN_S && stale <= STALE_MAX_S ? stale : DEFAULT_PREFERENCES.staleWarningSeconds,
     showLocalTime: typeof o.showLocalTime === "boolean" ? o.showLocalTime : DEFAULT_PREFERENCES.showLocalTime,
+    keepDetailedFlights:
+      typeof o.keepDetailedFlights === "number" && Number.isInteger(o.keepDetailedFlights) && o.keepDetailedFlights >= RETENTION_MIN && o.keepDetailedFlights <= RETENTION_MAX
+        ? o.keepDetailedFlights
+        : DEFAULT_PREFERENCES.keepDetailedFlights,
   };
 }
 

@@ -6,14 +6,17 @@ import { afterEach, describe, expect, it } from "vitest";
 import { App } from "../src/App";
 import type { FlightHistoryRepository } from "../src/data/flightHistory";
 import { STORAGE_KEY } from "../src/preferences/preferences";
+import { MemoryFlightStore } from "./memoryStore";
 import { connState, FakeTransport, flush, frame, helloOk, MemoryStorage, running } from "./support";
 
 afterEach(cleanup);
 
-async function renderApp(opts: { transport?: FakeTransport | null; storage?: MemoryStorage; history?: FlightHistoryRepository; page?: "welcome" | "live" | "history" | "debrief" | "settings" } = {}) {
+async function renderApp(opts: { transport?: FakeTransport | null; storage?: MemoryStorage; history?: FlightHistoryRepository; store?: MemoryFlightStore; page?: "welcome" | "live" | "history" | "debrief" | "settings" } = {}) {
   const transport = opts.transport === undefined ? new FakeTransport() : opts.transport;
   const storage = opts.storage ?? new MemoryStorage();
-  const utils = render(<App transport={transport} storage={storage} {...(opts.history ? { history: opts.history } : {})} {...(opts.page ? { initialPage: opts.page } : {})} />);
+  const utils = render(
+    <App transport={transport} storage={storage} {...(opts.store ? { store: opts.store } : {})} {...(opts.history ? { history: opts.history } : {})} {...(opts.page ? { initialPage: opts.page } : {})} />,
+  );
   await act(flush);
   await act(flush);
   // Callers that pass `transport: null` never use the returned transport.
@@ -100,7 +103,7 @@ describe("live flight", () => {
   it("shows an honest empty state without telemetry", async () => {
     await renderApp({ page: "live" });
     expect(screen.getByText("No live telemetry")).toBeInTheDocument();
-    expect(screen.getByText("No flight planned")).toBeInTheDocument();
+    expect(screen.getByText("No flight in progress")).toBeInTheDocument();
     expect(screen.getByText("Not detected")).toBeInTheDocument();
   });
 
@@ -150,10 +153,10 @@ describe("live flight", () => {
 });
 
 describe("flight history", () => {
-  it("shows the honest empty state when persistence is not implemented", async () => {
+  it("shows an honest empty state outside the desktop shell (no database)", async () => {
     await renderApp({ page: "history" });
     expect(screen.getByText("No flights recorded")).toBeInTheDocument();
-    expect(screen.getByText(/Flight recording is not available yet/)).toBeInTheDocument();
+    expect(screen.getByText(/stored by the FlightSimApp desktop app/)).toBeInTheDocument();
     expect(screen.queryByRole("table")).toBeNull();
   });
 
@@ -170,22 +173,30 @@ describe("flight history", () => {
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(screen.getByText("Loading flight history…")).toBeInTheDocument();
     await act(flush);
-    expect(screen.getByText("Completed flights will appear here.")).toBeInTheDocument();
+    expect(screen.getByText(/appears here as soon as it is recorded/)).toBeInTheDocument();
   });
 
-  it("lists recorded flights and navigates to their debrief (test data only)", async () => {
-    const flight: FlightSummary = { id: "f-1", status: "COMPLETED", aircraftTitle: "Test Jet", originIcao: "KSEA", destinationIcao: null, startedAtUtc: "2026-10-10T21:00:00Z", endedAtUtc: "2026-10-10T22:30:00Z", simulator: "msfs2024" };
-    const repo: FlightHistoryRepository = { availability: { available: true }, listFlights: async () => [flight], getFlight: async (id) => (id === "f-1" ? flight : null) };
-    await renderApp({ page: "history", history: repo });
+  it("lists recorded flights with session vs airborne time and navigates to their debrief (test data only)", async () => {
+    const store = new MemoryFlightStore();
+    await store.commit({
+      flight: { id: "f-1", status: "completed", completion: "arrival_confirmed", phase: "COMPLETED", simulator: "msfs2024", simulatorVersion: null, aircraftTitle: "Test Jet", aircraftIcao: null, originIcao: "KSEA", destinationIcao: null, startedAtUtc: "2026-10-10T21:00:00.000Z", endedAtUtc: "2026-10-10T22:30:00.000Z", lastSeenAtUtc: "2026-10-10T22:29:59.000Z", takeoffAtUtc: "2026-10-10T21:10:00.000Z", landingAtUtc: "2026-10-10T22:20:00.000Z", airborneSeconds: 4200, startedAirborne: false, engineState: "{}", stats: "{}" },
+      events: [{ seq: 1, eventId: "e1", kind: "flight.started", occurredAtUtc: "2026-10-10T21:00:00.000Z", source: "user", fromPhase: null, toPhase: "NOT_STARTED", details: "{}" }],
+      samples: [],
+      interruptions: [],
+    });
+    await renderApp({ page: "history", store });
     const row = screen.getByRole("row", { name: /Test Jet/ });
     expect(row).toHaveTextContent("KSEA");
     expect(row).toHaveTextContent("Not recorded");
-    expect(row).toHaveTextContent("1 h 30 min");
+    expect(row).toHaveTextContent("1 h 30 min"); // session
+    expect(row).toHaveTextContent("1 h 10 min"); // airborne
+    expect(row).toHaveTextContent("Completed");
     fireEvent.click(within(row).getByRole("button", { name: /Open debrief/ }));
     await act(flush);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Flight debrief");
-    expect(screen.getByText("Available")).toBeInTheDocument();
+    expect(screen.getAllByText("Recorded data").length).toBe(2);
     expect(screen.getAllByText("Test Jet").length).toBeGreaterThan(0);
+    expect(screen.getByRole("cell", { name: "Flight started" })).toBeInTheDocument(); // timeline row
   });
 });
 
@@ -193,7 +204,7 @@ describe("debrief", () => {
   it("marks future sections as not yet implemented and invents no metrics", async () => {
     await renderApp({ page: "debrief" });
     expect(screen.getByText("No flight selected", { selector: ".empty__title" })).toBeInTheDocument();
-    expect(screen.getAllByText("Not yet implemented")).toHaveLength(8);
+    expect(screen.getAllByText("Not yet implemented")).toHaveLength(7);
     for (const title of ["Safety observations", "Passenger experience", "Fuel performance"]) {
       expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
     }
@@ -285,5 +296,122 @@ describe("adapter switching", () => {
     expect(screen.getAllByText("Mock Twinjet (demo data)").length).toBeGreaterThan(0);
     await act(async () => transport.emitShell({ state: "restarting", message: "Sim bridge exited", attempt: 1 }));
     expect(screen.queryByText("Mock Twinjet (demo data)")).toBeNull();
+  });
+});
+
+describe("flight lifecycle controls", () => {
+  const T = Date.now();
+  const liveFrame = (seq: number, patch: (d: Record<string, any>) => void = () => {}) =>
+    frame(seq, (d) => {
+      d.observed_at = new Date(T + seq * 500).toISOString();
+      patch(d);
+    });
+
+  async function connected(store = new MemoryFlightStore()) {
+    const r = await renderApp({ page: "live", store });
+    await send(r.transport, helloOk(), connState("CONNECTED"), liveFrame(1));
+    return { ...r, store };
+  }
+
+  it("enables Start only with live telemetry and a ready database, then records the flight", async () => {
+    const { transport, store } = await connected();
+    const start = screen.getByRole("button", { name: "Start flight" });
+    expect(start).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /End flight/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Confirm completion" })).toBeNull();
+    fireEvent.click(start);
+    await act(flush);
+    await send(transport, liveFrame(2));
+    expect(screen.getByText("● RECORDING")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "End flight…" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Start flight" })).toBeNull();
+    expect(store.flights.size).toBe(1);
+    expect(screen.getByText("Preparing (detected)")).toBeInTheDocument();
+  });
+
+  it("asks for explicit confirmation before completing a flight without landing evidence", async () => {
+    const { store } = await connected();
+    fireEvent.click(screen.getByRole("button", { name: "Start flight" }));
+    await act(flush);
+    fireEvent.click(screen.getByRole("button", { name: "End flight…" }));
+    const dialog = screen.getByRole("dialog", { name: "End this flight?" });
+    expect(dialog).toHaveTextContent("No takeoff or landing was detected.");
+    const markAnyway = within(dialog).getByRole("button", { name: "Mark completed anyway" });
+    expect(markAnyway).toBeDisabled();
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect([...store.flights.values()][0]!.status).toBe("active");
+
+    fireEvent.click(screen.getByRole("button", { name: "End flight…" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /I confirm this flight was completed/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark completed anyway" }));
+    await act(flush);
+    await act(flush);
+    expect([...store.flights.values()][0]).toMatchObject({ status: "completed", completion: "user_confirmed_without_evidence" });
+    expect(screen.getByRole("button", { name: "View debrief" })).toBeInTheDocument();
+  });
+
+  it("can end a flight as incomplete", async () => {
+    const { store } = await connected();
+    fireEvent.click(screen.getByRole("button", { name: "Start flight" }));
+    await act(flush);
+    fireEvent.click(screen.getByRole("button", { name: "End flight…" }));
+    fireEvent.click(screen.getByRole("button", { name: "End as incomplete" }));
+    await act(flush);
+    await act(flush);
+    expect([...store.flights.values()][0]).toMatchObject({ status: "aborted", completion: null });
+  });
+
+  it("shows a resume/discard decision for an unfinished flight found at startup and resumes the same flight", async () => {
+    const store = new MemoryFlightStore();
+    const first = await connected(store);
+    fireEvent.click(screen.getByRole("button", { name: "Start flight" }));
+    await act(flush);
+    await send(first.transport, liveFrame(2), liveFrame(3));
+    const id = [...store.flights.keys()][0]!;
+    cleanup(); // app closed without ending the flight
+
+    await renderApp({ page: "history", store });
+    const banner = screen.getByRole("alert", { name: "Unfinished flight found." });
+    expect(banner).toHaveTextContent("Resume it to continue recording");
+    expect(store.interruptions.get(id)![0]).toMatchObject({ cause: "app_closed", endedAtUtc: null });
+    fireEvent.click(within(banner).getByRole("button", { name: "Resume flight" }));
+    await act(flush);
+    await act(flush);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Live flight");
+    expect(screen.queryByRole("alert", { name: "Unfinished flight found." })).toBeNull();
+    expect(store.flights.size).toBe(1);
+    expect(store.flights.get(id)!.status).toBe("active");
+  });
+
+  it("discarding the unfinished flight requires confirmation and keeps it in history", async () => {
+    const store = new MemoryFlightStore();
+    await connected(store);
+    fireEvent.click(screen.getByRole("button", { name: "Start flight" }));
+    await act(flush);
+    cleanup();
+    await renderApp({ store });
+    fireEvent.click(within(screen.getByRole("alert", { name: "Unfinished flight found." })).getByRole("button", { name: "Discard…" }));
+    const dialog = screen.getByRole("dialog", { name: "Discard the unfinished flight?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Discard flight" }));
+    await act(flush);
+    await act(flush);
+    expect([...store.flights.values()][0]!.status).toBe("discarded");
+  });
+
+  it("reports a corrupted database with actionable recovery and disables recording", async () => {
+    const store = new MemoryFlightStore();
+    store.statusValue = { state: "unavailable", kind: "corrupt", message: "The flight database is damaged and cannot be read.", location: "C:/Users/p/AppData/Roaming/dev.flightsimapp.desktop/flightsim.db", canReset: true };
+    const { transport } = await renderApp({ page: "live", store });
+    await send(transport, helloOk(), connState("CONNECTED"), liveFrame(1));
+    expect(screen.getByText(/Flight recording is unavailable/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start flight" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Move damaged database aside…" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("renamed (not deleted)");
+    fireEvent.click(screen.getByRole("button", { name: "Move aside and start a new database" }));
+    await act(flush);
+    await act(flush);
+    expect(screen.queryByText(/Flight recording is unavailable/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Start flight" })).toBeEnabled();
   });
 });

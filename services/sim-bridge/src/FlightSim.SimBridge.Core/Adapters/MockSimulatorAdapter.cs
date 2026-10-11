@@ -16,6 +16,12 @@ public sealed record MockAdapterOptions
 
     /// <summary>When false, fuel is reported as unavailable (exercises the "fuel unavailable, not 0 kg" path).</summary>
     public bool ReportFuel { get; init; } = true;
+
+    /// <summary>
+    /// Start the demo flight this far in (seconds). Test/dev hook that simulates the simulator having
+    /// kept flying while FlightSimApp was closed.
+    /// </summary>
+    public TimeSpan StartOffset { get; init; } = TimeSpan.Zero;
 }
 
 /// <summary>
@@ -28,6 +34,7 @@ public sealed class MockSimulatorAdapter(MockAdapterOptions? options = null, Tim
     public const string AircraftTitle = "Mock Twinjet (demo data)";
     private readonly MockAdapterOptions _options = options ?? new MockAdapterOptions();
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
+    private bool _offsetApplied;
     private int _connectAttempts;
     private long _profileIndex; // continues across reconnects so the mock flight progresses
     private bool _connected;
@@ -60,6 +67,11 @@ public sealed class MockSimulatorAdapter(MockAdapterOptions? options = null, Tim
         {
             throw new InvalidOperationException("ReadSamplesAsync called before ConnectAsync.");
         }
+        if (!_offsetApplied)
+        {
+            _profileIndex = (long)(_options.StartOffset.TotalSeconds * 2);
+            _offsetApplied = true;
+        }
         var emitted = 0;
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -87,42 +99,50 @@ public sealed class MockSimulatorAdapter(MockAdapterOptions? options = null, Tim
     }
 }
 
-/// <summary>A simple, deterministic parked → taxi → takeoff → climb → cruise loop. Not a flight model.</summary>
+/// <summary>
+/// Deterministic demo flight at 2 Hz, flown once and then held parked (it does not loop, so it never
+/// "teleports"): parked → taxi out → takeoff roll → climb to 8,000 ft AGL → cruise → descent →
+/// approach → landing → rollout → taxi in → parked with engines off. Not a flight model; values
+/// are only plausible enough to exercise the lifecycle detector end to end (~15 min real time).
+/// </summary>
 internal static class MockFlightProfile
 {
     private const double StartLat = 47.4502, StartLon = -122.3088, FieldElevationFt = 433;
-    private const double StartFuelKg = 5120, FuelBurnKgPerSample = 0.35;
+    private const double StartFuelKg = 5120, FuelBurnKgPerSecondPerEngine = 0.35;
+
+    // Phase boundaries in seconds since the start of the profile.
+    internal const double ParkedEnd = 20, TaxiOutEnd = 80, LiftoffAt = 105, ClimbEnd = 345, CruiseEnd = 465,
+        DescentEnd = 705, TouchdownAt = 785, RolloutEnd = 815, TaxiInEnd = 875, EnginesOffAt = 890;
+    private const double CruiseAglFt = 8000;
+
+    private static readonly double[] CumulativeNm = BuildDistance();
 
     public static TelemetrySample Sample(long i, DateTimeOffset now, MockAdapterOptions options)
     {
-        // Phase boundaries in samples (2 Hz): 20 s parked, 60 s taxi, 30 s takeoff roll+rotate, climb, cruise.
-        const long parkedEnd = 40, taxiEnd = 160, rollEnd = 220, climbEnd = 1420;
-        var cycle = i % 2400;
-
-        bool onGround = cycle < rollEnd;
-        bool brake = cycle < parkedEnd;
-        int enginesRunning = cycle < 10 ? 0 : 2;
-        double gs = cycle < parkedEnd ? 0
-            : cycle < taxiEnd ? 15
-            : cycle < rollEnd ? Math.Min(160, 15 + (cycle - taxiEnd) * 2.4)
-            : cycle < climbEnd ? 160 + (cycle - rollEnd) * 0.25
-            : 460;
-        double vs = onGround ? 0 : cycle < climbEnd ? 2200 : 0;
-        double altAgl = onGround ? 0 : Math.Min((cycle - rollEnd) * vs / 120.0, 35000);
-        double heading = cycle < taxiEnd ? 179.5 : 340.0;
-        double distanceNm = gs / 3600.0 * 0.5 * cycle; // rough, monotonic; fine for demo data
-        double lat = StartLat + distanceNm / 60.0 * Math.Cos(heading * Math.PI / 180) * 0.1;
-        double lon = StartLon + distanceNm / 60.0 * Math.Sin(heading * Math.PI / 180) * 0.1;
-        double fuel = Math.Max(0, StartFuelKg - FuelBurnKgPerSample * enginesRunning / 2.0 * i);
+        var t = Math.Max(0, i) * 0.5;
+        var gs = GroundSpeed(t);
+        var agl = AltitudeAgl(t);
+        var onGround = t < LiftoffAt || t >= TouchdownAt;
+        var vs = onGround ? 0 : t < ClimbEnd ? 2000 : t < CruiseEnd ? 0 : -1500;
+        var enginesRunning = t < 5 || t >= EnginesOffAt ? 0 : 2;
+        var brake = t < ParkedEnd || t >= TaxiInEnd;
+        var heading = t < TaxiOutEnd ? 179.5 : t < TaxiInEnd ? 340.0 : 70.0;
+        var nm = CumulativeNm[Math.Min((int)(t * 2), CumulativeNm.Length - 1)];
+        // Constant track of 340° after the taxi; good enough for demo positions.
+        var lat = StartLat + nm / 60.0 * Math.Cos(340 * Math.PI / 180);
+        var lon = StartLon + nm / 60.0 * Math.Sin(340 * Math.PI / 180) / Math.Cos(StartLat * Math.PI / 180);
+        var engineSeconds = Math.Max(0, Math.Min(t, EnginesOffAt) - 5);
+        var fuel = Math.Max(0, StartFuelKg - FuelBurnKgPerSecondPerEngine * 2 * engineSeconds);
+        var ias = onGround ? Math.Max(0, gs - 5) : gs * (1 - agl / 60000);
 
         var readings = new TelemetryReadingsV1(
             Reading.Bool(onGround),
-            Reading.Number(Math.Clamp(lat, -90, 90), Units.Degrees),
-            Reading.Number(Math.Clamp(lon, -180, 180), Units.Degrees),
-            Reading.Number(Math.Round(FieldElevationFt + altAgl), Units.Feet),
-            Reading.Number(Math.Round(FieldElevationFt + altAgl - 13), Units.Feet),
-            altAgl <= 2500 ? Reading.Number(Math.Round(altAgl), Units.Feet) : Reading.UnavailableNumber(Units.Feet),
-            Reading.Number(Math.Round(onGround ? Math.Max(0, gs - 5) : gs * 0.62), Units.Knots),
+            Reading.Number(Math.Round(lat, 6), Units.Degrees),
+            Reading.Number(Math.Round(lon, 6), Units.Degrees),
+            Reading.Number(Math.Round(FieldElevationFt + agl), Units.Feet),
+            Reading.Number(Math.Round(FieldElevationFt + agl - 13), Units.Feet),
+            agl <= 2500 ? Reading.Number(Math.Round(agl), Units.Feet) : Reading.UnavailableNumber(Units.Feet),
+            Reading.Number(Math.Round(ias), Units.Knots),
             Reading.Number(Math.Round(gs), Units.Knots),
             Reading.Number(vs, Units.FeetPerMinute),
             Reading.Number(heading, Units.Degrees),
@@ -132,5 +152,31 @@ internal static class MockFlightProfile
             Reading.Bool(brake));
 
         return new TelemetrySample(now, new AircraftIdentityV1(Reading.Text(MockSimulatorAdapter.AircraftTitle), Reading.Text("A20N")), readings);
+    }
+
+    internal static double GroundSpeed(double t) =>
+        t < ParkedEnd ? 0
+        : t < TaxiOutEnd ? 15
+        : t < LiftoffAt ? 15 + (t - TaxiOutEnd) * 5.8          // takeoff roll to 160 kt
+        : t < ClimbEnd ? 160 + (t - LiftoffAt) * 0.5           // 160 → 280 kt
+        : t < CruiseEnd ? 300
+        : t < DescentEnd ? 250
+        : t < TouchdownAt ? 140
+        : t < RolloutEnd ? 140 - (t - TouchdownAt) * 125.0 / 30 // rollout to 15 kt
+        : t < TaxiInEnd ? 15
+        : 0;
+
+    internal static double AltitudeAgl(double t) =>
+        t < LiftoffAt || t >= TouchdownAt ? 0
+        : t < ClimbEnd ? (t - LiftoffAt) * 2000 / 60
+        : t < CruiseEnd ? CruiseAglFt
+        : Math.Max(0, CruiseAglFt - (t - CruiseEnd) * 1500 / 60);
+
+    private static double[] BuildDistance()
+    {
+        var samples = (int)(EnginesOffAt * 2) + 1;
+        var d = new double[samples];
+        for (var k = 1; k < samples; k++) d[k] = d[k - 1] + GroundSpeed(k * 0.5) * 0.5 / 3600;
+        return d;
     }
 }

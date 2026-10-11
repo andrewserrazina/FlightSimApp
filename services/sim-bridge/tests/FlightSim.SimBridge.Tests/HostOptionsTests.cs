@@ -13,6 +13,14 @@ public class HostOptionsTests
         Assert.Equal("flightsim-abc", o.PipeName);
     }
 
+    [Fact]
+    public void Parses_mock_start_offset()
+    {
+        Assert.Equal(420, BridgeOptions.Parse(["--adapter", "mock", "--mock-start-offset-s", "420"]).MockStartOffsetSeconds);
+        Assert.Throws<ArgumentException>(() => BridgeOptions.Parse(["--adapter", "mock", "--mock-start-offset-s", "-1"]));
+        Assert.Throws<ArgumentException>(() => BridgeOptions.Parse(["--adapter", "mock", "--mock-start-offset-s", "99999"]));
+    }
+
     [Theory]
     [InlineData("--adapter", "xplane")]
     [InlineData("--pipe-name", "x")]

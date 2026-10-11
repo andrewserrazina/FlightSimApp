@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { bridgeReducer, initialBridgeState, type BridgeAction } from "../src/bridge/reducer";
-import { buildDebrief } from "../src/domain/debrief";
+import type { FlightDetail } from "@flightsim/flight-core";
+import { buildDebrief, buildOverview, dataAvailability, describeEvent, interruptionLines, observedPhases } from "../src/domain/debrief";
 import { presentConnection, type PresentationKey } from "../src/domain/connectionPresentation";
 import { buildDiagnosticsReport, redactId } from "../src/domain/diagnostics";
 import { describeFreshness, telemetryFreshness } from "../src/domain/freshness";
@@ -83,12 +84,27 @@ describe("telemetryFreshness", () => {
 });
 
 describe("buildDebrief", () => {
-  it("marks every section unavailable when no flight is selected and fabricates nothing", () => {
+  const detail = {
+    summary: { id: "f1", status: "completed", completion: "arrival_confirmed", phase: "COMPLETED", simulator: "mock", simulatorVersion: "mock-1", aircraftTitle: null, aircraftIcao: null, originIcao: null, destinationIcao: null, startedAtUtc: "2026-10-10T21:00:00.000Z", endedAtUtc: "2026-10-10T21:30:00.000Z", lastSeenAtUtc: "2026-10-10T21:29:59.000Z", takeoffAtUtc: "2026-10-10T21:02:00.000Z", landingAtUtc: null, airborneSeconds: 600, startedAirborne: false, interruptionCount: 1, sampleCount: 10 },
+    events: [
+      { seq: 1, kind: "flight.started", occurredAtUtc: "2026-10-10T21:00:00.000Z", source: "user", fromPhase: null, toPhase: "NOT_STARTED", details: {} },
+      { seq: 2, kind: "phase.changed", occurredAtUtc: "2026-10-10T21:00:01.000Z", source: "detected", fromPhase: "NOT_STARTED", toPhase: "PREPARING", details: { reason: "initial" } },
+      { seq: 3, kind: "phase.changed", occurredAtUtc: "2026-10-10T21:02:03.000Z", source: "detected", fromPhase: "PREPARING", toPhase: "CLIMB", details: {} },
+      { seq: 4, kind: "flight.interrupted", occurredAtUtc: "2026-10-10T21:10:00.000Z", source: "system", fromPhase: "CLIMB", toPhase: "INTERRUPTED", details: { cause: "app_closed" } },
+      { seq: 5, kind: "flight.resumed", occurredAtUtc: "2026-10-10T21:15:00.000Z", source: "user", fromPhase: "INTERRUPTED", toPhase: "CLIMB", details: {} },
+      { seq: 6, kind: "flight.completed", occurredAtUtc: "2026-10-10T21:30:00.000Z", source: "user", fromPhase: "CLIMB", toPhase: "COMPLETED", details: { completion: "arrival_confirmed" } },
+    ],
+    interruptions: [{ startedAtUtc: "2026-10-10T21:09:50.000Z", endedAtUtc: "2026-10-10T21:15:02.000Z", cause: "app_closed", resolution: "user_resumed" }],
+    stats: { framesSeen: 200, framesUsable: 200, readings: { total_fuel_kg: 0, ground_speed_kt: 200 }, maxIndicatedAltitudeFt: 8433, maxGroundSpeedKt: 300, samplesRecorded: 10 },
+    samplesPruned: false,
+  } as unknown as FlightDetail;
+
+  it("marks future sections not implemented and fabricates nothing when no flight is selected", () => {
     const sections = buildDebrief(null);
     expect(sections.map((s) => s.title)).toEqual([
       "Flight overview",
-      "Departure and arrival performance",
       "Flight timeline",
+      "Departure and arrival performance",
       "Flight data analysis",
       "Fuel performance",
       "Operational delays",
@@ -96,14 +112,40 @@ describe("buildDebrief", () => {
       "Passenger experience",
       "Overall operational assessment",
     ]);
-    expect(sections[0]!.availability).toBe("awaiting-data");
-    expect(sections.slice(1).every((s) => s.availability === "not-implemented" && s.metrics.length === 0)).toBe(true);
+    expect(sections.slice(0, 2).every((s) => s.availability === "awaiting-data")).toBe(true);
+    expect(sections.slice(2).every((s) => s.availability === "not-implemented" && s.metrics.length === 0)).toBe(true);
   });
 
-  it("uses only recorded fields for a flight and says Not recorded otherwise", () => {
-    const [overview] = buildDebrief({ id: "f1", status: "AIRBORNE", aircraftTitle: null, originIcao: "KSEA", destinationIcao: null, startedAtUtc: "2026-10-10T21:00:00Z", endedAtUtc: null, simulator: "mock" });
-    const m = Object.fromEntries(overview!.metrics.map((x) => [x.label, x.value]));
-    expect(m).toMatchObject({ Aircraft: "Not recorded", Origin: "KSEA", Destination: "Not recorded", Duration: "Unavailable", Ended: "Not recorded" });
+  it("builds the overview only from recorded fields", () => {
+    const m = Object.fromEntries(buildOverview(detail).map((x) => [x.label, x.value]));
+    expect(m).toMatchObject({
+      "Flight ID": "f1",
+      Aircraft: "Not recorded",
+      Origin: "Not recorded",
+      "Landing (detected)": "Not detected",
+      "Takeoff (detected)": "2026-10-10 21:02:00Z",
+      "Elapsed session time": "30 min",
+      "Observed airborne time": "10 min",
+    });
+  });
+
+  it("derives observed phases, interruptions and availability from the record", () => {
+    expect(observedPhases(detail).map((p) => [p.label, p.durationS])).toEqual([
+      ["Preparing", 122],
+      ["Climb", 477],
+      ["Interrupted", 300],
+      ["Climb", 900],
+    ]);
+    expect(interruptionLines(detail)[0]).toMatchObject({ cause: "App closed", resolution: "Resumed by pilot", durationS: 312 });
+    const avail = Object.fromEntries(dataAvailability(detail).map((a) => [a.label, a.percent]));
+    expect(avail["Fuel quantity"]).toBe(0);
+    expect(avail["Ground speed"]).toBe(100);
+  });
+
+  it("describes events with their provenance", () => {
+    expect(describeEvent(detail.events[1]!)).toEqual({ text: "Initial phase: Preparing", source: "Detected" });
+    expect(describeEvent(detail.events[3]!).text).toBe("Flight interrupted (App closed)");
+    expect(describeEvent(detail.events[4]!).source).toBe("Pilot");
   });
 });
 
@@ -140,5 +182,14 @@ describe("diagnostics report", () => {
     expect(text).toContain(redactId("7d1c6a52-2f1e-4b8a-9c0d-3e5f6a7b8c9d")!);
     expect(text).not.toMatch(/token/i);
     expect(text).not.toContain("47.4502");
+  });
+});
+
+describe("normalizeStats", () => {
+  it("treats empty or malformed stored stats as missing rather than crashing", async () => {
+    const { normalizeStats } = await import("../src/domain/debrief");
+    expect(normalizeStats({})).toBeNull();
+    expect(normalizeStats(null)).toBeNull();
+    expect(normalizeStats({ framesSeen: 3, readings: {} })).toMatchObject({ framesSeen: 3, samplesRecorded: 0 });
   });
 });

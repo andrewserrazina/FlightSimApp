@@ -13,6 +13,7 @@ import { localTime } from "../ui/format";
 import { StatusIndicator } from "../ui/StatusIndicator";
 import { Tag } from "../ui/Tag";
 import { PAGES, pageForShortcut, type NavigateFn, type NavigationState } from "./navigation";
+import { RecorderBanners } from "./RecorderBanners";
 import { useAdapterSync } from "./useAdapterSync";
 import { useNow } from "./useNow";
 
@@ -132,6 +133,9 @@ export function AppShell({ initialPage = "welcome" }: { initialPage?: Navigation
         <h1 ref={headingRef} tabIndex={-1} className="page-title">
           {current.title}
         </h1>
+        <ErrorBoundary label="Flight recording notices">
+          <RecorderBanners navigate={navigate} />
+        </ErrorBoundary>
         <ErrorBoundary key={nav.page} label={current.label}>
           {nav.page === "welcome" && <WelcomePage navigate={navigate} />}
           {nav.page === "live" && <LiveFlightPage navigate={navigate} />}

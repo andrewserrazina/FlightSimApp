@@ -291,11 +291,18 @@ fn selected_adapter() -> &'static str {
 }
 
 fn spawn_bridge(adapter: &str, pipe_name: &str) -> Result<Child, String> {
-    let bridge_args = ["--adapter", adapter, "--pipe-name", pipe_name];
+    let mut bridge_args = vec!["--adapter".to_string(), adapter.to_string(), "--pipe-name".to_string(), pipe_name.to_string()];
+    // Dev/test hook: start the mock demo flight part-way through (simulates the simulator having
+    // kept flying while the app was closed). Ignored for real simulators.
+    if adapter == "mock" {
+        if let Some(offset) = std::env::var("FLIGHTSIM_MOCK_START_OFFSET_S").ok().and_then(|v| v.parse::<u32>().ok()).filter(|v| *v <= 86_400) {
+            bridge_args.extend(["--mock-start-offset-s".to_string(), offset.to_string()]);
+        }
+    }
     let mut cmd = match std::env::var("FLIGHTSIM_BRIDGE_PATH").ok().filter(|p| !p.trim().is_empty()) {
         Some(path) => {
             let mut c = Command::new(path);
-            c.args(bridge_args);
+            c.args(&bridge_args);
             c
         }
         None if cfg!(debug_assertions) => {
@@ -303,7 +310,7 @@ fn spawn_bridge(adapter: &str, pipe_name: &str) -> Result<Child, String> {
             let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("../../../services/sim-bridge/src/FlightSim.SimBridge.Host");
             let mut c = Command::new("dotnet");
-            c.arg("run").arg("--project").arg(project).arg("--").args(bridge_args);
+            c.arg("run").arg("--project").arg(project).arg("--").args(&bridge_args);
             c
         }
         None => {
@@ -311,7 +318,7 @@ fn spawn_bridge(adapter: &str, pipe_name: &str) -> Result<Child, String> {
             let exe = std::env::current_exe().map_err(|e| e.to_string())?;
             let name = if cfg!(windows) { "flightsim-sim-bridge.exe" } else { "flightsim-sim-bridge" };
             let mut c = Command::new(exe.with_file_name(name));
-            c.args(bridge_args);
+            c.args(&bridge_args);
             c
         }
     };

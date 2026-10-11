@@ -57,6 +57,38 @@ public class MockAdapterTests
     }
 
     [Fact]
+    public void Mock_profile_flies_a_complete_flight_and_then_holds_parked()
+    {
+        var o = new MockAdapterOptions();
+        TelemetrySample At(double seconds) => MockFlightProfile.Sample((long)(seconds * 2), DateTimeOffset.UtcNow, o);
+        Assert.True(At(90).Readings.OnGround.Value);                     // takeoff roll
+        Assert.True(At(90).Readings.GroundSpeedKt.Value > 40);
+        Assert.Equal(2000d, At(200).Readings.VerticalSpeedFpm.Value);    // climb
+        Assert.Equal(0d, At(400).Readings.VerticalSpeedFpm.Value);       // cruise
+        Assert.Equal(-1500d, At(600).Readings.VerticalSpeedFpm.Value);   // descent
+        Assert.True(At(700).Readings.RadioAltitudeFt.IsAvailable);       // approach (radio altitude below 2,500 ft)
+        Assert.True(At(800).Readings.OnGround.Value);                    // rollout
+        var parked = At(2000);
+        Assert.Equal(0d, parked.Readings.GroundSpeedKt.Value);
+        Assert.Equal(0, parked.Readings.EnginesRunningCount.Value);
+        Assert.True(parked.Readings.ParkingBrakeSet.Value);
+        Assert.Equal(TestSamples.ToJson(At(2000).Readings), TestSamples.ToJson(At(5000).Readings)); // no loop/teleport
+    }
+
+    [Fact]
+    public async Task Start_offset_begins_the_demo_flight_later()
+    {
+        await using var adapter = new MockSimulatorAdapter(Fast with { StartOffset = TimeSpan.FromSeconds(400) });
+        await adapter.ConnectAsync(CancellationToken.None);
+        await foreach (var s in adapter.ReadSamplesAsync(CancellationToken.None))
+        {
+            Assert.False(s.Readings.OnGround.Value);
+            Assert.Equal(0d, s.Readings.VerticalSpeedFpm.Value);
+            break;
+        }
+    }
+
+    [Fact]
     public void Mock_without_fuel_reports_unavailable_not_zero()
     {
         var sample = MockFlightProfile.Sample(10, DateTimeOffset.UtcNow, new MockAdapterOptions { ReportFuel = false });

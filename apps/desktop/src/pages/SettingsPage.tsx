@@ -6,7 +6,8 @@ import { presentConnection } from "../domain/connectionPresentation";
 import { buildDiagnosticsReport, redactId } from "../domain/diagnostics";
 import { describeFreshness, telemetryFreshness } from "../domain/freshness";
 import { usePreferences } from "../preferences/PreferencesContext";
-import { STALE_MAX_S, STALE_MIN_S } from "../preferences/preferences";
+import { RETENTION_MAX, RETENTION_MIN, STALE_MAX_S, STALE_MIN_S } from "../preferences/preferences";
+import { useRecorderView } from "../recording/RecorderContext";
 import { Button } from "../ui/Button";
 import { CheckboxField, NumberField, SelectField } from "../ui/Fields";
 import { utcDateTime } from "../ui/format";
@@ -24,7 +25,9 @@ export function SettingsPage() {
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const p = presentConnection(state);
   const freshness = telemetryFreshness(state, now, preferences.staleWarningSeconds * 1000);
-  const report = JSON.stringify(buildDiagnosticsReport(state, preferences, now, __APP_VERSION__), null, 2);
+  const recorder = useRecorderView();
+  const report = JSON.stringify(buildDiagnosticsReport(state, preferences, now, __APP_VERSION__, recorder), null, 2);
+  const store = recorder.store;
 
   async function copyReport() {
     try {
@@ -81,6 +84,27 @@ export function SettingsPage() {
           <Button variant="quiet" onClick={reset}>
             Reset preferences
           </Button>
+        </Panel>
+
+        <Panel title="Local flight data">
+          <KeyValueList
+            columns={1}
+            items={[
+              ["Database", store.state === "ready" ? `Ready (schema v${store.schemaVersion})` : store.state === "unavailable" ? `Unavailable — ${store.message}` : store.state === "absent" ? "Not available outside the desktop app" : "Opening…"],
+              ["Location", store.state === "ready" || store.state === "unavailable" ? <code className="mono">{store.location}</code> : "—"],
+              ["Unsaved items", recorder.pendingItems.toLocaleString("en-US")],
+              ["Last write error", recorder.writeError ?? "None"],
+            ]}
+          />
+          <NumberField
+            label="Keep detailed track data for the last"
+            unit="flights"
+            value={preferences.keepDetailedFlights}
+            min={RETENTION_MIN}
+            max={RETENTION_MAX}
+            onCommit={(v) => update({ keepDetailedFlights: v })}
+            description={`Older flights keep their summary, events and interruptions; only their track points are removed (${RETENTION_MIN}–${RETENTION_MAX}).`}
+          />
         </Panel>
 
         <Panel title="Connection status" actions={<StatusIndicator presentation={p} size="sm" />}>

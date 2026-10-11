@@ -59,7 +59,7 @@ if (!options.DevTokenFromEnv)
 }
 
 await using ISimulatorAdapter adapter = options.Adapter == SimulatorId.Mock
-    ? new MockSimulatorAdapter(new MockAdapterOptions { ReportFuel = !options.MockNoFuel })
+    ? new MockSimulatorAdapter(new MockAdapterOptions { ReportFuel = !options.MockNoFuel, StartOffset = TimeSpan.FromSeconds(options.MockStartOffsetSeconds) })
     : MsfsSimConnectAdapter.For(options.Adapter, loggers: loggers);
 
 var server = new NamedPipeBridgeServer(new PipeServerOptions { PipeName = options.PipeName }, token, loggers.CreateLogger<NamedPipeBridgeServer>());

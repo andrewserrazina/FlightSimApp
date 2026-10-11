@@ -1,7 +1,7 @@
 import type { SimulatorId } from "@flightsim/contracts";
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
 import { connectBridge } from "./connect";
-import { bridgeReducer, initialBridgeState } from "./reducer";
+import { bridgeReducer, initialBridgeState, type BridgeAction } from "./reducer";
 import type { BridgeTransport } from "./transport";
 import type { BridgeViewState } from "./types";
 
@@ -22,10 +22,13 @@ const noTransport = () => Promise.reject(new Error("Sim bridge is not available 
  * Single owner of the bridge subscription for the whole app (pages never subscribe themselves),
  * so there is exactly one set of listeners regardless of navigation.
  */
-export function BridgeProvider({ transport, children }: { transport: BridgeTransport | null; children: ReactNode }) {
+export function BridgeProvider({ transport, onAction, children }: { transport: BridgeTransport | null; onAction?: (action: BridgeAction) => void; children: ReactNode }) {
   const [state, dispatch] = useReducer(bridgeReducer, initialBridgeState);
   const transportRef = useRef(transport);
   transportRef.current = transport;
+  // Observers (the flight recorder) see exactly the actions the reducer sees, in order.
+  const onActionRef = useRef(onAction);
+  onActionRef.current = onAction;
 
   useEffect(() => {
     if (!transport) {
@@ -36,7 +39,10 @@ export function BridgeProvider({ transport, children }: { transport: BridgeTrans
       });
       return;
     }
-    return connectBridge(transport, dispatch);
+    return connectBridge(transport, (action) => {
+      dispatch(action);
+      onActionRef.current?.(action);
+    });
   }, [transport]);
 
   const actions = useMemo<BridgeActions>(

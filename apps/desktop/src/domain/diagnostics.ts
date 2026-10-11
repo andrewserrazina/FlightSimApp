@@ -1,5 +1,6 @@
 import type { BridgeViewState } from "../bridge/types";
 import type { Preferences } from "../preferences/preferences";
+import type { RecorderView } from "../recording/FlightRecorder";
 import { telemetryFreshness } from "./freshness";
 
 /** Shorten identifiers in diagnostics so shared reports do not carry full ids. */
@@ -11,7 +12,7 @@ export function redactId(id: string | null): string | null {
  * Troubleshooting report. Contains no secrets: the webview never has the bridge token, and
  * identifiers are shortened. Telemetry values are deliberately excluded.
  */
-export function buildDiagnosticsReport(state: BridgeViewState, prefs: Preferences, nowMs: number, appVersion: string) {
+export function buildDiagnosticsReport(state: BridgeViewState, prefs: Preferences, nowMs: number, appVersion: string, recorder?: RecorderView) {
   const freshness = telemetryFreshness(state, nowMs, prefs.staleWarningSeconds * 1000);
   return {
     generated_at_utc: new Date(nowMs).toISOString(),
@@ -42,6 +43,18 @@ export function buildDiagnosticsReport(state: BridgeViewState, prefs: Preference
       connections_lost: state.reconnectCount,
     },
     last_error: state.lastError,
+    recording: recorder
+      ? {
+          store: recorder.store.state,
+          store_error: recorder.store.state === "unavailable" ? recorder.store.kind : null,
+          flight: redactId(recorder.lifecycle.flightId),
+          status: recorder.lifecycle.status,
+          phase: recorder.lifecycle.phase,
+          pending_items: recorder.pendingItems,
+          write_error: recorder.writeError,
+          dropped_samples: recorder.droppedSamples,
+        }
+      : null,
     recent_connection_events: state.connectionLog.slice(-20),
     preferences: prefs,
   };

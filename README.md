@@ -3,7 +3,7 @@
 A pilot-first airline operations simulator for Windows desktop flight simulators (MSFS 2020/2024).
 Product, architecture and sprint specs live in [`docs/spec/`](docs/spec/).
 
-**Status: Sprint 1 — S1-01 repo foundation, S1-02 contract-first bridge, S1-03 desktop UI.** This is a technical
+**Status: Sprint 1 — S1-01 repo foundation, S1-02 contract-first bridge, S1-03 desktop UI, S1-04 flight lifecycle & local persistence.** This is a technical
 foundation, not a usable product. **No real MSFS integration has been verified.** See
 [`docs/compatibility/msfs-telemetry.md`](docs/compatibility/msfs-telemetry.md).
 
@@ -107,6 +107,25 @@ screenshots in [`docs/screenshots/s1-03/`](docs/screenshots/s1-03/).
 
 Linux smoke test harness (Xvfb, not a Windows test): `scripts/ui-smoke-linux.sh`.
 
+## Flight lifecycle & local persistence (S1-04)
+
+- **Lifecycle engine** (`packages/flight-core/src/engine.ts`): a pure, deterministic reducer.
+  - Phases: Not started, Preparing, Taxi out, Takeoff, Climb, Cruise, Descent, Approach, Landing, Taxi in, Completed, Interrupted.
+  - Detection from telemetry uses configurable thresholds with debounce and hysteresis. It handles starting in the air, starting on a runway, and the simulator restarting mid-flight.
+  - Losing telemetry never completes a flight.
+- **Manual controls** on Live Flight: Start flight, End flight (with confirmation), Confirm completion (after landing and parking are detected), Resume, Discard. A flight is only marked completed without landing evidence if the pilot explicitly confirms it.
+- **Recovery**: if the app closes mid-flight, the next start shows a Resume/Discard banner. The interruption interval is recorded, the flight ID is preserved, and the phase is re-checked against live telemetry.
+- **Local SQLite store** in the native shell (`apps/desktop/src-tauri/src/store`):
+  - Versioned migrations, a single writer thread, atomic and idempotent batch commits, and one open flight per profile.
+  - A corrupt or newer-version database gets an actionable message and is never deleted.
+  - Location: `%APPDATA%\dev.flightsimapp.desktop\flightsim.db` on Windows, or `FLIGHTSIM_DATA_DIR`.
+- **Recording strategy**: down-sampled track points by phase, event-triggered points, per-flight availability counters, and a configurable retention limit. See [`docs/architecture/flight-recording.md`](docs/architecture/flight-recording.md) and [ADR-003](docs/adr/ADR-003-local-first-flight-recording.md).
+- **History and Debrief** read real recorded flights:
+  - History shows session time vs observed airborne time, status and interruptions.
+  - Debrief shows the overview, observed phases, interruptions, data availability and the event timeline.
+  - Advanced metrics are clearly marked as not yet implemented.
+- **Mock bridge** now flies one complete demo flight (≈15 min) and then holds parked. For testing, `FLIGHTSIM_MOCK_START_OFFSET_S` starts it part-way, simulating a simulator that kept flying while the app was closed.
+
 ## Key behaviours implemented
 - Connection states DISCONNECTED / CONNECTING / CONNECTED / STALE / RECONNECTING / ERROR, with
   an explicit transition table, capped exponential backoff with jitter, a stale timeout (2 s) and
@@ -121,6 +140,9 @@ Linux smoke test harness (Xvfb, not a Windows test): `scripts/ui-smoke-linux.sh`
 ## Known gaps / not done
 - MSFS 2020/2024 runtime integration is **unverified**. `ManagedSimConnectClient.cs` has never been compiled.
 - The desktop UI has been smoke-tested on Linux (WebKitGTK under Xvfb) only. It has **not been run on Windows/WebView2**.
-- S1-04 onwards: SQLite spool, lifecycle detector (flight phase), cloud sync, release signing.
+- Phase thresholds are tuned against the mock profile and synthetic tests only. They need validation with real MSFS aircraft.
+- Origin/destination are never inferred (no dispatch import yet), so they show as *Not recorded*.
+- Recording runs in the webview process: if the webview hangs, recording pauses (it is treated as an interruption on recovery).
+- S1-05 onwards: cloud sync (not implemented; the local store does not require Supabase), release signing.
 - The database migration has been written but not applied anywhere. RLS has not been tested yet (S1-05).
 - No billing, SimBrief, GSX, TOBT or EDCT (out of scope).
