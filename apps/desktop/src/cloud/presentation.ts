@@ -16,7 +16,12 @@ export interface FlightCloudBadge {
 export function flightCloudBadge(f: Pick<FlightSummary, "status" | "sync">, boundAccountId: string | null): FlightCloudBadge | null {
   const s = f.sync;
   if (!s) return f.status === "completed" ? { label: "Local only", tone: "neutral", title: "Stored on this computer only. Not uploaded." } : null;
-  if (boundAccountId && s.accountId !== boundAccountId) return { label: "Other account", tone: "neutral", title: "Queued for a different account than the one cloud sync is set up for. It will not be uploaded to this account." };
+  if (boundAccountId && s.accountId !== boundAccountId)
+    return {
+      label: "Other account",
+      tone: "neutral",
+      title: s.state === "synced" ? "Uploaded to a different account than the one cloud sync is set up for now." : "Belongs to a different account than the one cloud sync is set up for. It will not be uploaded to this account.",
+    };
   switch (s.state) {
     case "synced":
       return { label: "Synced", tone: "ok", title: s.syncedAtUtc ? `Uploaded and verified ${s.syncedAtUtc} (UTC).` : "Uploaded and verified." };

@@ -53,3 +53,17 @@ const server = createServer((req, res) => {
   req.pipe(upstream);
 });
 server.listen(54321, "127.0.0.1", () => console.log("gateway listening on http://127.0.0.1:54321"));
+
+// GoTrue (in Docker) fetches the email templates from the host. Serve ONLY the static templates on
+// the Docker bridge address — never the API — so nothing else is reachable from outside loopback.
+const TEMPLATES_HOST = process.env.SB_LOCAL_TEMPLATES_HOST ?? "172.17.0.1";
+createServer((req, res) => {
+  const name = (req.url ?? "").startsWith("/templates/") ? (req.url ?? "").slice("/templates/".length) : "";
+  if (req.method !== "GET" || !["confirmation.html", "recovery.html"].includes(name)) {
+    res.writeHead(404).end();
+    return;
+  }
+  res.writeHead(200, { "content-type": "text/html" }).end(readFileSync(join(here, "templates", name)));
+})
+  .on("error", (e) => console.log(`templates server not started on ${TEMPLATES_HOST}:54329 (${e.message}); GoTrue will use its default templates`))
+  .listen(54329, TEMPLATES_HOST, () => console.log(`email templates served to GoTrue on http://${TEMPLATES_HOST}:54329`));

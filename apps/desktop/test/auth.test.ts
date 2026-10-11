@@ -161,3 +161,34 @@ describe("secure session storage", () => {
     expect(await s.getItem("k")).toBe("v");
   });
 });
+
+describe("secure session storage ordering", () => {
+  it("never lets a slow earlier write overwrite a later one", async () => {
+    let stored: string | null = null;
+    let calls = 0;
+    const b: SecureBackend = {
+      available: async () => true,
+      get: async () => null,
+      set: async (v) => {
+        // The first OS write is slow; later writes are fast.
+        if (calls++ === 0) await new Promise((r) => setTimeout(r, 30));
+        stored = v;
+      },
+      remove: async () => {
+        calls++;
+        stored = null;
+      },
+    };
+    const s = await createSecureSessionStorage(b);
+    const p1 = s.setItem("flightsim-auth", "old-session");
+    await new Promise((r) => setTimeout(r, 0)); // first write is now in flight
+    const p2 = s.setItem("flightsim-auth", "new-session");
+    await Promise.all([p1, p2]);
+    expect(JSON.parse(stored!)).toEqual({ "flightsim-auth": "new-session" });
+
+    const p3 = s.setItem("flightsim-auth", "another");
+    const p4 = s.removeItem("flightsim-auth");
+    await Promise.all([p3, p4]);
+    expect(stored).toBeNull();
+  });
+});

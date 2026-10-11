@@ -245,3 +245,4 @@ code.mono { font-size: var(--text-sm); overflow-wrap: anywhere; }
 .form-error { color: var(--status-alert); margin-top: var(--space-3); }
 .sync-explainer { margin: 0 0 var(--space-3); padding-left: 1.2em; }
 .sync-explainer li { margin-bottom: var(--space-1); }
+.sync-status { margin: 0 0 var(--space-4); }

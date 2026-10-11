@@ -71,20 +71,20 @@ export function CloudSyncPanel() {
         }
       />
       <WhatIsUploaded />
-      <p role="status" className={v.block || v.offline || (o?.failed ?? 0) > 0 ? "" : "muted"}>
+      <p role="status" className={`sync-status${v.block || v.offline || (o?.failed ?? 0) > 0 ? "" : " muted"}`}>
         {syncStatusLine(v)}
       </p>
       {s && (s.enabled || s.boundAccountId) && (
         <KeyValueList
           items={[
-            ["Account", s.boundAccountLabel ?? "—"],
+            ["Sync account", s.boundAccountLabel ?? "—"],
             ["Opted in", s.optedInAtUtc ? utcDateTime(s.optedInAtUtc) : "—"],
             ["Last successful upload", s.lastSuccessAtUtc ? utcDateTime(s.lastSuccessAtUtc) : "Never"],
             ["Uploaded and verified", (o?.synced ?? 0).toLocaleString("en-US")],
             ["Waiting to upload", ((o?.pending ?? 0) + (o?.retryPending ?? 0) + (o?.uploading ?? 0)).toLocaleString("en-US")],
             ["Failed", (o?.failed ?? 0).toLocaleString("en-US")],
             ["Local only (not uploaded)", (o?.localOnlyCompleted ?? 0).toLocaleString("en-US")],
-            ...(o && o.otherAccount > 0 ? ([["Queued for another account", o.otherAccount.toLocaleString("en-US")]] as Array<[string, string]>) : []),
+            ...(o && o.otherAccount > 0 ? ([["Belonging to another account", o.otherAccount.toLocaleString("en-US")]] as Array<[string, string]>) : []),
           ]}
         />
       )}
@@ -138,7 +138,8 @@ export function CloudSyncPanel() {
           }
         >
           <p>
-            {o?.localOnlyCompleted ?? 0} completed flight{o?.localOnlyCompleted === 1 ? " was" : "s were"} recorded on this computer before you turned on cloud sync. They will be uploaded to <strong>{s?.boundAccountLabel ?? "your account"}</strong>.
+            {o?.localOnlyCompleted === 1 ? "1 completed flight was" : `${o?.localOnlyCompleted ?? 0} completed flights were`} recorded on this computer without cloud sync. {o?.localOnlyCompleted === 1 ? "It" : "They"} will be uploaded to{" "}
+            <strong>{s?.boundAccountLabel ?? "your account"}</strong>.
           </p>
           <p>Only summaries, lifecycle events and interruptions are uploaded. Local copies are kept.</p>
         </ConfirmDialog>

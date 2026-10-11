@@ -45,8 +45,8 @@ services:
       GOTRUE_SMTP_PASS: ""
       GOTRUE_SMTP_ADMIN_EMAIL: noreply@flightsimapp.invalid
       GOTRUE_SMTP_SENDER_NAME: FlightSimApp (local test)
-      GOTRUE_MAILER_TEMPLATES_CONFIRMATION: http://host.docker.internal:54321/templates/confirmation.html
-      GOTRUE_MAILER_TEMPLATES_RECOVERY: http://host.docker.internal:54321/templates/recovery.html
+      GOTRUE_MAILER_TEMPLATES_CONFIRMATION: http://host.docker.internal:54329/templates/confirmation.html
+      GOTRUE_MAILER_TEMPLATES_RECOVERY: http://host.docker.internal:54329/templates/recovery.html
       GOTRUE_MAILER_SUBJECTS_CONFIRMATION: "Your FlightSimApp verification code"
       GOTRUE_MAILER_SUBJECTS_RECOVERY: "Your FlightSimApp password reset code"
       GOTRUE_PASSWORD_MIN_LENGTH: "8"

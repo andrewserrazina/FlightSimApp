@@ -36,14 +36,20 @@ export async function createSecureSessionStorage(backend: SecureBackend | null):
       cache = {};
     }
   }
-  const flush = async () => {
-    if (!persistent || !backend) return;
-    try {
-      if (Object.keys(cache).length === 0) await backend.remove();
-      else await backend.set(JSON.stringify(cache));
-    } catch {
-      // Secure store failed mid-session: keep working from memory; never fall back to plaintext.
-    }
+  // Writes are serialised and each writes the latest snapshot, so overlapping set/remove calls can
+  // never reach the OS store out of order (a stale write can't resurrect or clobber a session).
+  let queue: Promise<void> = Promise.resolve();
+  const flush = () => {
+    if (!persistent || !backend) return Promise.resolve();
+    queue = queue.then(async () => {
+      try {
+        if (Object.keys(cache).length === 0) await backend.remove();
+        else await backend.set(JSON.stringify(cache));
+      } catch {
+        // Secure store failed mid-session: keep working from memory; never fall back to plaintext.
+      }
+    });
+    return queue;
   };
   return {
     get persistent() {
