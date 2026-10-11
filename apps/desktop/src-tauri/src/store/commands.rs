@@ -86,3 +86,62 @@ pub fn database_path(app: &tauri::AppHandle) -> std::path::PathBuf {
         .unwrap_or_else(|| std::env::temp_dir().join("flightsimapp"));
     dir.join(DB_FILE)
 }
+
+// ---------- cloud sync bookkeeping (schema v2) ----------
+
+use super::sync::{DueItemOut, SyncMark, SyncOverviewOut, SyncSettingsOut};
+
+#[tauri::command]
+pub async fn sync_settings_get(store: State<'_, StoreHandle>) -> Result<SyncSettingsOut, StoreError> {
+    store.call(|slot| slot.get()?.sync_settings()).await
+}
+
+#[tauri::command]
+pub async fn sync_enable(store: State<'_, StoreHandle>, account_id: String, account_label: String) -> Result<SyncSettingsOut, StoreError> {
+    store.call(move |slot| slot.get()?.sync_enable(&account_id, &account_label)).await
+}
+
+#[tauri::command]
+pub async fn sync_disable(store: State<'_, StoreHandle>) -> Result<SyncSettingsOut, StoreError> {
+    store.call(|slot| slot.get()?.sync_disable()).await
+}
+
+#[tauri::command]
+pub async fn sync_enqueue_after_opt_in(store: State<'_, StoreHandle>, account_id: String) -> Result<usize, StoreError> {
+    store.call(move |slot| slot.get()?.sync_enqueue_after_opt_in(&account_id)).await
+}
+
+#[tauri::command]
+pub async fn sync_backfill(store: State<'_, StoreHandle>, account_id: String, flight_ids: Vec<String>) -> Result<usize, StoreError> {
+    store.call(move |slot| slot.get()?.sync_backfill(&account_id, &flight_ids)).await
+}
+
+#[tauri::command]
+pub async fn sync_due(store: State<'_, StoreHandle>, account_id: String, now: String, limit: i64) -> Result<Vec<DueItemOut>, StoreError> {
+    store.call(move |slot| slot.get()?.sync_due(&account_id, &now, limit)).await
+}
+
+#[tauri::command]
+pub async fn sync_mark(store: State<'_, StoreHandle>, mark: SyncMark) -> Result<(), StoreError> {
+    store.call(move |slot| slot.get()?.sync_mark(&mark)).await
+}
+
+#[tauri::command]
+pub async fn sync_retry_failed(store: State<'_, StoreHandle>, account_id: String) -> Result<usize, StoreError> {
+    store.call(move |slot| slot.get()?.sync_retry_failed(&account_id)).await
+}
+
+#[tauri::command]
+pub async fn sync_recover_interrupted(store: State<'_, StoreHandle>) -> Result<usize, StoreError> {
+    store.call(|slot| slot.get()?.sync_recover_interrupted()).await
+}
+
+#[tauri::command]
+pub async fn sync_overview(store: State<'_, StoreHandle>) -> Result<SyncOverviewOut, StoreError> {
+    store.call(|slot| slot.get()?.sync_overview()).await
+}
+
+#[tauri::command]
+pub async fn sync_local_only_ids(store: State<'_, StoreHandle>) -> Result<Vec<String>, StoreError> {
+    store.call(|slot| slot.get()?.sync_local_only_ids()).await
+}

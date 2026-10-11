@@ -1,4 +1,5 @@
 use super::*;
+use super::sync::SyncMark;
 
 fn temp_db(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("flightsim-store-test-{name}-{}", std::process::id()));
@@ -61,7 +62,7 @@ fn reopening_does_not_reapply_migrations_and_keeps_data() {
     }
     let s = Store::open(&path).unwrap();
     let applied: i64 = s.conn.query_row("SELECT COUNT(*) FROM schema_migrations", [], |r| r.get(0)).unwrap();
-    assert_eq!(applied, 1);
+    assert_eq!(applied, MIGRATIONS.len() as i64);
     assert_eq!(s.open_flight().unwrap().unwrap().id, "f1");
 }
 
@@ -258,4 +259,124 @@ async fn actor_serializes_work_off_the_calling_thread() {
     assert_ne!(ran_on, caller);
     let n = handle.call(|slot| Ok(slot.get()?.list_flights(10, 0)?.len())).await.unwrap();
     assert_eq!(n, 0);
+}
+
+// ---------- schema v2: cloud sync bookkeeping ----------
+
+fn completed(id: &str, ended: &str) -> CommitBatch {
+    let mut f = flight(id, "completed", "2026-10-10T20:00:00.000Z");
+    f.ended_at_utc = Some(ended.into());
+    let mut b = batch(f);
+    b.events = vec![EventRow { event_id: format!("ev-{id}"), ..event(1, "flight.started") }];
+    b
+}
+
+#[test]
+fn migrates_to_schema_v2_with_sync_disabled_by_default() {
+    let s = Store::open_in_memory().unwrap();
+    assert_eq!(s.schema_version().unwrap(), 2);
+    let st = s.sync_settings().unwrap();
+    assert!(!st.enabled);
+    assert_eq!(st.bound_account_id, None);
+}
+
+#[test]
+fn only_flights_completed_after_opt_in_are_queued_automatically() {
+    let mut s = Store::open_in_memory().unwrap();
+    s.commit(&completed("before", "2000-01-01T00:00:00.000Z")).unwrap();
+    s.commit(&batch(flight("open", "active", "2026-10-10T21:00:00.000Z"))).unwrap();
+    assert_eq!(s.sync_enqueue_after_opt_in("acct-a").unwrap(), 0, "nothing while disabled");
+    s.sync_enable("acct-a", "a***@example.test").unwrap();
+    s.commit(&completed("after", "2999-01-01T00:00:00.000Z")).unwrap();
+    assert_eq!(s.sync_enqueue_after_opt_in("acct-a").unwrap(), 1);
+    assert_eq!(s.sync_enqueue_after_opt_in("acct-a").unwrap(), 0, "idempotent");
+    let due = s.sync_due("acct-a", "2999-12-31T00:00:00Z", 10).unwrap();
+    assert_eq!(due.iter().map(|d| d.flight_id.as_str()).collect::<Vec<_>>(), ["after"]);
+    let o = s.sync_overview().unwrap();
+    assert_eq!((o.pending, o.local_only_completed), (1, 1));
+}
+
+#[test]
+fn earlier_flights_need_explicit_backfill_consent_for_the_bound_account() {
+    let mut s = Store::open_in_memory().unwrap();
+    s.commit(&completed("old", "2000-01-01T00:00:00.000Z")).unwrap();
+    assert!(s.sync_backfill("acct-a", &["old".into()]).is_err(), "sync must be enabled first");
+    s.sync_enable("acct-a", "a").unwrap();
+    assert!(s.sync_backfill("acct-b", &["old".into()]).is_err(), "only the bound account");
+    assert_eq!(s.sync_local_only_ids().unwrap(), ["old"]);
+    assert_eq!(s.sync_backfill("acct-a", &["old".into()]).unwrap(), 1);
+    assert_eq!(s.sync_backfill("acct-a", &["old".into()]).unwrap(), 0);
+    assert_eq!(s.flight_detail("old").unwrap().unwrap().summary.sync.unwrap().account_id, "acct-a");
+}
+
+#[test]
+fn switching_accounts_never_transfers_queued_flights() {
+    let mut s = Store::open_in_memory().unwrap();
+    s.sync_enable("acct-a", "a").unwrap();
+    s.commit(&completed("fa", "2999-01-01T00:00:00.000Z")).unwrap();
+    s.sync_enqueue_after_opt_in("acct-a").unwrap();
+    // Another account signs in and opts in on the same machine.
+    let st = s.sync_enable("acct-b", "b").unwrap();
+    assert_eq!(st.bound_account_id.as_deref(), Some("acct-b"));
+    assert_eq!(s.sync_enqueue_after_opt_in("acct-b").unwrap(), 0, "fa is already bound to acct-a");
+    assert!(s.sync_due("acct-b", "2999-12-31T00:00:00Z", 10).unwrap().is_empty());
+    assert!(s.sync_backfill("acct-b", &["fa".into()]).unwrap() == 0, "backfill cannot re-bind");
+    let mark = SyncMark { flight_id: "fa".into(), account_id: "acct-b".into(), state: "synced".into(), attempts: None, next_attempt_at_utc: None, last_error: None, cloud_event_count: Some(1), cloud_interruption_count: Some(0) };
+    assert!(s.sync_mark(&mark).is_err(), "cannot mark another account's flight");
+    assert_eq!(s.flight_detail("fa").unwrap().unwrap().summary.sync.unwrap().account_id, "acct-a");
+    assert_eq!(s.sync_overview().unwrap().other_account, 1);
+}
+
+#[test]
+fn state_transitions_retry_and_crash_recovery() {
+    let mut s = Store::open_in_memory().unwrap();
+    s.sync_enable("acct-a", "a").unwrap();
+    s.commit(&completed("f1", "2999-01-01T00:00:00.000Z")).unwrap();
+    s.sync_enqueue_after_opt_in("acct-a").unwrap();
+    let mk = |state: &str| SyncMark { flight_id: "f1".into(), account_id: "acct-a".into(), state: state.into(), attempts: None, next_attempt_at_utc: None, last_error: None, cloud_event_count: None, cloud_interruption_count: None };
+    s.sync_mark(&mk("uploading")).unwrap();
+    assert_eq!(s.sync_recover_interrupted().unwrap(), 1, "crash during upload");
+    assert_eq!(s.flight_detail("f1").unwrap().unwrap().summary.sync.unwrap().state, "retry_pending");
+    s.sync_mark(&SyncMark { attempts: Some(2), next_attempt_at_utc: Some("2999-06-01T00:00:00Z".into()), last_error: Some("timeout".into()), ..mk("retry_pending") }).unwrap();
+    assert!(s.sync_due("acct-a", "2999-05-01T00:00:00Z", 10).unwrap().is_empty(), "backoff respected");
+    assert_eq!(s.sync_due("acct-a", "2999-07-01T00:00:00Z", 10).unwrap().len(), 1);
+    s.sync_mark(&SyncMark { last_error: Some("permission denied".into()), ..mk("failed") }).unwrap();
+    assert_eq!(s.sync_overview().unwrap().failed, 1);
+    assert_eq!(s.sync_retry_failed("acct-a").unwrap(), 1);
+    s.sync_mark(&SyncMark { cloud_event_count: Some(1), cloud_interruption_count: Some(0), ..mk("synced") }).unwrap();
+    let sync = s.flight_detail("f1").unwrap().unwrap().summary.sync.unwrap();
+    assert_eq!(sync.state, "synced");
+    assert!(sync.synced_at_utc.is_some());
+    assert!(s.sync_settings().unwrap().last_success_at_utc.is_some());
+    assert_eq!(s.list_flights(10, 0).unwrap()[0].sync.as_ref().unwrap().state, "synced");
+}
+
+#[test]
+fn disabling_keeps_the_binding_and_never_touches_flights() {
+    let mut s = Store::open_in_memory().unwrap();
+    s.sync_enable("acct-a", "a").unwrap();
+    s.commit(&completed("f1", "2999-01-01T00:00:00.000Z")).unwrap();
+    s.sync_enqueue_after_opt_in("acct-a").unwrap();
+    let st = s.sync_disable().unwrap();
+    assert!(!st.enabled);
+    assert_eq!(st.bound_account_id.as_deref(), Some("acct-a"));
+    assert_eq!(s.list_flights(10, 0).unwrap().len(), 1);
+    let opted = st.opted_in_at_utc.clone();
+    assert_eq!(s.sync_enable("acct-a", "a").unwrap().opted_in_at_utc, opted, "same account keeps its opt-in");
+}
+
+#[test]
+fn detail_includes_event_ids_for_idempotent_upload() {
+    let mut s = Store::open_in_memory().unwrap();
+    s.commit(&completed("f1", "2999-01-01T00:00:00.000Z")).unwrap();
+    assert_eq!(s.flight_detail("f1").unwrap().unwrap().events[0].event_id, "ev-f1");
+}
+
+#[test]
+fn rejects_invalid_sync_input() {
+    let mut s = Store::open_in_memory().unwrap();
+    assert!(s.sync_enable("'; drop table flights; --", "x").is_err());
+    assert!(s.sync_due("acct", "yesterday", 10).is_err());
+    let bad = SyncMark { flight_id: "f".into(), account_id: "a".into(), state: "teleported".into(), attempts: None, next_attempt_at_utc: None, last_error: None, cloud_event_count: None, cloud_interruption_count: None };
+    assert!(s.sync_mark(&bad).is_err());
 }

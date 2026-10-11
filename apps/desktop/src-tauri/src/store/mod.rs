@@ -9,6 +9,7 @@
 
 pub mod actor;
 pub mod commands;
+pub mod sync;
 
 use std::path::{Path, PathBuf};
 
@@ -18,7 +19,10 @@ use serde::{Deserialize, Serialize};
 pub const DB_FILE: &str = "flightsim.db";
 
 /// (version, SQL). Append only; never edit a released migration.
-const MIGRATIONS: &[(i64, &str)] = &[(1, include_str!("../../migrations/0001_local_flight_store.sql"))];
+const MIGRATIONS: &[(i64, &str)] = &[
+    (1, include_str!("../../migrations/0001_local_flight_store.sql")),
+    (2, include_str!("../../migrations/0002_cloud_sync.sql")),
+];
 
 pub fn latest_schema_version() -> i64 {
     MIGRATIONS.last().map(|m| m.0).unwrap_or(0)
@@ -57,7 +61,7 @@ impl StoreError {
     fn new(kind: StoreErrorKind, message: impl Into<String>) -> Self {
         Self { kind, message: message.into() }
     }
-    fn invalid(message: impl Into<String>) -> Self {
+    pub(crate) fn invalid(message: impl Into<String>) -> Self {
         Self::new(StoreErrorKind::Invalid, message)
     }
 }
@@ -183,12 +187,15 @@ pub struct FlightSummaryOut {
     pub started_airborne: bool,
     pub interruption_count: i64,
     pub sample_count: i64,
+    /// Cloud sync bookkeeping for this flight, if it was ever queued.
+    pub sync: Option<sync::FlightSyncOut>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EventOut {
     pub seq: i64,
+    pub event_id: String,
     pub kind: String,
     pub occurred_at_utc: String,
     pub source: String,
@@ -235,7 +242,7 @@ pub fn is_utc_timestamp(s: &str) -> bool {
     rest.is_empty() || (rest[0] == b'.' && rest.len() > 1 && rest[1..].iter().all(u8::is_ascii_digit))
 }
 
-fn check_ts(name: &str, v: &str) -> Result<(), StoreError> {
+pub(crate) fn check_ts(name: &str, v: &str) -> Result<(), StoreError> {
     if is_utc_timestamp(v) { Ok(()) } else { Err(StoreError::invalid(format!("{name} must be a UTC timestamp ending in Z"))) }
 }
 fn check_opt_ts(name: &str, v: &Option<String>) -> Result<(), StoreError> {
@@ -321,7 +328,7 @@ fn validate(batch: &CommitBatch) -> Result<(), StoreError> {
     Ok(())
 }
 
-fn now_utc() -> String {
+pub(crate) fn now_utc() -> String {
     // Seconds precision is enough for bookkeeping columns.
     let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
     format_unix_utc(secs)
@@ -347,14 +354,16 @@ pub fn format_unix_utc(secs: i64) -> String {
 // ---------- store ----------
 
 pub struct Store {
-    conn: Connection,
+    pub(crate) conn: Connection,
 }
 
 const SUMMARY_COLUMNS: &str = "f.id, f.status, f.completion, f.phase, f.simulator, f.simulator_version, f.aircraft_title, f.aircraft_icao, \
     f.origin_icao, f.destination_icao, f.started_at_utc, f.ended_at_utc, f.last_seen_at_utc, f.takeoff_at_utc, f.landing_at_utc, \
     f.airborne_seconds, f.started_airborne, \
     (SELECT COUNT(*) FROM flight_interruptions i WHERE i.flight_id = f.id), \
-    (SELECT COUNT(*) FROM flight_samples s WHERE s.flight_id = f.id)";
+    (SELECT COUNT(*) FROM flight_samples s WHERE s.flight_id = f.id), \
+    fs.state, fs.account_id, fs.synced_at_utc, fs.last_error, fs.attempts, fs.next_attempt_at_utc";
+const SUMMARY_FROM: &str = "flights f LEFT JOIN flight_sync fs ON fs.flight_id = f.id";
 
 fn summary_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<FlightSummaryOut> {
     Ok(FlightSummaryOut {
@@ -377,6 +386,17 @@ fn summary_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<FlightSummaryOut>
         started_airborne: r.get::<_, i64>(16)? == 1,
         interruption_count: r.get(17)?,
         sample_count: r.get(18)?,
+        sync: match r.get::<_, Option<String>>(19)? {
+            Some(state) => Some(sync::FlightSyncOut {
+                state,
+                account_id: r.get(20)?,
+                synced_at_utc: r.get(21)?,
+                last_error: r.get(22)?,
+                attempts: r.get(23)?,
+                next_attempt_at_utc: r.get(24)?,
+            }),
+            None => None,
+        },
     })
 }
 
@@ -550,7 +570,7 @@ impl Store {
     /// Newest first.
     pub fn list_flights(&self, limit: i64, offset: i64) -> Result<Vec<FlightSummaryOut>, StoreError> {
         let mut stmt = self.conn.prepare_cached(&format!(
-            "SELECT {SUMMARY_COLUMNS} FROM flights f WHERE f.profile_id = 'local' ORDER BY f.started_at_utc DESC, f.id LIMIT ?1 OFFSET ?2"
+            "SELECT {SUMMARY_COLUMNS} FROM {SUMMARY_FROM} WHERE f.profile_id = 'local' ORDER BY f.started_at_utc DESC, f.id LIMIT ?1 OFFSET ?2"
         ))?;
         let rows = stmt.query_map(params![limit.clamp(1, 500), offset.max(0)], summary_from_row)?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -559,18 +579,19 @@ impl Store {
     pub fn flight_detail(&self, id: &str) -> Result<Option<FlightDetailOut>, StoreError> {
         let summary = self
             .conn
-            .query_row(&format!("SELECT {SUMMARY_COLUMNS} FROM flights f WHERE f.id = ?1"), [id], summary_from_row)
+            .query_row(&format!("SELECT {SUMMARY_COLUMNS} FROM {SUMMARY_FROM} WHERE f.id = ?1"), [id], summary_from_row)
             .optional()?;
         let Some(summary) = summary else { return Ok(None) };
         let (stats, pruned): (String, i64) = self.conn.query_row("SELECT stats, samples_pruned FROM flights WHERE id = ?1", [id], |r| Ok((r.get(0)?, r.get(1)?)))?;
         let mut stmt = self.conn.prepare_cached(
-            "SELECT seq, kind, occurred_at_utc, source, from_phase, to_phase, details FROM flight_events WHERE flight_id = ?1 ORDER BY seq",
+            "SELECT seq, kind, occurred_at_utc, source, from_phase, to_phase, details, event_id FROM flight_events WHERE flight_id = ?1 ORDER BY seq",
         )?;
         let events = stmt
             .query_map([id], |r| {
                 let details: String = r.get(6)?;
                 Ok(EventOut {
                     seq: r.get(0)?,
+                    event_id: r.get(7)?,
                     kind: r.get(1)?,
                     occurred_at_utc: r.get(2)?,
                     source: r.get(3)?,

@@ -22,6 +22,8 @@ getrandom = "0.2"
 base64 = "0.22"
 # SQLite compiled in (no system library needed on Windows). Used only by the local flight store.
 rusqlite = { version = "0.32", features = ["bundled"] }
+# OS secure credential storage (Windows Credential Manager, macOS Keychain, Linux kernel keyring).
+keyring = { version = "3", features = ["windows-native", "apple-native", "linux-native"] }
 
 [profile.release]
 strip = true

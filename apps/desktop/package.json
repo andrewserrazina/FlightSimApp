@@ -12,8 +12,10 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@flightsim/cloud": "workspace:*",
     "@flightsim/contracts": "workspace:*",
     "@flightsim/flight-core": "workspace:*",
+    "@supabase/supabase-js": "2.117.1",
     "@tauri-apps/api": "2.12.2",
     "react": "18.3.1",
     "react-dom": "18.3.1"

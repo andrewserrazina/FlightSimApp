@@ -36,10 +36,23 @@ export interface FlightSummary {
   startedAirborne: boolean;
   interruptionCount: number;
   sampleCount: number;
+  /** Cloud sync bookkeeping, present once the flight was queued for an account. */
+  sync?: FlightSyncInfo | null;
+}
+
+export interface FlightSyncInfo {
+  state: "pending" | "uploading" | "synced" | "failed" | "retry_pending";
+  accountId: string;
+  syncedAtUtc: string | null;
+  lastError: string | null;
+  attempts: number;
+  nextAttemptAtUtc: string | null;
 }
 
 export interface RecordedFlightEvent {
   seq: number;
+  /** Stable UUID of the event (idempotency key for cloud sync). */
+  eventId?: string;
   kind: LifecycleEventKind;
   occurredAtUtc: string;
   source: EventSource;
