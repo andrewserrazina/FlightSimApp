@@ -34,7 +34,7 @@ Preliminary online findings:
 - https://turnline.co/ is in use by a client acquisition service.
 - An earlier US TURNLINE registration 75333950 is listed cancelled; this is not clearance.
 
-**Do not assume turnline.com, turnline.app, or other domains are available.** Live registrar availability and a comprehensive USPTO/state/common-law/international trademark review remain outstanding.
+- https://turnline.com/ currently redirects to a HugeDomains sales listing advertising a $3,295 asking price (observed October 11, 2026); this is a seller listing, not a domain purchase or ownership verification.\n\n**Do not assume any Turnline domain is available to register.** Live registrar checks and a comprehensive USPTO/state/common-law/international trademark review remain outstanding.
 
 ## Safe migration checklist
 Until brand clearance:
