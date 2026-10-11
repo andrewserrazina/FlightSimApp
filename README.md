@@ -3,7 +3,7 @@
 A pilot-first airline operations simulator for Windows desktop flight simulators (MSFS 2020/2024).
 Product, architecture and sprint specs live in [`docs/spec/`](docs/spec/).
 
-**Status: Sprint 1 — S1-01 repo foundation, S1-02 contract-first bridge, S1-03 desktop UI, S1-04 flight lifecycle & local persistence.** This is a technical
+**Status: Sprint 1 — S1-01 repo foundation, S1-02 contract-first bridge, S1-03 desktop UI, S1-04 flight lifecycle & local persistence, S1-05 cloud accounts & opt-in sync.** This is a technical
 foundation, not a usable product. **No real MSFS integration has been verified.** See
 [`docs/compatibility/msfs-telemetry.md`](docs/compatibility/msfs-telemetry.md).
 
@@ -18,8 +18,11 @@ services/sim-bridge/          .NET 8 out-of-process simulator bridge
   src/FlightSim.SimBridge.Host    flightsim-sim-bridge executable
   tests/FlightSim.SimBridge.Tests xUnit tests
 packages/contracts/           canonical JSON Schemas (schemas/v1) + TS types + generated validators
-packages/flight-core/         typed flight lifecycle transition rules
-db/migrations/                Postgres/Supabase baseline schema + RLS (not applied anywhere)
+packages/flight-core/         flight lifecycle engine, history types
+packages/cloud/               sync payload, cloud error classification, Supabase sync API, entitlement types;
+                              RLS/auth integration tests against the local stack
+db/migrations/                Supabase Postgres schema + RLS (applied only to the local test stack)
+infra/supabase-local/         isolated local Supabase stack (Docker) for tests and smoke runs
 fixtures/contracts/v1/        valid/invalid wire messages shared by the TS and C# tests
 docs/adr/, docs/compatibility/
 ```
@@ -128,6 +131,52 @@ Screenshots: [`docs/screenshots/s1-03/`](docs/screenshots/s1-03/), [`docs/screen
   - Advanced metrics are clearly marked as not yet implemented.
 - **Mock bridge** now flies one complete demo flight (≈15 min) and then holds parked. For testing, `FLIGHTSIM_MOCK_START_OFFSET_S` starts it part-way, simulating a simulator that kept flying while the app was closed.
 
+## Cloud accounts & opt-in sync (S1-05)
+
+Everything local keeps working without an account or internet. Cloud is optional and off by default.
+
+- **Accounts.** Supabase Auth in Settings:
+  - register, verify with a **6-digit emailed code**, sign in, password recovery by code, sign out
+  - an expired or revoked session is shown as *Session expired*
+  - no redirects or callback URLs
+- **Secure session storage.**
+  - Tokens live **only** in the OS credential store (Rust `keyring`): never localStorage,
+    preferences, SQLite or logs.
+  - If the store is unavailable, sessions are memory-only.
+  - Only the public anon key ships; never the service role.
+- **Cloud schema and RLS** ([`db/migrations/0002_…`](db/migrations/0002_s1_05_sync_and_hardening.sql)):
+  - per-command policies, owner forced to the caller, no cross-user FK paths
+  - immutable completed records, no anon access, no client-executable privileged functions
+  - an atomic, idempotent `sync_completed_flight` RPC (SECURITY INVOKER)
+- **Opt-in sync of completed flights.** Upload-only. Events and interruptions are included;
+  samples and telemetry never are.
+  - **UUIDs and UTC timestamps** are preserved.
+  - **Verified** by read-back before showing *Synced*.
+  - **Durable local queue** (pending / uploading / synced / failed / retry_pending) with crash
+    recovery and bounded backoff, one request at a time.
+  - **Consent.** Flights completed before opt-in stay **Local only** unless the user consents to
+    upload them.
+  - **Account binding.** Signing into another account never moves flights.
+- **UI.** Settings has Account and Cloud sync panels: status, counts, last success, retry,
+  backfill with consent, and what is uploaded. History has subtle cloud badges. Diagnostics
+  carry no tokens, emails or account ids.
+- **Entitlements: interface only.** Server-authoritative design documented; nothing enforced.
+
+Docs:
+- [auth](docs/architecture/auth.md), [sync](docs/architecture/sync.md),
+  [cloud database](docs/architecture/cloud-database.md),
+  [entitlements](docs/architecture/entitlements.md),
+  [threat model](docs/architecture/threat-model.md),
+  [environment, local stack & migrations](docs/architecture/local-development.md),
+  [ADR-004](docs/adr/ADR-004-opt-in-upload-only-cloud-sync.md)
+- smoke test: [`docs/screenshots/s1-05/`](docs/screenshots/s1-05/README.md)
+
+```bash
+infra/supabase-local/up.sh                          # local stack (Docker) + migrations
+pnpm --filter @flightsim/cloud test:integration     # 27 RLS/auth tests against real policies
+pnpm --filter @flightsim/desktop test:integration   # desktop auth + sync end to end
+```
+
 ## Key behaviours implemented
 - Connection states DISCONNECTED / CONNECTING / CONNECTED / STALE / RECONNECTING / ERROR, with
   an explicit transition table, capped exponential backoff with jitter, a stale timeout (2 s) and
@@ -145,6 +194,6 @@ Screenshots: [`docs/screenshots/s1-03/`](docs/screenshots/s1-03/), [`docs/screen
 - Phase thresholds are tuned against the mock profile and synthetic tests only. They need validation with real MSFS aircraft.
 - Origin/destination are never inferred (no dispatch import yet), so they show as *Not recorded*.
 - Recording runs in the webview process: if the webview hangs, recording pauses (it is treated as an interruption on recovery).
-- S1-05 onwards: cloud sync (not implemented; the local store does not require Supabase), release signing.
-- The database migration has been written but not applied anywhere. RLS has not been tested yet (S1-05).
+- Cloud: verified only against the **local** Supabase stack on Linux. No hosted project exists, and no migration has been applied outside it. Windows Credential Manager and macOS Keychain storage are unverified. Access JWTs stay valid until they expire after sign-out (see the threat model). Cloud integration tests are not in CI yet (they need Docker).
+- Release signing is not done.
 - No billing, SimBrief, GSX, TOBT or EDCT (out of scope).

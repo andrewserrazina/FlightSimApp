@@ -24,3 +24,9 @@ Then run the security integration tests: `pnpm --filter @flightsim/cloud test:in
 
 **Email.** Confirmation and recovery emails contain a 6-digit code (desktop OTP flow, so there are
 no redirect callbacks). They are caught by Mailpit: http://127.0.0.1:54327.
+
+- **Templates.** The gateway serves the code-only templates (`templates/`) to GoTrue on the Docker
+  bridge address (`172.17.0.1:54329`, override with `SB_LOCAL_TEMPLATES_HOST`). It serves *only*
+  those two files there; the API stays on loopback.
+- **Fallback.** If that address is unavailable, GoTrue falls back to its default templates, which
+  also contain a (PKCE) link.
