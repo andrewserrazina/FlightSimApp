@@ -3,7 +3,7 @@
 A pilot-first airline operations simulator for Windows desktop flight simulators (MSFS 2020/2024).
 Product, architecture and sprint specs live in [`docs/spec/`](docs/spec/).
 
-**Status: Sprint 1 — S1-01 repo foundation, S1-02 contract-first bridge, S1-03 desktop UI, S1-04 flight lifecycle & local persistence, S1-05 cloud accounts & opt-in sync.** This is a technical
+**Status: Sprint 1 — S1-01 repo foundation, S1-02 contract-first bridge, S1-03 desktop UI, S1-04 flight lifecycle & local persistence, S1-05 cloud accounts & opt-in sync, S1-06 Windows validation & release readiness.** This is a technical
 foundation, not a usable product. **No real MSFS integration has been verified.** See
 [`docs/compatibility/msfs-telemetry.md`](docs/compatibility/msfs-telemetry.md).
 
@@ -71,14 +71,23 @@ $env:FLIGHTSIM_BRIDGE_DEV_TOKEN = "<43+ base64url chars>"
 dotnet run --project services/sim-bridge/src/FlightSim.SimBridge.Host -- --adapter mock --pipe-name flightsim-dev --dev-token-from-env
 ```
 
-## Building with the MSFS SimConnect SDK (unverified)
+## MSFS SimConnect (native client — unverified against a real simulator)
+
+The MSFS adapters use a P/Invoke binding to the SimConnect C API (ADR-005). They always compile, on every OS and
+in CI. At runtime the bridge needs **`SimConnect.dll` from the MSFS SDK** next to `flightsim-sim-bridge.exe`, or
+an absolute path in `FLIGHTSIM_SIMCONNECT_DLL`. Without it, selecting MSFS shows `ERROR / sdk_unavailable`
+instead of crashing.
 
 ```powershell
+# optional: copy SimConnect.dll into the bridge build output
 dotnet build services/sim-bridge/FlightSim.SimBridge.sln -c Release -p:SimConnectSdkDir="C:\MSFS 2024 SDK\SimConnect SDK"
+# record real telemetry for validation, then replay it through the lifecycle engine
+flightsim-sim-bridge --adapter msfs2024 --probe 1800 --probe-out probe.jsonl
+node packages/flight-core/bin/replay.mjs probe.jsonl
 ```
 
-Without this property, the MSFS adapters still compile and can be selected. They report
-`ERROR / sdk_unavailable` instead of crashing.
+See [`docs/compatibility/msfs-telemetry.md`](docs/compatibility/msfs-telemetry.md) and
+[`docs/compatibility/windows-validation.md`](docs/compatibility/windows-validation.md).
 
 ## Internal (unsigned) Windows build
 
@@ -177,6 +186,33 @@ pnpm --filter @flightsim/cloud test:integration     # 27 RLS/auth tests against 
 pnpm --filter @flightsim/desktop test:integration   # desktop auth + sync end to end
 ```
 
+## Windows validation & release readiness (S1-06)
+
+- **Native SimConnect client** (ADR-005):
+  - a byte-exact message parser
+  - SimVars that MSFS rejects are reported as unavailable, without breaking the rest
+  - telemetry is withheld while MSFS is in its menus; pause and aircraft-load events are handled
+  - a fallback message pump
+  - probe mode (`--probe`) plus `flight-core` replay, so real recordings can be checked against the lifecycle engine
+- **Windows credential storage fix.** Supabase sessions exceed Windows Credential Manager's per-entry limit
+  (1280 characters with UTF-16). They are now stored as checksummed chunks with an atomic switch between write
+  generations. Damaged entries count as "no session" and are cleaned up. PKCE verifiers are pruned once signed in.
+  Startup while offline no longer waits about 25 s.
+- **CI:**
+  - the Windows .NET tests with a hang guard
+  - the Windows sidecar publish plus a probe check
+  - the Windows Credential Manager round-trip (required, cannot be skipped)
+  - a **cloud-integration security gate** (local Supabase: RLS, auth, desktop sync E2E)
+  - a **Windows NSIS installer** plus a real-app smoke test on the runner: WebView2, sidecar, named pipe, SQLite,
+    restart, upgrade, uninstall
+  - superseded runs are cancelled
+- **Database:**
+  - fixed migration 0003, which could not apply
+  - 0004 removes client TRUNCATE/REFERENCES/TRIGGER privileges and all grants on tables without policies
+  - generic catalog tests now guard future tables
+- **Docs:** [Windows/MSFS validation](docs/compatibility/windows-validation.md),
+  [staging preparation](docs/architecture/staging.md), [ADR-005](docs/adr/ADR-005-native-simconnect-pinvoke.md).
+
 ## Key behaviours implemented
 - Connection states DISCONNECTED / CONNECTING / CONNECTED / STALE / RECONNECTING / ERROR, with
   an explicit transition table, capped exponential backoff with jitter, a stale timeout (2 s) and
@@ -189,11 +225,11 @@ pnpm --filter @flightsim/desktop test:integration   # desktop auth + sync end to
 - The Tauri shell restarts a crashed bridge, and the bridge exits when the app exits.
 
 ## Known gaps / not done
-- MSFS 2020/2024 runtime integration is **unverified**. `ManagedSimConnectClient.cs` has never been compiled.
-- The desktop UI has been smoke-tested on Linux (WebKitGTK under Xvfb) only. It has **not been run on Windows/WebView2**.
+- MSFS 2020/2024 runtime integration is **unverified**. The native SimConnect client compiles and is unit-tested against byte-exact buffers, but it has never run against a real simulator. Whether `SimConnect.dll` may be redistributed is undecided, so the installer does not include it.
+- Windows: validated only on GitHub's Windows Server runner, without MSFS (see the S1-06 report for exactly what passed). Not yet validated on a Windows 10/11 desktop PC.
 - Phase thresholds are tuned against the mock profile and synthetic tests only. They need validation with real MSFS aircraft.
 - Origin/destination are never inferred (no dispatch import yet), so they show as *Not recorded*.
 - Recording runs in the webview process: if the webview hangs, recording pauses (it is treated as an interruption on recovery).
-- Cloud: verified only against the **local** Supabase stack on Linux. No hosted project exists, and no migration has been applied outside it. Windows Credential Manager and macOS Keychain storage are unverified. Access JWTs stay valid until they expire after sign-out (see the threat model). Cloud integration tests are not in CI yet (they need Docker).
-- Release signing is not done.
+- Cloud: verified only against the **local** Supabase stack on Linux. No hosted project exists, and no migration has been applied outside it. macOS Keychain storage is unverified. Access JWTs stay valid until they expire after sign-out (see the threat model).
+- Release signing is not done. The installer is unsigned and internal-only. The app identifier and data paths still use `dev.flightsimapp.desktop` until the Turnline rename is cleared.
 - No billing, SimBrief, GSX, TOBT or EDCT (out of scope).

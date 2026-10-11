@@ -41,6 +41,17 @@ data path between them. The simulator bridge's IPC is covered by ADR-001.
 | T16 | Account enumeration via password reset | GoTrue returns the same response for unknown emails | auth integration test |
 | T17 | XSS in the webview stealing a session | Strict CSP (`script-src 'self'`, no inline scripts, `connect-src` limited to IPC + `*.supabase.co`); React escaping; no HTML from the server is rendered | CSP review |
 
+## S1-06 additions
+
+| # | Threat | Mitigation | Verified by |
+|---|---|---|---|
+| T18 | A damaged, truncated or foreign credential entry is handed to the auth library or crashes the app | Rust: chunked entries with length + FNV-1a checksum; a mismatch reads as "no session" and is deleted. TS: only a JSON object of strings is accepted. | Rust tests (truncated / missing / flipped / extra chunks, malformed heads); TS tests (8 malformed shapes) |
+| T19 | Sessions silently not persisted on Windows (entry too large) | Chunking within the 1280-character UTF-16 limit | MemStore with the Windows limit; real Windows Credential Manager round-trip in CI |
+| T20 | Torn credential write (crash mid-write) | Generation switch: new chunks first, head last; the previous session stays readable | Rust test (failure after 2 chunks) |
+| T21 | Client roles hold TRUNCATE (bypasses RLS) or grants on policy-less tables | 0004 revokes, including default privileges | Generic catalog tests |
+| T22 | Lingering PKCE verifiers in the keychain | Pruned once a session exists | Desktop E2E test against GoTrue |
+| T23 | Simulator data misparsed (layout drift) produces plausible but wrong telemetry | Size-checked decode; unknown sizes dropped and reported; rejected SimVars isolated | Native SimConnect tests |
+
 ## Residual risks and limitations (honest)
 
 - **Access JWTs stay valid until they expire** (`JWT_EXP`, 1 h locally) after sign-out or
