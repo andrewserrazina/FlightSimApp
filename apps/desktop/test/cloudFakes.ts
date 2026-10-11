@@ -12,7 +12,7 @@ export function completedFlight(id: string, endedAtUtc: string, events = 2, inte
     summary: {
       id,
       status,
-      completion: status === "completed" ? "landed" : null,
+      completion: status === "completed" ? "arrival_confirmed" : null,
       phase: "COMPLETED",
       simulator: "mock",
       simulatorVersion: null,
@@ -30,7 +30,7 @@ export function completedFlight(id: string, endedAtUtc: string, events = 2, inte
       interruptionCount: interruptions,
       sampleCount: 10,
     } as FlightDetail["summary"],
-    events: Array.from({ length: events }, (_, i) => ({ seq: i + 1, eventId: `${id}-ev-${i + 1}`, kind: "flight.started", occurredAtUtc: "2026-10-10T20:00:00.000Z", source: "user", fromPhase: null, toPhase: null, details: {} })) as FlightDetail["events"],
+    events: Array.from({ length: events }, (_, i) => ({ seq: i + 1, eventId: crypto.randomUUID(), kind: "flight.started", occurredAtUtc: "2026-10-10T20:00:00.000Z", source: "user", fromPhase: null, toPhase: null, details: {} })) as FlightDetail["events"],
     interruptions: Array.from({ length: interruptions }, (_, i) => ({ startedAtUtc: `2026-10-10T20:1${i}:00.000Z`, endedAtUtc: null, cause: "app_closed", resolution: null })) as FlightDetail["interruptions"],
     stats: null,
     samplesPruned: false,

@@ -8,8 +8,9 @@
     "build": "tsc -p tsconfig.json && vite build",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "pnpm typecheck",
-    "test": "vitest run",
-    "tauri": "tauri"
+    "test": "vitest run --exclude 'test/**/*.integration.test.ts'",
+    "tauri": "tauri",
+    "test:integration": "vitest run test/cloud.integration.test.ts"
   },
   "dependencies": {
     "@flightsim/cloud": "workspace:*",

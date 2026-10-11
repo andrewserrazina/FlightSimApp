@@ -7,7 +7,7 @@ function detail(over: Partial<FlightDetail["summary"]> = {}): FlightDetail {
     summary: {
       id: "5b0c6a0e-1f7f-4c8e-9a52-2d7f7b1f0c11",
       status: "completed",
-      completion: "landed",
+      completion: "arrival_confirmed",
       phase: "COMPLETED",
       simulator: "mock",
       simulatorVersion: "mock-1",
