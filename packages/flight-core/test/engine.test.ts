@@ -154,6 +154,43 @@ describe("debounce and hysteresis", () => {
   });
 });
 
+describe("S1-06 scenarios (synthetic; no threshold changes without real-telemetry evidence)", () => {
+  it("a touch-and-go records the touchdown, climbs again and never offers completion", () => {
+    const r = run([
+      start(0),
+      ...hold(0, 20, { onGround: false, groundSpeedKt: 130, verticalSpeedFpm: -700, radioAltitudeFt: 1500 }),
+      ...hold(20, 30, (t) => ({ onGround: true, groundSpeedKt: 120 - (t - 20) * 2 })), // on the runway ~10 s
+      ...hold(30, 40, (t) => ({ onGround: true, groundSpeedKt: 100 + (t - 30) * 4 })), // power up, roll again
+      ...hold(40, 80, { onGround: false, groundSpeedKt: 140, verticalSpeedFpm: 1500, radioAltitudeFt: null }),
+    ]);
+    expect(r.phases.slice(0, 3)).toEqual(["DESCENT", "APPROACH", "LANDING"]);
+    expect(r.state.phase).toBe("CLIMB");
+    expect(r.state.status).toBe("active");
+    expect(availableActions(r.state, true).confirmCompletion).toBe(false);
+  });
+
+  it("a long simulator pause (frozen values) in cruise changes nothing and adds no events", () => {
+    const cruise = { onGround: false, groundSpeedKt: 450, verticalSpeedFpm: 0, radioAltitudeFt: null };
+    // Cruise is confirmed after 60 s level (DEFAULT_LIFECYCLE_CONFIG debounce); then pause for 10 min.
+    const before = run([start(0), ...hold(0, 40, { ...cruise, verticalSpeedFpm: 2000 }), ...hold(40, 110, cruise)]);
+    const r = run(hold(110, 710, cruise), before.state); // identical samples keep arriving while paused
+    expect(before.state.phase).toBe("CRUISE");
+    expect(r.state.phase).toBe("CRUISE");
+    expect(r.events).toHaveLength(0);
+  });
+
+  it("a pause during the landing roll never completes the flight", () => {
+    const r = run([
+      start(0),
+      ...hold(0, 20, { onGround: false, groundSpeedKt: 130, verticalSpeedFpm: -700, radioAltitudeFt: 1500 }),
+      ...hold(20, 620, { onGround: true, groundSpeedKt: 60 }), // frozen at 60 kt for 10 minutes
+    ]);
+    expect(r.state.status).toBe("active");
+    expect(r.state.phase).toBe("LANDING");
+    expect(availableActions(r.state, true).confirmCompletion).toBe(false);
+  });
+});
+
 describe("missing and stale telemetry", () => {
   it("does not infer any phase from samples without on-ground and ground speed", () => {
     const r = run([start(0), ...hold(0, 60, { onGround: null, groundSpeedKt: null })]);
