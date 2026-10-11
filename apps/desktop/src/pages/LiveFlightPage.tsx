@@ -30,9 +30,9 @@ export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
   const flightStrip = (
     <section className="flight-strip" aria-label="Flight summary">
       <dl className="flight-strip__items">
-        <StaticMetric label="Flight" value={flightOpen && rec.flightId ? `Recording · ${rec.flightId.slice(0, 8)}` : "No flight in progress"} unavailable={!flightOpen} />
+        <StaticMetric label="Flight" value={flightOpen && rec.flightId ? `${rec.status === "interrupted" ? "Interrupted" : "Recording"} · ${rec.flightId.slice(0, 8)}` : "No flight in progress"} unavailable={!flightOpen} />
         <StaticMetric label="Route" value="Unavailable" unavailable />
-        <StaticMetric label="Flight phase" value={phaseText ? `${phaseText} (detected)` : "Not detected"} unavailable={!phaseText} />
+        <StaticMetric label="Flight phase" value={phaseText ? (rec.status === "interrupted" ? phaseText : `${phaseText} (detected)`) : "Not detected"} unavailable={!phaseText} />
         <div className="metric">
           <dt className="metric__label">Connection</dt>
           <dd className="metric__value">
