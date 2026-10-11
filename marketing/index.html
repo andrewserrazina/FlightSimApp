@@ -29,7 +29,7 @@ footer{padding:35px 0;border-top:1px solid #ffffff25;color:#a8bdce;font-size:.83
   const form = document.getElementById('signup');
   const status = document.getElementById('status');
   const submit = document.getElementById('submit');
-  document.getElementById('year').textContent = String(new Date().getFullYear());
+  document.getElementById('year').textContent = String(new Date().getFullYear());\n  const result = new URLSearchParams(location.search).get('waitlist');\n  if(result==='confirmed')status.textContent='Your email is confirmed. You are on the Turnline update list.';\n  if(result==='unsubscribed')status.textContent='You have been unsubscribed from Turnline updates.';\n  if(result==='invalid')status.textContent='That link is invalid or expired. You can submit the form again.';
   if(cfg.turnstileSiteKey && /^https:\/\//.test(cfg.apiUrl || '')){
     const script=document.createElement('script');script.src='https://challenges.cloudflare.com/turnstile/v0/api.js';script.async=true;script.defer=true;
     script.onload=()=>window.turnstile?.render('#turnstile',{sitekey:cfg.turnstileSiteKey});document.head.appendChild(script);
@@ -47,7 +47,7 @@ footer{padding:35px 0;border-top:1px solid #ffffff25;color:#a8bdce;font-size:.83
       const params=new URLSearchParams(location.search);
       const response=await fetch(cfg.apiUrl,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,consent:true,captcha,source:'turnline_waitlist',utm_source:(params.get('utm_source')||'').slice(0,100),utm_medium:(params.get('utm_medium')||'').slice(0,100),utm_campaign:(params.get('utm_campaign')||'').slice(0,100)})});
       if(!response.ok)throw Error('unavailable');
-      status.textContent='Check your inbox for a confirmation email. Please verify your address to join.';
+      status.textContent='If this address needs confirmation, you will receive an email shortly. Check your inbox.';
       form.reset();
     }catch{status.textContent='We could not submit your request. Please try again later.';}
     finally{submit.disabled=false;submit.textContent='Join the list';window.turnstile?.reset();}
