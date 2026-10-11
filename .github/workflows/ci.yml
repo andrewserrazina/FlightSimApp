@@ -7,6 +7,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same branch supersedes older runs (saves Windows runner time).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   typescript:
     runs-on: ubuntu-latest
