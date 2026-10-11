@@ -7,7 +7,11 @@
 use serde::Serialize;
 
 const SERVICE: &str = "dev.flightsimapp.desktop";
+// Tests use their own account so `cargo test` never touches a developer's real saved session.
+#[cfg(not(test))]
 const ACCOUNT: &str = "supabase-auth-session";
+#[cfg(test)]
+const ACCOUNT: &str = "supabase-auth-session-test";
 const MAX_VALUE_BYTES: usize = 16 * 1024;
 
 #[derive(Debug, Serialize)]
@@ -68,7 +72,7 @@ pub fn secure_session_delete() -> Result<(), SecureError> {
 /// Probe used by the UI to explain whether sessions can persist across restarts.
 #[tauri::command]
 pub fn secure_storage_status() -> bool {
-    let probe = keyring::Entry::new(SERVICE, "probe");
+    let probe = keyring::Entry::new(SERVICE, if cfg!(test) { "probe-test" } else { "probe" });
     match probe {
         Ok(e) => {
             let ok = e.set_password("ok").is_ok() && e.get_password().map(|v| v == "ok").unwrap_or(false);
@@ -82,6 +86,11 @@ pub fn secure_storage_status() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tests_never_use_the_real_session_entry() {
+        assert_ne!(ACCOUNT, "supabase-auth-session");
+    }
 
     #[test]
     fn rejects_oversized_values_without_touching_storage() {
