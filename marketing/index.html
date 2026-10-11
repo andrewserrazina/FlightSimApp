@@ -23,6 +23,7 @@ footer{padding:35px 0;border-top:1px solid #ffffff25;color:#a8bdce;font-size:.83
 <label class="check"><input type="checkbox" id="consent" required><span>I agree to receive Turnline development news and beta invitations by email. I can unsubscribe at any time.</span></label>
 <div id="turnstile" aria-label="Spam prevention check"></div><p class="fine">We use your email only for the updates you request. See our <a href="privacy.html">privacy notice</a>.</p><p class="status" id="status" role="status" aria-live="polite"></p></form></section>
 </main><footer><div class="wrap footerrow"><span>© <span id="year">2026</span> Turnline · Working brand, subject to clearance.</span><span>Independent project; not affiliated with Microsoft, Navigraph/SimBrief or FSDreamTeam/GSX.</span></div></footer>
+<script src="config.js"></script>
 <script>
 (() => {
   const cfg = window.TURNLINE_CONFIG || {};
@@ -53,5 +54,4 @@ footer{padding:35px 0;border-top:1px solid #ffffff25;color:#a8bdce;font-size:.83
     finally{submit.disabled=false;submit.textContent='Join the list';window.turnstile?.reset();}
   });
 })();
-</script>
-<script src="config.js"></script></body></html>
+</script></body></html>
