@@ -6,7 +6,8 @@
 //! * Transport is an OS named pipe (Windows) / Unix domain socket (dev), created by the bridge
 //!   with `CurrentUserOnly`. There is no TCP/HTTP listener anywhere.
 //! * The webview only receives already-framed JSON messages (validated again in TS against the
-//!   versioned schema) and may only ask for two fixed commands.
+//!   versioned schema) and may only ask for two fixed commands, or pick one of the three known
+//!   adapters (which restarts the bridge with a fresh token and pipe).
 
 use std::{path::PathBuf, process::Stdio, time::Duration};
 
@@ -37,11 +38,15 @@ struct ShellStatus {
 pub struct BridgeHandle {
     tx: Mutex<Option<mpsc::Sender<String>>>,
     snapshot: std::sync::Mutex<Snapshot>,
+    adapter: std::sync::Mutex<&'static str>,
+    restart: tokio::sync::Notify,
 }
 
 #[derive(Clone, Default, Serialize)]
 pub struct Snapshot {
     shell: Option<ShellStatus>,
+    /// Adapter the shell starts the bridge with (mock | msfs2020 | msfs2024).
+    adapter: &'static str,
     /// Latest `hello.ok`, `connection.state` and `bridge.health` messages, in that order.
     messages: Vec<Value>,
 }
@@ -80,8 +85,37 @@ pub async fn bridge_command(command: String, handle: State<'_, BridgeHandle>) ->
     }
 }
 
+/// Select the simulator adapter. Only the three known adapter ids are accepted; a change
+/// restarts the bridge process (new token, new pipe).
+#[tauri::command]
+pub fn bridge_select_adapter(adapter: String, app: AppHandle, handle: State<'_, BridgeHandle>) -> Result<(), String> {
+    let Some(adapter) = ADAPTERS.into_iter().find(|a| *a == adapter) else {
+        return Err("unsupported adapter".into());
+    };
+    {
+        let mut current = handle.adapter.lock().map_err(|_| "state unavailable".to_string())?;
+        if *current == adapter {
+            return Ok(());
+        }
+        *current = adapter;
+    }
+    remember(&app, |snap| snap.adapter = adapter);
+    handle.restart.notify_one();
+    Ok(())
+}
+
+fn current_adapter(app: &AppHandle) -> &'static str {
+    app.state::<BridgeHandle>().adapter.lock().map(|a| *a).unwrap_or("mock")
+}
+
 pub fn start(app: AppHandle) {
-    app.manage(BridgeHandle { tx: Mutex::new(None), snapshot: Default::default() });
+    let adapter = selected_adapter();
+    app.manage(BridgeHandle {
+        tx: Mutex::new(None),
+        snapshot: std::sync::Mutex::new(Snapshot { adapter, ..Default::default() }),
+        adapter: std::sync::Mutex::new(adapter),
+        restart: tokio::sync::Notify::new(),
+    });
     tauri::async_runtime::spawn(supervise(app));
 }
 
@@ -107,10 +141,18 @@ async fn supervise(app: AppHandle) {
         let delay = Duration::from_secs(1u64 << attempt.min(5)).min(Duration::from_secs(30));
         match outcome {
             Ok(()) => emit_shell(&app, "restarting", "Sim bridge exited; restarting.", attempt),
+            Err(BridgeError::Restart) => {
+                attempt = 0; // deliberate adapter switch: restart immediately
+                continue;
+            }
             Err(BridgeError::Unavailable(msg)) => emit_shell(&app, "unavailable", msg, attempt),
             Err(BridgeError::Lost(msg)) => emit_shell(&app, "restarting", msg, attempt),
         }
-        tokio::time::sleep(delay).await;
+        let handle = app.state::<BridgeHandle>();
+        tokio::select! {
+            _ = tokio::time::sleep(delay) => {}
+            _ = handle.restart.notified() => attempt = 0,
+        }
     }
 }
 
@@ -119,6 +161,8 @@ enum BridgeError {
     Unavailable(String),
     /// The bridge started but the link was lost.
     Lost(String),
+    /// The user selected a different adapter.
+    Restart,
 }
 
 async fn set_sender(app: &AppHandle, tx: Option<mpsc::Sender<String>>) {
@@ -128,7 +172,7 @@ async fn set_sender(app: &AppHandle, tx: Option<mpsc::Sender<String>>) {
 async fn run_once(app: &AppHandle, attempt: u32) -> Result<(), BridgeError> {
     let token = random_token();
     let pipe_name = format!("flightsim-{}", random_hex(8));
-    let adapter = selected_adapter();
+    let adapter = current_adapter(app);
 
     let mut child = spawn_bridge(adapter, &pipe_name).map_err(BridgeError::Unavailable)?;
     let mut stdin = child.stdin.take().ok_or_else(|| BridgeError::Unavailable("bridge stdin unavailable".into()))?;
@@ -183,8 +227,10 @@ async fn run_once(app: &AppHandle, attempt: u32) -> Result<(), BridgeError> {
         }
     });
 
+    let handle = app.state::<BridgeHandle>();
     let result = tokio::select! {
         r = relay(app, reader) => r,
+        _ = handle.restart.notified() => Err(BridgeError::Restart),
         status = child.wait() => Err(BridgeError::Lost(format!("Sim bridge exited ({})", status.map(|s| s.to_string()).unwrap_or_else(|e| e.to_string())))),
     };
     writer_task.abort();
@@ -238,6 +284,7 @@ async fn relay(app: &AppHandle, reader: Box<dyn AsyncRead + Unpin + Send>) -> Re
     }
 }
 
+/// Initial adapter from FLIGHTSIM_BRIDGE_ADAPTER (dev override); the UI may change it later.
 fn selected_adapter() -> &'static str {
     let wanted = std::env::var("FLIGHTSIM_BRIDGE_ADAPTER").unwrap_or_default();
     ADAPTERS.into_iter().find(|a| *a == wanted).unwrap_or("mock")

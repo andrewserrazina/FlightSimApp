@@ -6,7 +6,7 @@ pub fn run() {
             bridge::start(app.handle().clone());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![bridge::bridge_command, bridge::bridge_snapshot])
+        .invoke_handler(tauri::generate_handler![bridge::bridge_command, bridge::bridge_snapshot, bridge::bridge_select_adapter])
         .run(tauri::generate_context!())
         .expect("error while running FlightSimApp");
 }

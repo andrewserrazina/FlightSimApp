@@ -1,66 +1,106 @@
-import { parseBridgeMessageV1, type BridgeServerMessageV1 } from "@flightsim/contracts";
-import type { BridgeViewState, ShellStatus } from "./types";
+import { parseBridgeMessageV1, type BridgeServerMessageV1, type SimulatorId } from "@flightsim/contracts";
+import type { BridgeViewState, ConnectionLogEntry, ShellStatus } from "./types";
 
 export type BridgeAction =
-  | { type: "raw"; payload: unknown }
-  | { type: "shell"; status: ShellStatus };
+  | { type: "raw"; payload: unknown; receivedAt: number }
+  | { type: "shell"; status: ShellStatus; receivedAt: number }
+  | { type: "configured-adapter"; adapter: SimulatorId | null };
+
+export const MAX_LOG_ENTRIES = 50;
 
 export const initialBridgeState: BridgeViewState = {
   shell: { state: "starting", message: "Starting sim bridge…", attempt: 0 },
+  configuredAdapter: null,
   sessionId: null,
   adapter: null,
   bridgeVersion: null,
   connection: null,
   lastFrame: null,
+  lastFrameReceivedAt: null,
   health: null,
   gapCount: 0,
+  reconnectCount: 0,
   invalidMessages: 0,
   lastError: null,
+  connectionLog: [],
 };
+
+function appendLog(log: ConnectionLogEntry[], entry: ConnectionLogEntry): ConnectionLogEntry[] {
+  const last = log[log.length - 1];
+  // Snapshot replays and repeated shell events must not create duplicate history.
+  if (last && last.source === entry.source && last.state === entry.state && (entry.source === "shell" || last.atUtc === entry.atUtc)) {
+    return log;
+  }
+  const next = [...log, entry];
+  return next.length > MAX_LOG_ENTRIES ? next.slice(next.length - MAX_LOG_ENTRIES) : next;
+}
 
 /**
  * Pure state transition for everything the bridge sends. Every inbound message is validated
  * against the versioned contract first; anything invalid is counted and dropped, never rendered.
  */
 export function bridgeReducer(state: BridgeViewState, action: BridgeAction): BridgeViewState {
-  if (action.type === "shell") {
-    if (action.status.state === "running") return { ...state, shell: action.status };
-    // The bridge process went away: anything it told us is no longer live.
-    return {
-      ...state,
-      shell: action.status,
-      connection: null,
-      health: null,
-      sessionId: action.status.state === "restarting" ? state.sessionId : null,
-    };
+  switch (action.type) {
+    case "configured-adapter":
+      return { ...state, configuredAdapter: action.adapter };
+    case "shell": {
+      const connectionLog = appendLog(state.connectionLog, {
+        atUtc: new Date(action.receivedAt).toISOString(),
+        source: "shell",
+        state: action.status.state,
+        detail: action.status.state === "running" ? null : action.status.message,
+      });
+      if (action.status.state === "running") return { ...state, shell: action.status, connectionLog };
+      // The bridge process went away: nothing it told us about the simulator is live any more.
+      // The last frame is kept (freshness marks it stale) until a new bridge session replaces it.
+      return { ...state, shell: action.status, connection: null, health: null, connectionLog };
+    }
+    case "raw": {
+      const parsed = parseBridgeMessageV1(action.payload);
+      if (!parsed.ok) {
+        return { ...state, invalidMessages: state.invalidMessages + 1, lastError: `Invalid bridge message: ${parsed.errors.slice(0, 3).join("; ")}` };
+      }
+      return applyMessage(state, parsed.value as BridgeServerMessageV1, action.receivedAt);
+    }
   }
-
-  const parsed = parseBridgeMessageV1(action.payload);
-  if (!parsed.ok) {
-    return { ...state, invalidMessages: state.invalidMessages + 1, lastError: parsed.errors.slice(0, 3).join("; ") };
-  }
-  return applyMessage(state, parsed.value as BridgeServerMessageV1);
 }
 
-function applyMessage(state: BridgeViewState, msg: BridgeServerMessageV1): BridgeViewState {
+function applyMessage(state: BridgeViewState, msg: BridgeServerMessageV1, receivedAt: number): BridgeViewState {
   switch (msg.type) {
-    case "hello.ok":
+    case "hello.ok": {
+      const sameSession = state.sessionId === msg.data.session_id;
       return {
         ...state,
         sessionId: msg.data.session_id,
         adapter: msg.data.adapter,
         bridgeVersion: msg.data.bridge_version,
         // A new bridge session invalidates the previous session's frame.
-        lastFrame: state.sessionId === msg.data.session_id ? state.lastFrame : null,
+        lastFrame: sameSession ? state.lastFrame : null,
+        lastFrameReceivedAt: sameSession ? state.lastFrameReceivedAt : null,
       };
-    case "connection.state":
-      return { ...state, connection: msg.data };
+    }
+    case "connection.state": {
+      // A lost live connection (CONNECTED/STALE -> RECONNECTING). Retry attempts are not counted.
+      const prev = state.connection?.state;
+      const lostLive = msg.data.state === "RECONNECTING" && (prev === "CONNECTED" || prev === "STALE");
+      return {
+        ...state,
+        connection: msg.data,
+        reconnectCount: state.reconnectCount + (lostLive ? 1 : 0),
+        connectionLog: appendLog(state.connectionLog, {
+          atUtc: msg.data.since,
+          source: "bridge",
+          state: msg.data.state,
+          detail: msg.data.reason ? `${msg.data.reason.code}: ${msg.data.reason.message}` : null,
+        }),
+      };
+    }
     case "telemetry.frame":
       if (state.sessionId !== null && msg.data.session_id !== state.sessionId) return state;
       if (state.lastFrame && state.lastFrame.session_id === msg.data.session_id && msg.data.seq <= state.lastFrame.seq) {
         return state; // duplicate or out-of-order
       }
-      return { ...state, lastFrame: msg.data };
+      return { ...state, lastFrame: msg.data, lastFrameReceivedAt: receivedAt };
     case "bridge.health":
       return { ...state, health: msg.data };
     case "flight.event":

@@ -35,3 +35,4 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+ui-smoke-out/

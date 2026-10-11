@@ -18,7 +18,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @flightsim/contracts build
+      - run: pnpm -r --filter "./packages/**" build
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm --filter @flightsim/desktop build
@@ -49,7 +49,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @flightsim/contracts build
+      - run: pnpm -r --filter "./packages/**" build
       - run: pnpm --filter @flightsim/desktop build
       - working-directory: apps/desktop/src-tauri
         run: cargo clippy --all-targets -- -D warnings

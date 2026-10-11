@@ -1,0 +1,69 @@
+/*
+ * FlightSimApp design tokens. All colours, type, spacing and radii come from here; components
+ * reference tokens only. Contrast notes (WCAG): text-primary/surface ≥ 12:1, text-secondary ≥ 8:1,
+ * text-muted ≥ 4.8:1 on every surface, accent on navy ≥ 8:1.
+ */
+:root {
+  /* Brand */
+  --color-navy: #0b1f3a;
+  --color-navy-deep: #081629;
+  --color-gold: #f4b400;
+  --color-gold-strong: #ffc933;
+  --color-on-gold: #1a1300;
+
+  /* Surfaces (dark slate) */
+  --surface-app: var(--color-navy);
+  --surface-sidebar: var(--color-navy-deep);
+  --surface-1: #13263f;
+  --surface-2: #1a2f4c;
+  --surface-3: #22395a;
+  --border-subtle: #233a5a;
+  --border-strong: #35507a;
+
+  /* Text */
+  --text-primary: #ffffff;
+  --text-secondary: #d3dbe7;
+  --text-muted: #9fb0c8;
+  --text-unavailable: #8d9cb3;
+
+  /* Status (restrained) */
+  --status-ok: #4cc38a;
+  --status-info: #6cb4ee;
+  --status-warn: #ff9f43;
+  --status-alert: #f2665b;
+  --status-neutral: #a9b6c9;
+  --status-warn-surface: #3a2a14;
+  --status-alert-surface: #3b1d22;
+
+  --focus-ring: #8fd0ff;
+
+  /* Type */
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI Semibold", "Segoe UI", "Inter", Arial, sans-serif;
+  --font-mono: "Cascadia Mono", "Consolas", "DejaVu Sans Mono", ui-monospace, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+  --text-data: 1.375rem;
+  --text-data-lg: 2rem;
+  --tracking-label: 0.08em;
+
+  /* Spacing (4 px grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --control-height: 34px;
+  --topbar-height: 56px;
+  --sidebar-width: 224px;
+
+  color-scheme: dark;
+}

@@ -3,7 +3,7 @@
 A pilot-first airline operations simulator for Windows desktop flight simulators (MSFS 2020/2024).
 Product, architecture and sprint specs live in [`docs/spec/`](docs/spec/).
 
-**Status: Sprint 1A (S1-01 repo foundation + S1-02 contract-first bridge).** This is a technical
+**Status: Sprint 1 — S1-01 repo foundation, S1-02 contract-first bridge, S1-03 desktop UI.** This is a technical
 foundation, not a usable product. **No real MSFS integration has been verified.** See
 [`docs/compatibility/msfs-telemetry.md`](docs/compatibility/msfs-telemetry.md).
 
@@ -40,7 +40,7 @@ docs/adr/, docs/compatibility/
 ```powershell
 corepack enable
 pnpm install --frozen-lockfile
-pnpm --filter @flightsim/contracts build     # generates validators + dist (desktop depends on it)
+pnpm -r --filter "./packages/**" build      # contracts (generated validators) + flight-core; desktop depends on both
 pnpm typecheck
 pnpm test                                    # contracts, flight-core, desktop reducer tests
 
@@ -86,6 +86,27 @@ cd apps/desktop; pnpm tauri build --config src-tauri/tauri.bundle.conf.json
 
 This produces an unsigned NSIS installer for internal testing only. It is not for public release.
 
+## Desktop UI (S1-03)
+
+Five pages in a persistent shell (sidebar + status bar with connection state, DEMO DATA badge and UTC clock).
+Navigate with the sidebar or **Alt+1 … Alt+5**.
+
+| Page | What it shows |
+|---|---|
+| Connection | Connection state (each FR-01 state and each bridge-process state has its own glyph, label, explanation and guidance), detected simulator, bridge version/health, retry, mock-mode toggle, getting-started steps |
+| Live Flight | Aircraft, altitude, speed, position, fuel and timing groups. Explicit units, **Unavailable** never 0, live/stale indicator with local staleness detection. Flight number, route and phase are shown as not available because there is no source for them yet |
+| Flight History | Typed `FlightHistoryRepository` with loading, failure and empty states. Persistence arrives in S1-04, so the list is honestly empty |
+| Debrief | All nine planned sections. Only the overview uses data; every other section is labelled *Not yet implemented* with the reason. No scores are fabricated |
+| Settings | Mock mode / simulator selection (restarts the bridge via the narrowly scoped `bridge_select_adapter` command), stale threshold, local-time display, connection status, bridge info, data-quality counters, connection event log, copyable diagnostics report (no secrets, shortened ids) |
+
+Structure: `src/domain` (pure logic: connection presentation, freshness, debrief, diagnostics),
+`src/bridge` (reducer, transport seam, delayed-init handling, single subscription owner),
+`src/preferences`, `src/data`, `src/ui` (component library), `src/pages`, design tokens in
+`src/styles/tokens.css`. See [`docs/ui/design-system.md`](docs/ui/design-system.md) and the
+screenshots in [`docs/screenshots/s1-03/`](docs/screenshots/s1-03/).
+
+Linux smoke test harness (Xvfb, not a Windows test): `scripts/ui-smoke-linux.sh`.
+
 ## Key behaviours implemented
 - Connection states DISCONNECTED / CONNECTING / CONNECTED / STALE / RECONNECTING / ERROR, with
   an explicit transition table, capped exponential backoff with jitter, a stale timeout (2 s) and
@@ -99,6 +120,7 @@ This produces an unsigned NSIS installer for internal testing only. It is not fo
 
 ## Known gaps / not done
 - MSFS 2020/2024 runtime integration is **unverified**. `ManagedSimConnectClient.cs` has never been compiled.
-- S1-03 onwards: full UI pages, SQLite spool, lifecycle detector, cloud sync, release signing.
+- The desktop UI has been smoke-tested on Linux (WebKitGTK under Xvfb) only. It has **not been run on Windows/WebView2**.
+- S1-04 onwards: SQLite spool, lifecycle detector (flight phase), cloud sync, release signing.
 - The database migration has been written but not applied anywhere. RLS has not been tested yet (S1-05).
 - No billing, SimBrief, GSX, TOBT or EDCT (out of scope).
