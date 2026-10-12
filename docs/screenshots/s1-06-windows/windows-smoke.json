@@ -1,0 +1,142 @@
+{
+  "uitest.exe_present": {
+    "ok": true,
+    "detail": "D:\\a\\FlightSimApp\\FlightSimApp\\uitest\\flightsim-desktop.exe"
+  },
+  "uitest.bridge_next_to_exe": {
+    "ok": true,
+    "detail": null
+  },
+  "ui.connected": {
+    "ok": true,
+    "detail": "{\"webview2_rendered\":true,\"bridge_connected_over_named_pipe\":true,\"user_agent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0\"}"
+  },
+  "start.bridge_child_process": {
+    "ok": true,
+    "detail": "flightsim-sim-bridge.exe,msedgewebview2.exe"
+  },
+  "start.webview2_processes": {
+    "ok": true,
+    "detail": null
+  },
+  "start.named_pipe_present": {
+    "ok": true,
+    "detail": 1
+  },
+  "ui.settings": {
+    "ok": true,
+    "detail": "{\"database_ready_schema_v2\":true,\"database_in_appdata\":true,\"diagnostics_parse\":true,\"diagnostics_adapter\":\"mock\",\"diagnostics_simconnect_sdk\":\"not_applicable\",\"diagnostics_no_secrets\":true}"
+  },
+  "data.database_created": {
+    "ok": true,
+    "detail": "C:\\Users\\runneradmin\\AppData\\Roaming\\dev.flightsimapp.desktop\\flightsim.db"
+  },
+  "data.schema_version": {
+    "ok": true,
+    "detail": "2"
+  },
+  "ui.fly": {
+    "ok": true,
+    "detail": "{\"flight_started\":true,\"flight_completed_and_listed\":true}"
+  },
+  "data.completed_flight_persisted": {
+    "ok": true,
+    "detail": "1"
+  },
+  "ui.msfs": {
+    "ok": true,
+    "detail": "{\"msfs_adapter_selected\":true,\"reports_sdk_unavailable\":true,\"switched_back_to_mock\":true}"
+  },
+  "lifecycle.bridge_exits_after_app_killed": {
+    "ok": true,
+    "detail": "bridge pid was 3408"
+  },
+  "ui.history": {
+    "ok": true,
+    "detail": "{\"completed_flights_listed\":1}"
+  },
+  "lifecycle.app_exits_on_close": {
+    "ok": true,
+    "detail": null
+  },
+  "lifecycle.bridge_exits_on_close": {
+    "ok": true,
+    "detail": null
+  },
+  "install.exit_code": {
+    "ok": true,
+    "detail": 0
+  },
+  "install.app_exe_present": {
+    "ok": true,
+    "detail": "C:\\Users\\runneradmin\\AppData\\Local\\FlightSimApp\\flightsim-desktop.exe"
+  },
+  "install.bridge_exe_packaged": {
+    "ok": true,
+    "detail": "C:\\Users\\runneradmin\\AppData\\Local\\FlightSimApp"
+  },
+  "install.registered_version": {
+    "ok": true,
+    "detail": "0.1.0"
+  },
+  "installed.app_running": {
+    "ok": true,
+    "detail": null
+  },
+  "installed.bridge_child_process": {
+    "ok": true,
+    "detail": "flightsim-sim-bridge.exe,msedgewebview2.exe"
+  },
+  "installed.webview2_processes": {
+    "ok": true,
+    "detail": null
+  },
+  "installed.keeps_existing_flights": {
+    "ok": true,
+    "detail": "1 completed"
+  },
+  "installed.bridge_exits_on_close": {
+    "ok": true,
+    "detail": null
+  },
+  "upgrade.exit_code": {
+    "ok": true,
+    "detail": 0
+  },
+  "upgrade.registered_version": {
+    "ok": true,
+    "detail": "0.1.1"
+  },
+  "upgrade.database_preserved": {
+    "ok": true,
+    "detail": "1 completed"
+  },
+  "upgrade.app_starts": {
+    "ok": true,
+    "detail": null
+  },
+  "upgrade.schema_version": {
+    "ok": true,
+    "detail": null
+  },
+  "uninstall.exit_code": {
+    "ok": true,
+    "detail": 0
+  },
+  "uninstall.app_removed": {
+    "ok": true,
+    "detail": "C:\\Users\\runneradmin\\AppData\\Local\\FlightSimApp"
+  },
+  "uninstall.registry_removed": {
+    "ok": true,
+    "detail": null
+  },
+  "uninstall.local_flights_kept": {
+    "ok": true,
+    "detail": "default uninstall keeps %APPDATA% data"
+  },
+  "uninstall.credential_manager_untouched": {
+    "ok": true,
+    "detail": null
+  }
+}

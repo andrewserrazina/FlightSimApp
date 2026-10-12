@@ -10,7 +10,7 @@ Every check is labelled with exactly one evidence category. Categories are never
 | **L** | Passed on Linux / mock mode |
 | **NT** | Not tested |
 
-CI evidence: workflow `CI` on branch `claude/new-session-2b3s69`. Run IDs are in the S1-06 report.
+CI evidence: workflow `CI` on branch `claude/new-session-2b3s69`. All 6 jobs green in run **38308410373**.
 
 ## Platform and packaging
 
@@ -26,7 +26,9 @@ CI evidence: workflow `CI` on branch `claude/new-session-2b3s69`. Run IDs are in
 | Fresh install (silent), bridge packaged, registry version, WebView2 processes, bridge child process, named pipe, SQLite in %APPDATA% schema v2 | **W** (run 38305699397) | `windows-installer` smoke |
 | Upgrade 0.1.0 → 0.1.1 in place (DB kept), uninstall (app removed, %APPDATA% data and Credential Manager entries kept) | **W** (run 38305699397) | same |
 | Bridge shuts down with the app (window close and forced kill) | **W** (run 38305699397) | same |
-| Adapter selection (mock ↔ MSFS 2024, no SimConnect.dll → `sdk_unavailable`) | see `windows-installer` smoke | same |
+| Real UI in WebView2: render, settings, diagnostics (no secrets), mock flight recorded + completed, history after forced kill + restart | **W** (run 38308410373; UI phase on a test build = shipped code + `--remote-debugging-port`) | `docs/screenshots/s1-06-windows/` |
+| Adapter selection (mock ↔ MSFS 2024, no SimConnect.dll → `sdk_unavailable`) | **W** (run 38308410373) | same |
+| Installed (shipped) app keeps flights recorded earlier; upgrade keeps them; uninstall keeps them | **W** (run 38308410373) | same |
 | Windows 10/11 **desktop** PC | **NT** | Part A has not been run on a Windows 10/11 desktop PC (`windows-validation.md`) |
 | Code signing / SmartScreen | **NT** | unsigned internal build |
 
