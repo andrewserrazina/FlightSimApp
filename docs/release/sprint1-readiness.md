@@ -17,15 +17,15 @@ CI evidence: workflow `CI` on branch `claude/new-session-2b3s69`. Run IDs are in
 | Check | Status | Evidence |
 |---|---|---|
 | .NET bridge builds (Release) | **W**, **L** | `bridge` jobs |
-| .NET bridge tests incl. named pipe `CurrentUserOnly` + token hello | **W** (123 of the suite before the deadlock fix; full suite after), **L** | `bridge (windows-latest)` |
+| .NET bridge tests incl. named pipe `CurrentUserOnly` + token hello | **W** (135/135, run 38305699397 — first time the Windows suite ever completed), **L** | `bridge (windows-latest)` |
 | Native SimConnect client compiles | **W**, **L** | `bridge` jobs |
-| Self-contained single-file sidecar publish | **W** | `windows-installer`, `bridge (windows-latest)` |
+| Self-contained single-file sidecar publish + probe (8 mock frames; MSFS 2024 without SimConnect.dll → `sdk_unavailable`) | **W** | `bridge (windows-latest)` |
 | Rust shell clippy + tests | **W**, **L** | `desktop-shell` |
 | Windows Credential Manager: full-size chunked session round-trip | **W** | `desktop-shell` log: "round-trip exercised with a 2972-char session" |
 | NSIS installer build (0.1.0, upgrade 0.1.1) | **W** | `windows-installer` |
-| Fresh install, WebView2 startup, bridge packaged, named pipe, SQLite in %APPDATA% | see `windows-installer` smoke | `smoke-out/summary.md` artifact |
-| Restart / recovery, upgrade preserves DB, uninstall keeps data | see `windows-installer` smoke | same |
-| Bridge shuts down with the app (close and forced kill) | see `windows-installer` smoke | same |
+| Fresh install (silent), bridge packaged, registry version, WebView2 processes, bridge child process, named pipe, SQLite in %APPDATA% schema v2 | **W** (run 38305699397) | `windows-installer` smoke |
+| Upgrade 0.1.0 → 0.1.1 in place (DB kept), uninstall (app removed, %APPDATA% data and Credential Manager entries kept) | **W** (run 38305699397) | same |
+| Bridge shuts down with the app (window close and forced kill) | **W** (run 38305699397) | same |
 | Adapter selection (mock ↔ MSFS 2024, no SimConnect.dll → `sdk_unavailable`) | see `windows-installer` smoke | same |
 | Windows 10/11 **desktop** PC | **NT** | Part A has not been run on a Windows 10/11 desktop PC (`windows-validation.md`) |
 | Code signing / SmartScreen | **NT** | unsigned internal build |
