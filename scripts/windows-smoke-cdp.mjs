@@ -12,34 +12,39 @@ mkdirSync(outDir, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function pageTarget() {
+  let last = "no response";
   for (let i = 0; i < 90; i++) {
     try {
       const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+      last = JSON.stringify(list.map((t) => ({ type: t.type, url: t.url })));
       const page = list.find((t) => t.type === "page" && /tauri|localhost/.test(t.url));
       if (page) return page;
-    } catch {
-      // WebView2 not up yet
+    } catch (e) {
+      last = String(e?.cause?.code ?? e?.message ?? e); // WebView2 not up yet / port closed
     }
     await sleep(1000);
   }
-  throw new Error("no WebView2 page target on the DevTools port");
+  throw new Error(`no WebView2 page target on DevTools port ${port} (last: ${last})`);
 }
 
-const target = await pageTarget();
-const ws = new WebSocket(target.webSocketDebuggerUrl);
-await new Promise((resolve, reject) => {
-  ws.onopen = resolve;
-  ws.onerror = reject;
-});
+let ws;
 let nextId = 0;
 const pending = new Map();
-ws.onmessage = (ev) => {
-  const msg = JSON.parse(ev.data);
-  if (msg.id && pending.has(msg.id)) {
-    pending.get(msg.id)(msg);
-    pending.delete(msg.id);
-  }
-};
+async function connect() {
+  const target = await pageTarget();
+  ws = new WebSocket(target.webSocketDebuggerUrl);
+  await new Promise((resolve, reject) => {
+    ws.onopen = resolve;
+    ws.onerror = (e) => reject(new Error(`DevTools websocket error: ${e?.message ?? e}`));
+  });
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.id && pending.has(msg.id)) {
+      pending.get(msg.id)(msg);
+      pending.delete(msg.id);
+    }
+  };
+}
 function send(method, params = {}) {
   const id = ++nextId;
   ws.send(JSON.stringify({ id, method, params }));
@@ -79,6 +84,7 @@ const nav = (page) => click(page); // sidebar buttons: "Connection", "Live Fligh
 
 const result = { step, ok: false, checks: {} };
 try {
+  await connect();
   if (step === "connected") {
     await waitFor("app shell rendered", textIncludes("Settings"), 90_000);
     await waitFor("mock simulator connected (DEMO DATA)", `${textIncludes("DEMO DATA")} && ${textIncludes("Connected")}`, 120_000);
@@ -137,8 +143,8 @@ try {
   result.ok = true;
 } catch (e) {
   result.error = String(e?.message ?? e);
-  await screenshot(`failed-${step}`).catch(() => {});
+  if (ws) await screenshot(`failed-${step}`).catch(() => {});
 }
 console.log(JSON.stringify(result));
-ws.close();
+ws?.close();
 process.exit(result.ok ? 0 : 1);

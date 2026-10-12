@@ -22,8 +22,11 @@ function Check([string]$name, [bool]$ok, $detail = $null) {
   Write-Host ("[{0}] {1} {2}" -f ($(if ($ok) { "PASS" } else { "FAIL" }), $name, $detail))
 }
 function Cdp([string]$step) {
-  $out = & node $cdp $step $OutDir $DevToolsPort 2>&1 | Select-Object -Last 1
-  try { $r = $out | ConvertFrom-Json } catch { $r = [pscustomobject]@{ ok = $false; error = "$out" } }
+  $all = @(& node $cdp $step $OutDir $DevToolsPort 2>&1 | ForEach-Object { "$_" })
+  $all | Set-Content (Join-Path $OutDir "cdp-$step.log")
+  $json = $all | Where-Object { $_ -match '^\{"step"' } | Select-Object -Last 1
+  try { $r = $json | ConvertFrom-Json } catch { $r = $null }
+  if (-not $r) { $r = [pscustomobject]@{ ok = $false; error = (($all | Select-Object -Last 12) -join " | ") } }
   Check "ui.$step" ([bool]$r.ok) $(if ($r.ok) { ($r.checks | ConvertTo-Json -Compress) } else { $r.error })
   return $r
 }
@@ -78,7 +81,7 @@ $r = Cdp "connected"
 $children = Get-CimInstance Win32_Process -Filter "ParentProcessId = $($app.Id)"
 Check "start.bridge_child_process" (@($children | Where-Object Name -eq "flightsim-sim-bridge.exe").Count -eq 1) (($children.Name | Sort-Object -Unique) -join ",")
 Check "start.webview2_processes" (@(Get-Process -Name msedgewebview2 -ErrorAction SilentlyContinue).Count -gt 0)
-$pipes = [System.IO.Directory]::GetFiles("\\.\pipe\") | Where-Object { $_ -match "flightsim-bridge-" }
+$pipes = [System.IO.Directory]::GetFiles("\\.\pipe\") | Where-Object { $_ -match "flightsim-[0-9a-f]{16}$" }
 Check "start.named_pipe_present" (@($pipes).Count -ge 1) (@($pipes).Count)
 Cdp "settings" | Out-Null
 Check "data.database_created" (Test-Path $db) $db

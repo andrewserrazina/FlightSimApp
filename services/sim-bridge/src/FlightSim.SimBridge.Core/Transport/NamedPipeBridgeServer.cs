@@ -40,6 +40,7 @@ public sealed record PipeServerOptions
 /// </summary>
 public sealed class NamedPipeBridgeServer : IBridgeOutput
 {
+    private const int PipeBufferBytes = 64 * 1024;
     private readonly PipeServerOptions _options;
     private readonly BridgeToken _token;
     private readonly ILogger _log;
@@ -79,7 +80,11 @@ public sealed class NamedPipeBridgeServer : IBridgeOutput
                 PipeDirection.InOut,
                 maxNumberOfServerInstances: 1,
                 PipeTransmissionMode.Byte,
-                PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly,
+                // Explicit buffers: with the default (0) a Windows pipe write completes only while the
+                // peer is reading, so a client that writes before it reads stalls the server.
+                inBufferSize: PipeBufferBytes,
+                outBufferSize: PipeBufferBytes);
             await using (pipe.ConfigureAwait(false))
             {
                 try
@@ -90,6 +95,11 @@ public sealed class NamedPipeBridgeServer : IBridgeOutput
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
                     break;
+                }
+                catch (OperationCanceledException)
+                {
+                    // A write deadline expired: the client stopped draining. Drop it; keep serving.
+                    _log.LogWarning("Bridge client dropped: it stopped reading (write timed out)");
                 }
                 catch (IOException ex)
                 {
