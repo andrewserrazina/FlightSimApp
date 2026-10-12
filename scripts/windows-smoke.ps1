@@ -1,12 +1,17 @@
 # Windows installer + app smoke test (internal build; no MSFS). Runs on a clean Windows 10/11 x64
 # machine or a GitHub windows runner. Usage:
-#   pwsh scripts/windows-smoke.ps1 -Installer <setup-0.1.0.exe> -UpgradeInstaller <setup-0.1.1.exe> -OutDir smoke-out
+#   pwsh scripts/windows-smoke.ps1 -Installer <setup-0.1.0.exe> -UpgradeInstaller <setup-0.1.1.exe> -UiTestExe <dir\flightsim-desktop.exe> -OutDir smoke-out
+# Phase U drives the real UI over the WebView2 DevTools protocol. It needs a TEST build whose only difference
+# is the extra browser argument --remote-debugging-port (src-tauri/tauri.uitest.conf.json): WebView2 ignores
+# WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS because Tauri/wry always sets its own browser arguments. Phase I uses
+# the SHIPPED installers (no debugging port) for install, start, upgrade and uninstall.
 # Every check is recorded in $OutDir/windows-smoke.json and summary.md; exit code 1 if any check fails.
 # NOTE: deletes and recreates the app's data directory (%APPDATA%\dev.flightsimapp.desktop) — never run
 # on a PC whose local flights you want to keep.
 param(
   [Parameter(Mandatory = $true)][string]$Installer,
   [Parameter(Mandatory = $true)][string]$UpgradeInstaller,
+  [Parameter(Mandatory = $true)][string]$UiTestExe,
   [string]$OutDir = "smoke-out",
   [int]$DevToolsPort = 9222
 )
@@ -44,7 +49,6 @@ function AppExe([string]$dir) {
 }
 function BridgeProcs { Get-Process -Name "flightsim-sim-bridge" -ErrorAction SilentlyContinue }
 function Launch([string]$exe) {
-  $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$DevToolsPort"
   $env:FLIGHTSIM_MOCK_START_OFFSET_S = "700"   # mock flight near its end: completes in ~4 min
   $p = Start-Process -FilePath $exe -PassThru
   Start-Sleep -Seconds 8
@@ -65,19 +69,11 @@ if (Test-Path $dataDir) { Remove-Item -Recurse -Force $dataDir }
 $marker = "turnline-smoke-marker.dev.flightsimapp.desktop"
 cmdkey /generic:$marker /user:smoke /pass:not-a-secret | Out-Null
 
-# ---------- 1. fresh install ----------
-$p = Start-Process -FilePath $Installer -ArgumentList "/S" -Wait -PassThru
-Check "install.exit_code" ($p.ExitCode -eq 0) $p.ExitCode
-$dir = InstallDir
-$exe = AppExe $dir
-Check "install.app_exe_present" ($null -ne $exe) $(if ($exe) { $exe.FullName })
-Check "install.bridge_exe_packaged" (Test-Path (Join-Path $dir "flightsim-sim-bridge.exe")) $dir
-$ver0 = (Get-ItemProperty $uninstallKey -ErrorAction SilentlyContinue).DisplayVersion
-Check "install.registered_version" ($ver0 -eq "0.1.0") $ver0
-
-# ---------- 2. first start (WebView2, bridge sidecar, named pipe, SQLite) ----------
-$app = Launch $exe.FullName
-$r = Cdp "connected"
+# ===== Phase U: real UI over DevTools (test build = shipped code + --remote-debugging-port) =====
+Check "uitest.exe_present" (Test-Path $UiTestExe) $UiTestExe
+Check "uitest.bridge_next_to_exe" (Test-Path (Join-Path (Split-Path $UiTestExe) "flightsim-sim-bridge.exe"))
+$app = Launch $UiTestExe
+Cdp "connected" | Out-Null
 $children = Get-CimInstance Win32_Process -Filter "ParentProcessId = $($app.Id)"
 Check "start.bridge_child_process" (@($children | Where-Object Name -eq "flightsim-sim-bridge.exe").Count -eq 1) (($children.Name | Sort-Object -Unique) -join ",")
 Check "start.webview2_processes" (@(Get-Process -Name msedgewebview2 -ErrorAction SilentlyContinue).Count -gt 0)
@@ -90,42 +86,58 @@ Cdp "fly" | Out-Null
 $completed = DbQuery "select count(*) from flights where status = 'completed'"
 Check "data.completed_flight_persisted" ([int]$completed -ge 1) $completed
 Cdp "msfs" | Out-Null
-
-# ---------- 3. forced kill: the bridge must not outlive the app ----------
-$bridgePid = ($children | Where-Object Name -eq "flightsim-sim-bridge.exe" | Select-Object -First 1).ProcessId
+$bridgePid = (Get-CimInstance Win32_Process -Filter "ParentProcessId = $($app.Id)" | Where-Object Name -eq "flightsim-sim-bridge.exe" | Select-Object -First 1).ProcessId
 Stop-Process -Id $app.Id -Force
 Check "lifecycle.bridge_exits_after_app_killed" (WaitGone { BridgeProcs } 20) "bridge pid was $bridgePid"
-
-# ---------- 4. restart: data persists; graceful close stops the bridge ----------
-$app = Launch $exe.FullName
+$app = Launch $UiTestExe
 Cdp "connected" | Out-Null
 Cdp "history" | Out-Null
 $null = $app.CloseMainWindow()
 Check "lifecycle.app_exits_on_close" (WaitGone { Get-Process -Id $app.Id -ErrorAction SilentlyContinue } 20)
 Check "lifecycle.bridge_exits_on_close" (WaitGone { BridgeProcs } 20)
+Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
 
-# ---------- 5. upgrade in place ----------
-$before = DbQuery "select count(*) from flights"
+# ===== Phase I: shipped installers (no debugging port) =====
+$recorded = DbQuery "select count(*) from flights where status = 'completed'"
+$p = Start-Process -FilePath $Installer -ArgumentList "/S" -Wait -PassThru
+Check "install.exit_code" ($p.ExitCode -eq 0) $p.ExitCode
+$dir = InstallDir
+$exe = AppExe $dir
+Check "install.app_exe_present" ($null -ne $exe) $(if ($exe) { $exe.FullName })
+Check "install.bridge_exe_packaged" (Test-Path (Join-Path $dir "flightsim-sim-bridge.exe")) $dir
+$ver0 = (Get-ItemProperty $uninstallKey -ErrorAction SilentlyContinue).DisplayVersion
+Check "install.registered_version" ($ver0 -eq "0.1.0") $ver0
+$app = Launch $exe.FullName
+Start-Sleep -Seconds 10
+$children = Get-CimInstance Win32_Process -Filter "ParentProcessId = $($app.Id)"
+Check "installed.app_running" ($null -ne (Get-Process -Id $app.Id -ErrorAction SilentlyContinue))
+Check "installed.bridge_child_process" (@($children | Where-Object Name -eq "flightsim-sim-bridge.exe").Count -eq 1) (($children.Name | Sort-Object -Unique) -join ",")
+Check "installed.webview2_processes" (@(Get-Process -Name msedgewebview2 -ErrorAction SilentlyContinue).Count -gt 0)
+Check "installed.keeps_existing_flights" ((DbQuery "select count(*) from flights where status = 'completed'") -eq $recorded) "$recorded completed"
+$null = $app.CloseMainWindow()
+Check "installed.bridge_exits_on_close" (WaitGone { BridgeProcs } 20)
+Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+
 $p = Start-Process -FilePath $UpgradeInstaller -ArgumentList "/S" -Wait -PassThru
 Check "upgrade.exit_code" ($p.ExitCode -eq 0) $p.ExitCode
 $ver1 = (Get-ItemProperty $uninstallKey -ErrorAction SilentlyContinue).DisplayVersion
 Check "upgrade.registered_version" ($ver1 -eq "0.1.1") $ver1
-Check "upgrade.database_preserved" ((DbQuery "select count(*) from flights") -eq $before) "$before flights"
+Check "upgrade.database_preserved" ((DbQuery "select count(*) from flights where status = 'completed'") -eq $recorded) "$recorded completed"
 $exe = AppExe (InstallDir)
 $app = Launch $exe.FullName
-Cdp "connected" | Out-Null
-Cdp "history" | Out-Null
+Start-Sleep -Seconds 10
+Check "upgrade.app_starts" ($null -ne (Get-Process -Id $app.Id -ErrorAction SilentlyContinue))
+Check "upgrade.schema_version" ((DbQuery "PRAGMA user_version") -eq "2")
 $null = $app.CloseMainWindow()
 WaitGone { BridgeProcs } 20 | Out-Null
 Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
 
-# ---------- 6. uninstall ----------
 $dir = InstallDir
 $p = Start-Process -FilePath (Join-Path $dir "uninstall.exe") -ArgumentList "/S" -Wait -PassThru
 Check "uninstall.exit_code" ($p.ExitCode -eq 0) $p.ExitCode
 Check "uninstall.app_removed" (WaitGone { Test-Path (Join-Path $dir $exe.Name) } 60) $dir
 Check "uninstall.registry_removed" (WaitGone { Test-Path $uninstallKey } 30)
-Check "uninstall.local_flights_kept" (Test-Path $db) "default uninstall keeps %APPDATA% data"
+Check "uninstall.local_flights_kept" ((Test-Path $db) -and ((DbQuery "select count(*) from flights where status = 'completed'") -eq $recorded)) "default uninstall keeps %APPDATA% data"
 $cred = (cmdkey /list:$marker | Out-String)
 Check "uninstall.credential_manager_untouched" ($cred -match [regex]::Escape($marker))
 cmdkey /delete:$marker | Out-Null

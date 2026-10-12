@@ -166,12 +166,19 @@ jobs:
           '{"version":"0.1.1","bundle":{"externalBin":["binaries/flightsim-sim-bridge"]}}' | Set-Content -Encoding utf8 apps/desktop/src-tauri/tauri.upgrade-test.conf.json
           pnpm --filter @flightsim/desktop tauri build --config src-tauri/tauri.upgrade-test.conf.json
           Copy-Item apps/desktop/src-tauri/target/release/bundle/nsis/*_0.1.1_x64-setup.exe installers/
+      - name: Build UI-test exe (shipped code + --remote-debugging-port; never packaged)
+        shell: pwsh
+        run: |
+          pnpm --filter @flightsim/desktop tauri build --no-bundle --config src-tauri/tauri.uitest.conf.json
+          New-Item -ItemType Directory -Force uitest | Out-Null
+          Copy-Item apps/desktop/src-tauri/target/release/flightsim-desktop.exe uitest/
+          Copy-Item apps/desktop/src-tauri/binaries/flightsim-sim-bridge-x86_64-pc-windows-msvc.exe uitest/flightsim-sim-bridge.exe
       - name: Installer + app smoke
         shell: pwsh
         run: |
           $i0 = (Get-ChildItem installers/*_0.1.0_x64-setup.exe).FullName
           $i1 = (Get-ChildItem installers/*_0.1.1_x64-setup.exe).FullName
-          pwsh scripts/windows-smoke.ps1 -Installer $i0 -UpgradeInstaller $i1 -OutDir smoke-out
+          pwsh scripts/windows-smoke.ps1 -Installer $i0 -UpgradeInstaller $i1 -UiTestExe (Resolve-Path uitest/flightsim-desktop.exe).Path -OutDir smoke-out
       - uses: actions/upload-artifact@v4
         if: always()
         with:
