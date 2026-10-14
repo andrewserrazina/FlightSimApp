@@ -1,5 +1,8 @@
 # Sprint 1 release readiness (internal build) — S1-06
 
+> S1-07 follow-up (simulator-connected alpha readiness, tester kit, per-simulator matrices):
+> [s1-07-alpha-readiness.md](s1-07-alpha-readiness.md). The simulator rows below are still **NT**.
+
 Every check is labelled with exactly one evidence category. Categories are never merged into a single
 "compatible" claim.
 

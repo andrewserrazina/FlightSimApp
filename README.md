@@ -3,7 +3,7 @@
 A pilot-first airline operations simulator for Windows desktop flight simulators (MSFS 2020/2024).
 Product, architecture and sprint specs live in [`docs/spec/`](docs/spec/).
 
-**Status: Sprint 1 — S1-01 repo foundation, S1-02 contract-first bridge, S1-03 desktop UI, S1-04 flight lifecycle & local persistence, S1-05 cloud accounts & opt-in sync, S1-06 Windows validation & release readiness.** This is a technical
+**Status: Sprint 1 — S1-01 repo foundation, S1-02 contract-first bridge, S1-03 desktop UI, S1-04 flight lifecycle & local persistence, S1-05 cloud accounts & opt-in sync, S1-06 Windows validation & release readiness, S1-07 real-MSFS acceptance readiness (preparation only; no real-simulator validation yet).** This is a technical
 foundation, not a usable product. **No real MSFS integration has been verified.** See
 [`docs/compatibility/msfs-telemetry.md`](docs/compatibility/msfs-telemetry.md).
 
@@ -212,6 +212,22 @@ pnpm --filter @flightsim/desktop test:integration   # desktop auth + sync end to
   - generic catalog tests now guard future tables
 - **Docs:** [Windows/MSFS validation](docs/compatibility/windows-validation.md),
   [staging preparation](docs/architecture/staging.md), [ADR-005](docs/adr/ADR-005-native-simconnect-pinvoke.md).
+
+## Real-MSFS acceptance readiness (S1-07)
+
+**No real MSFS validation has been run.** S1-07 prepared and automated it:
+- **Tester kit:** CI artifact `turnline-tester-kit`. It contains the installer, the recording tools, the plans
+  and checksums, and never `SimConnect.dll`. See [docs/release/tester-build.md](docs/release/tester-build.md).
+- **Probe recording with tester markers.** A replay that matches the desktop recorder, and an acceptance report
+  that marks nothing *verified* without a real-simulator recording and a cockpit check. See
+  [docs/testing/recording-and-replay.md](docs/testing/recording-and-replay.md).
+- **Separate MSFS 2020 and 2024 test plans and matrices.** See
+  [docs/testing/](docs/testing/) and [docs/compatibility/](docs/compatibility/).
+- **Bridge fixes:** no menu values after a reconnect; a 10 s shutdown deadline; a bridge log file at
+  `%APPDATA%\dev.flightsimapp.desktop\logs\bridge.log`.
+- **Security review, including migration 0004 safety:** [docs/security/s1-07-security-review.md](docs/security/s1-07-security-review.md).
+  `db/verify/privileges.sql` runs in CI.
+- **Readiness and recommendation:** [docs/release/s1-07-alpha-readiness.md](docs/release/s1-07-alpha-readiness.md).
 
 ## Key behaviours implemented
 - Connection states DISCONNECTED / CONNECTING / CONNECTED / STALE / RECONNECTING / ERROR, with
