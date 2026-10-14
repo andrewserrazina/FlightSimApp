@@ -40,6 +40,8 @@ pub struct BridgeHandle {
     snapshot: std::sync::Mutex<Snapshot>,
     adapter: std::sync::Mutex<&'static str>,
     restart: tokio::sync::Notify,
+    /// Bridge stderr is appended here (see bridge_log.rs); None if the log directory is unusable.
+    log_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Default, Serialize)]
@@ -108,13 +110,14 @@ fn current_adapter(app: &AppHandle) -> &'static str {
     app.state::<BridgeHandle>().adapter.lock().map(|a| *a).unwrap_or("mock")
 }
 
-pub fn start(app: AppHandle) {
+pub fn start(app: AppHandle, log_path: Option<PathBuf>) {
     let adapter = selected_adapter();
     app.manage(BridgeHandle {
         tx: Mutex::new(None),
         snapshot: std::sync::Mutex::new(Snapshot { adapter, ..Default::default() }),
         adapter: std::sync::Mutex::new(adapter),
         restart: tokio::sync::Notify::new(),
+        log_path,
     });
     tauri::async_runtime::spawn(supervise(app));
 }
@@ -175,6 +178,20 @@ async fn run_once(app: &AppHandle, attempt: u32) -> Result<(), BridgeError> {
     let adapter = current_adapter(app);
 
     let mut child = spawn_bridge(adapter, &pipe_name).map_err(BridgeError::Unavailable)?;
+    if let Some(stderr) = child.stderr.take() {
+        match app.state::<BridgeHandle>().log_path.clone() {
+            Some(path) => {
+                let header = format!("=== {} bridge start: adapter={adapter} attempt={attempt} ===", crate::bridge_log::utc_now());
+                tokio::spawn(crate::bridge_log::copy(stderr, path, header, token.clone(), crate::bridge_log::MAX_BYTES));
+            }
+            None => {
+                tokio::spawn(async move {
+                    let mut lines = BufReader::new(stderr).lines();
+                    while let Ok(Some(_)) = lines.next_line().await {}
+                });
+            }
+        }
+    }
     let mut stdin = child.stdin.take().ok_or_else(|| BridgeError::Unavailable("bridge stdin unavailable".into()))?;
     stdin
         .write_all(format!("{token}\n").as_bytes())
@@ -322,7 +339,7 @@ fn spawn_bridge(adapter: &str, pipe_name: &str) -> Result<Child, String> {
             c
         }
     };
-    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit()).kill_on_drop(true);
+    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
     #[cfg(windows)]
     {
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;

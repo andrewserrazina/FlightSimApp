@@ -31,6 +31,8 @@ Each result is labelled with exactly one category. Categories are never combined
 | SQLite in `%APPDATA%\dev.flightsimapp.desktop\flightsim.db`, schema v2; a mock flight recorded and completed | same | `windows-installer` |
 | Diagnostics report (no secrets) | same | `windows-installer` |
 | Adapter selection: switch to MSFS 2024 → `sdk_unavailable`; switch back to mock | same | `windows-installer` |
+| Bridge log file `%APPDATA%\dev.flightsimapp.desktop\logs\bridge.log` written, no token (S1-07) | same | `windows-installer` |
+| Tester kit assembled (installer, recording tools, checksums; **no SimConnect.dll**) and its acceptance self-check (S1-07) | `scripts/make-tester-kit.ps1` | `windows-installer` |
 | Forced kill → bridge exits (stdin closed); restart → history persists; window close → app and bridge exit | same | `windows-installer` |
 | Upgrade 0.1.0 → 0.1.1 in place: database preserved, readable | same | `windows-installer` |
 | Silent uninstall: app removed; local flights and Credential Manager entries kept | same | `windows-installer` |
@@ -52,6 +54,14 @@ Expected: every line `[PASS] …`, then `Windows smoke: all checks passed`. Scre
 `windows-smoke.json` / `summary.md` are written to `smoke-out\`.
 
 ## Part B — manual, Windows 10/11 x64 PC with MSFS (NOT YET RUN)
+
+> **S1-07:** Part B is superseded by the per-simulator plans and the tester kit:
+> - [physical-pc-checklist.md](../testing/physical-pc-checklist.md)
+> - [msfs2020-test-plan.md](../testing/msfs2020-test-plan.md)
+> - [msfs2024-test-plan.md](../testing/msfs2024-test-plan.md)
+> - [tester-build.md](../release/tester-build.md)
+>
+> The steps below remain valid as a summary.
 
 Prerequisites:
 - the part A installer (CI artifact `windows-installer-and-smoke`, or your own build)

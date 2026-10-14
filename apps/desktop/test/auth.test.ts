@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AuthService, authErrorMessage, readCloudConfig } from "../src/auth/AuthService";
+import { AuthService, authErrorMessage, memoryOnlyStorage, readCloudConfig } from "../src/auth/AuthService";
 import { createSecureSessionStorage, type SecureBackend } from "../src/auth/secureStorage";
 import { authReducer, initialAuthView, maskEmail, type AuthView } from "../src/auth/state";
 
@@ -279,5 +279,38 @@ describe("secure session storage hardening (S1-06)", () => {
     expect(JSON.parse(b.value!)).toEqual({ "flightsim-auth": "s" });
     await s.prune((k) => k.endsWith("-code-verifier"));
     expect(writes).toBe(1);
+  });
+});
+
+describe("session storage never falls back to web storage", () => {
+  it("uses process memory, not localStorage, when no secure adapter is supplied", async () => {
+    const writes: string[] = [];
+    const store = new Map<string, string>();
+    const fake = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        writes.push(`${k}=${v}`);
+        store.set(k, v);
+      },
+      removeItem: (k: string) => void store.delete(k),
+    };
+    const had = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", { value: fake, configurable: true, writable: true });
+    try {
+      const a = new AuthService({ url: "http://127.0.0.1:59997", anonKey: "anon" }, null);
+      await (a.client!.auth as unknown as { _saveSession: (s: unknown) => Promise<void> })._saveSession({
+        access_token: "a", refresh_token: "refresh-secret", expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, token_type: "bearer", user: { id: "u" },
+      });
+      expect(writes.join("\n")).not.toContain("refresh-secret");
+      const m = memoryOnlyStorage();
+      await m.setItem("k", "v");
+      expect(await m.getItem("k")).toBe("v");
+      await m.prune((k) => k === "k");
+      expect(await m.getItem("k")).toBeNull();
+      expect(m.persistent).toBe(false);
+    } finally {
+      if (had) Object.defineProperty(globalThis, "localStorage", had);
+      else delete (globalThis as { localStorage?: unknown }).localStorage;
+    }
   });
 });

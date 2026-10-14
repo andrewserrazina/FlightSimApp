@@ -27,6 +27,7 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
     private readonly ILogger _log;
     private readonly TimeSpan _sampleInterval;
     private readonly TimeSpan _openTimeout;
+    private readonly TimeSpan _simStateGrace;
     private readonly SimConnectOwnerThread _owner = new();
 
     private ISimConnectClient? _client;
@@ -40,7 +41,7 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
 
     public MsfsSimConnectAdapter(IMsfsCompatibilityProfile profile, ISimConnectClientFactory? factory = null,
         TimeProvider? timeProvider = null, ILogger<MsfsSimConnectAdapter>? logger = null,
-        TimeSpan? sampleInterval = null, TimeSpan? openTimeout = null)
+        TimeSpan? sampleInterval = null, TimeSpan? openTimeout = null, TimeSpan? simStateGrace = null)
     {
         _profile = profile;
         _factory = factory ?? SimConnectClientFactory.CreateDefault();
@@ -48,7 +49,15 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
         _log = logger ?? NullLogger<MsfsSimConnectAdapter>.Instance;
         _sampleInterval = sampleInterval ?? TimeSpan.FromMilliseconds(500);
         _openTimeout = openTimeout ?? TimeSpan.FromSeconds(5);
+        _simStateGrace = simStateGrace ?? DefaultSimStateGrace;
     }
+
+    /// <summary>
+    /// After (re)connecting, samples are held until MSFS reports whether a flight is loaded (system
+    /// state <c>Sim</c>), at most this long. Without the hold, every reconnect in the main menu would
+    /// leak a few menu-screen values (position 0/0, default aircraft) into the flight record.
+    /// </summary>
+    public static readonly TimeSpan DefaultSimStateGrace = TimeSpan.FromSeconds(3);
 
     public static MsfsSimConnectAdapter For(SimulatorId simulator, ISimConnectClientFactory? factory = null, ILoggerFactory? loggers = null) =>
         new(simulator switch
@@ -72,7 +81,7 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
     public async Task<AdapterConnection> ConnectAsync(CancellationToken cancellationToken)
     {
         await DisconnectAsync(cancellationToken).ConfigureAwait(false);
-        var connection = new Connection(_log, d => Diagnostics?.Invoke(d with { At = _time.GetUtcNow() }));
+        var connection = new Connection(_log, d => Diagnostics?.Invoke(d with { At = _time.GetUtcNow() }), _time, _simStateGrace);
         await _owner.InvokeAsync(() =>
         {
             var client = _factory.Open(ApplicationName, connection);
@@ -180,11 +189,15 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
     }
 
     /// <summary>Per-connection callback sink. Callbacks arrive on the owner thread.</summary>
-    private sealed class Connection(ILogger log, Action<MsfsDiagnostic> diagnostics) : ISimConnectCallbacks
+    private sealed class Connection(ILogger log, Action<MsfsDiagnostic> diagnostics, TimeProvider time, TimeSpan simStateGrace) : ISimConnectCallbacks
     {
-        // Unknown until MSFS reports it; samples flow unless the simulator explicitly says it is not
-        // in a flight (main menu / loading), where SimConnect values do not describe a real aircraft.
-        private bool _inFlight = true;
+        // Null until MSFS reports it. While unknown, samples are held for at most simStateGrace (the
+        // Sim state answer normally arrives within one dispatch); after that they flow, so a simulator
+        // that never answers still produces telemetry. Outside a flight (main menu / loading) SimConnect
+        // values do not describe a real aircraft and are withheld.
+        private bool? _inFlight;
+        private bool _graceExpiredLogged;
+        private readonly long _createdAt = time.GetTimestamp();
 
         private readonly TaskCompletionSource<SimConnectOpenInfo> _opened = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly Channel<RawMsfsSample> _samples = Channel.CreateBounded<RawMsfsSample>(
@@ -199,8 +212,14 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
 
         public void OnSample(RawMsfsSample sample)
         {
-            diagnostics(new MsfsDiagnostic("raw_sample", default, Raw: sample, Dropped: !_inFlight));
-            if (_inFlight) _samples.Writer.TryWrite(sample);
+            var deliver = _inFlight ?? time.GetElapsedTime(_createdAt) >= simStateGrace;
+            if (_inFlight is null && deliver && !_graceExpiredLogged)
+            {
+                _graceExpiredLogged = true;
+                log.LogWarning("MSFS did not report its simulation state within {Grace} s; telemetry released.", simStateGrace.TotalSeconds);
+            }
+            diagnostics(new MsfsDiagnostic("raw_sample", default, Raw: sample, Dropped: !deliver));
+            if (deliver) _samples.Writer.TryWrite(sample);
         }
 
         public void OnSimulatorState(SimulatorStateChange change)

@@ -12,6 +12,7 @@ apps/desktop/src-tauri/binaries/
 
 # .NET
 bin/
+!packages/flight-core/bin/
 obj/
 TestResults/
 *.user

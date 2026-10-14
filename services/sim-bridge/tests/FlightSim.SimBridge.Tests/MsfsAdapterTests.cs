@@ -156,13 +156,15 @@ internal sealed class FakeSimConnectFactory : ISimConnectClientFactory
     public FakeSimConnectClient? Current { get; private set; }
     public int Opens;
     public bool Refuse { get; set; }
+    /// <summary>What the fake reports for system state <c>Sim</c> right after OPEN (null: never answers).</summary>
+    public bool? InitialInFlight { get; set; } = true;
 
     public ISimConnectClient Open(string applicationName, ISimConnectCallbacks callbacks)
     {
         CallThreads.Add(Environment.CurrentManagedThreadId);
         Interlocked.Increment(ref Opens);
         if (Refuse) throw new SimulatorUnavailableException(Reason.Codes.SimulatorNotRunning, "not running");
-        Current = new FakeSimConnectClient(callbacks, CallThreads);
+        Current = new FakeSimConnectClient(callbacks, CallThreads) { InitialInFlight = InitialInFlight };
         return Current;
     }
 }
@@ -174,6 +176,7 @@ internal sealed class FakeSimConnectClient(ISimConnectCallbacks callbacks, Concu
     private bool _opened;
     public volatile bool QuitRequested;
     public int Requests;
+    public bool? InitialInFlight { get; init; } = true;
 
     public WaitHandle MessageReady => _ready;
 
@@ -194,6 +197,7 @@ internal sealed class FakeSimConnectClient(ISimConnectCallbacks callbacks, Concu
         {
             _opened = true;
             callbacks.OnOpen(new SimConnectOpenInfo("KittyHawk", "12.1.282.0"));
+            if (InitialInFlight is { } inFlight) callbacks.OnSimulatorState(new SimulatorStateChange(SimulatorStateKind.InFlight, inFlight, null));
         }
         if (QuitRequested)
         {
@@ -201,6 +205,13 @@ internal sealed class FakeSimConnectClient(ISimConnectCallbacks callbacks, Concu
             return;
         }
         while (_pending.TryDequeue(out var a)) a();
+    }
+
+    /// <summary>Simulate the <c>Sim</c> system event (1 = flight loaded, 0 = menu/loading).</summary>
+    public void SetInFlight(bool inFlight)
+    {
+        _pending.Enqueue(() => callbacks.OnSimulatorState(new SimulatorStateChange(SimulatorStateKind.InFlight, inFlight, null)));
+        _ready.Set();
     }
 
     public void Quit()
@@ -277,5 +288,60 @@ public class MsfsAdapterTests
         await cts.CancelAsync();
         await run;
         Assert.DoesNotContain(output.States, s => s.State == ConnectionStateName.Error);
+    }
+
+    [Fact]
+    public async Task Samples_are_held_until_msfs_says_a_flight_is_loaded()
+    {
+        // Connected in the main menu: no frame may leak before Sim = 1.
+        var factory = new FakeSimConnectFactory { InitialInFlight = false };
+        await using var adapter = new MsfsSimConnectAdapter(new Msfs2024Profile(), factory, sampleInterval: TimeSpan.FromMilliseconds(20));
+        var raw = new ConcurrentQueue<MsfsDiagnostic>();
+        adapter.Diagnostics = raw.Enqueue;
+        var output = new CollectingOutput();
+        var session = new BridgeSession(adapter, output, TestSamples.FastOptions);
+        using var cts = new CancellationTokenSource();
+        var run = session.RunAsync(cts.Token);
+
+        await output.WaitUntilAsync(o => o.States.Any(s => s.State == ConnectionStateName.Connected));
+        await WaitForAsync(() => raw.Count(d => d.Kind == "raw_sample") >= 5);
+        Assert.Empty(output.Frames);
+        Assert.All(raw.Where(d => d.Kind == "raw_sample"), d => Assert.True(d.Dropped));
+
+        factory.Current!.SetInFlight(true);
+        await output.WaitUntilAsync(o => o.Frames.Count >= 2);
+        await cts.CancelAsync();
+        await run;
+    }
+
+    [Fact]
+    public async Task Samples_are_held_after_reconnect_until_the_sim_state_is_known()
+    {
+        // A simulator that never answers the Sim state request: nothing for the grace period, then frames.
+        var factory = new FakeSimConnectFactory { InitialInFlight = null };
+        await using var adapter = new MsfsSimConnectAdapter(new Msfs2024Profile(), factory, sampleInterval: TimeSpan.FromMilliseconds(20), simStateGrace: TimeSpan.FromMilliseconds(400));
+        var raw = new ConcurrentQueue<MsfsDiagnostic>();
+        adapter.Diagnostics = raw.Enqueue;
+        var output = new CollectingOutput();
+        var session = new BridgeSession(adapter, output, TestSamples.FastOptions);
+        using var cts = new CancellationTokenSource();
+        var run = session.RunAsync(cts.Token);
+
+        await output.WaitUntilAsync(o => o.Frames.Count >= 2);
+        await cts.CancelAsync();
+        await run;
+        var samples = raw.Where(d => d.Kind == "raw_sample").ToList();
+        Assert.True(samples[0].Dropped, "the first sample after connecting must be held");
+        Assert.Contains(samples, d => d.Dropped == false);
+    }
+
+    private static async Task WaitForAsync(Func<bool> condition)
+    {
+        var until = DateTime.UtcNow.AddSeconds(10);
+        while (!condition())
+        {
+            if (DateTime.UtcNow > until) throw new TimeoutException();
+            await Task.Delay(10);
+        }
     }
 }

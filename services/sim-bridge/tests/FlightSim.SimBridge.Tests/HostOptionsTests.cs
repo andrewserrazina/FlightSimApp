@@ -45,3 +45,17 @@ public class HostOptionsTests
     public void Rejects_pipe_names_that_are_not_bare(string name) =>
         Assert.Throws<ArgumentException>(() => BridgeOptions.Parse(["--adapter", "mock", "--pipe-name", name]));
 }
+
+public class ProbeMarkerTests
+{
+    [Theory]
+    [InlineData("  wheels-up  ", "wheels-up")]
+    [InlineData("check ias=142\talt=3500", "check ias=142alt=3500")]
+    [InlineData("", null)]
+    [InlineData(" \u0007 ", null)]
+    public void Marker_text_is_trimmed_and_cleaned(string line, string? expected) =>
+        Assert.Equal(expected, Probe.MarkerText(line));
+
+    [Fact]
+    public void Marker_text_is_capped() => Assert.Equal(200, Probe.MarkerText(new string('x', 500))!.Length);
+}

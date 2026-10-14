@@ -28,7 +28,8 @@ var log = loggers.CreateLogger("bridge");
 if (options.ProbeSeconds > 0)
 {
     using var probeStop = new CancellationTokenSource();
-    Console.CancelKeyPress += (_, e) => { e.Cancel = true; probeStop.Cancel(); };
+    // First Ctrl+C ends the recording cleanly; a second one terminates the process.
+    Console.CancelKeyPress += (_, e) => { e.Cancel = !probeStop.IsCancellationRequested; probeStop.Cancel(); };
     return await Probe.RunAsync(options, loggers, probeStop.Token).ConfigureAwait(false);
 }
 
@@ -50,6 +51,13 @@ catch (FormatException ex)
 var shutdown = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; shutdown.Cancel(); };
 AppDomain.CurrentDomain.ProcessExit += (_, _) => shutdown.Cancel();
+// Shutdown deadline: closing SimConnect runs on its owner thread, and a native call that never
+// returns must not leave an orphaned bridge (holding a SimConnect client) after the app has gone.
+shutdown.Token.Register(() => _ = Task.Delay(BridgeOptions.ShutdownDeadline).ContinueWith(_ =>
+{
+    log.LogWarning("Shutdown did not complete within {Seconds} s; terminating.", BridgeOptions.ShutdownDeadline.TotalSeconds);
+    Environment.Exit(4);
+}, TaskScheduler.Default));
 
 if (!options.DevTokenFromEnv)
 {

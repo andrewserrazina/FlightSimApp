@@ -61,6 +61,18 @@ internal static class Probe
             sample_interval_ms = adapter.Capabilities.SampleInterval.TotalMilliseconds,
         }, DiagnosticJson));
 
+        // Tester markers: each stdin line becomes {"probe":"marker","at":...,"text":...}. EOF just ends reading.
+        _ = Task.Run(async () =>
+        {
+            while (await Console.In.ReadLineAsync().ConfigureAwait(false) is { } line)
+            {
+                var text = MarkerText(line);
+                if (text is null) continue;
+                Write(JsonSerializer.Serialize(new { probe = "marker", at = DateTime.UtcNow.ToString("O"), text }, DiagnosticJson));
+                await Console.Error.WriteLineAsync($"probe: marker recorded: {text}").ConfigureAwait(false);
+            }
+        }, CancellationToken.None);
+
         var output = new JsonlOutput(Write);
         var session = new BridgeSession(adapter, output, logger: loggers.CreateLogger<BridgeSession>());
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(shutdown);
@@ -75,6 +87,14 @@ internal static class Probe
         }
         await Console.Error.WriteLineAsync($"probe: {output.Frames} telemetry frames, {output.Messages} messages written to {Path.GetFullPath(path)}").ConfigureAwait(false);
         return 0;
+    }
+
+    /// <summary>Trimmed marker text (max 200 chars, control characters removed); null for an empty line.</summary>
+    internal static string? MarkerText(string line)
+    {
+        var clean = new string(line.Where(c => !char.IsControl(c)).ToArray()).Trim();
+        if (clean.Length == 0) return null;
+        return clean.Length <= 200 ? clean : clean[..200];
     }
 
     private sealed class JsonlOutput(Action<string> write) : IBridgeOutput

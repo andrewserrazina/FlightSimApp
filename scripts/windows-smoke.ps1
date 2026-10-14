@@ -86,6 +86,11 @@ Cdp "fly" | Out-Null
 $completed = DbQuery "select count(*) from flights where status = 'completed'"
 Check "data.completed_flight_persisted" ([int]$completed -ge 1) $completed
 Cdp "msfs" | Out-Null
+$bridgeLog = Join-Path $dataDir "logs\bridge.log"
+$logText = if (Test-Path $bridgeLog) { Get-Content $bridgeLog -Raw } else { "" }
+Check "logs.bridge_log_written" ($logText -match "sim-bridge .* starting: adapter=mock" -and $logText -match "adapter=msfs2024") $bridgeLog
+Check "logs.bridge_log_has_no_token" (-not ($logText -match '"token"\s*:'))
+if (Test-Path $bridgeLog) { Copy-Item $bridgeLog (Join-Path $OutDir "bridge.log") }
 $bridgePid = (Get-CimInstance Win32_Process -Filter "ParentProcessId = $($app.Id)" | Where-Object Name -eq "flightsim-sim-bridge.exe" | Select-Object -First 1).ProcessId
 Stop-Process -Id $app.Id -Force
 Check "lifecycle.bridge_exits_after_app_killed" (WaitGone { BridgeProcs } 20) "bridge pid was $bridgePid"

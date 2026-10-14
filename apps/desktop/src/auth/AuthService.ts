@@ -1,5 +1,19 @@
 import { createClient, isAuthRetryableFetchError, type AuthError, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import type { SessionStorageAdapter } from "./secureStorage";
+
+/** Session lives only for this process: used when no secure adapter was supplied. */
+export function memoryOnlyStorage(): SessionStorageAdapter {
+  const m = new Map<string, string>();
+  return {
+    persistent: false,
+    getItem: async (k) => m.get(k) ?? null,
+    setItem: async (k, v) => void m.set(k, v),
+    removeItem: async (k) => void m.delete(k),
+    prune: async (predicate) => {
+      for (const k of [...m.keys()]) if (predicate(k)) m.delete(k);
+    },
+  };
+}
 import { authReducer, initialAuthView, type AuthEvent, type AuthView } from "./state";
 
 export interface CloudConfig {
@@ -60,7 +74,8 @@ export class AuthService {
     this.client = config
       ? createClient(config.url, config.anonKey, {
           auth: {
-            storage: storage ?? undefined,
+            // Never undefined: supabase-js would then fall back to localStorage (refresh token in web storage).
+            storage: storage ?? memoryOnlyStorage(),
             storageKey: STORAGE_KEY,
             persistSession: true,
             autoRefreshToken: true,

@@ -6,6 +6,9 @@ internal sealed record BridgeOptions(SimulatorId Adapter, string PipeName, bool 
 {
     public const string DevTokenEnvVar = "FLIGHTSIM_BRIDGE_DEV_TOKEN";
 
+    /// <summary>After shutdown starts, the process is terminated if it has not exited within this time.</summary>
+    public static readonly TimeSpan ShutdownDeadline = TimeSpan.FromSeconds(10);
+
     public const string Usage = """
         flightsim-sim-bridge --adapter <mock|msfs2020|msfs2024> --pipe-name <name> [--dev-token-from-env] [--mock-no-fuel] [--mock-start-offset-s <0-86400>]
         flightsim-sim-bridge --adapter <mock|msfs2020|msfs2024> --probe <seconds 1-86400> [--probe-out <file.jsonl>]
@@ -16,6 +19,9 @@ internal sealed record BridgeOptions(SimulatorId Adapter, string PipeName, bool 
         On ready, one JSON line is written to stdout: {"event":"ready","pipe_name":"...","adapter":"..."}
           --probe  simulator validation: no pipe, no token; records wire messages + raw SimConnect values
                    and simulator state to a JSONL file for the given number of seconds, then exits.
+                   While it runs, every line typed on stdin is recorded as a timestamped marker, e.g.
+                   "engines-started", "wheels-up", "touchdown" or "check ias=142 alt=3500 fuel_lb=10230"
+                   (see docs/testing/recording-and-replay.md). Ctrl+C ends the recording early.
         """;
 
     public static BridgeOptions Parse(IReadOnlyList<string> args)

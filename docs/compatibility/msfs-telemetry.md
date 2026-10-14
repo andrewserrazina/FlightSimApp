@@ -1,4 +1,4 @@
-# MSFS telemetry compatibility (S1-06)
+# MSFS telemetry compatibility (S1-06, updated S1-07)
 
 **Real-simulator status: NOT VERIFIED.** No Windows PC with MSFS 2020 or MSFS 2024 was available. Nothing on this
 page has been observed against a running simulator. Do not claim support for either simulator until the
@@ -33,8 +33,10 @@ redistributed inside the installer is a licensing question that has not been ans
 - **Disconnect / simulator exit.** `RECV_QUIT`, or a dispatch failure → `connection_lost`. The session reconnects
   with backoff. The lifecycle engine records an interruption and never completes a flight from lost telemetry.
 - **Main menu / loading.** System event `Sim` and system state `Sim` = 0 → samples are withheld, so the app shows
-  STALE and then reconnects. When `Sim` returns to 1, samples resume. Initially unknown, so samples flow until
-  MSFS says otherwise.
+  STALE and then reconnects. When `Sim` returns to 1, samples resume. **S1-07:** after every (re)connect, samples
+  are held until MSFS answers the `Sim` state request, for at most 3 s. Before this change, each reconnect in the
+  main menu let a few menu-screen values into the flight record. If MSFS never answers, samples flow after
+  3 s and the bridge log says `did not report its simulation state`.
 - **Pause.** System event `Pause` is logged. Frames keep flowing with frozen values. Tested: a 10-minute pause in
   cruise or on the landing roll changes no phase and never completes a flight.
 - **Aircraft loaded.** System event `AircraftLoaded` is logged with the file name only (paths can contain the
@@ -85,9 +87,18 @@ Simulator behaviour:
 | Quit MSFS mid-flight, then restart | L (engine, session) | pending | pending |
 | Unrecognised SimVar is isolated | L, CI-W (fake API) | pending | pending |
 
+## Per-simulator matrices and test plans (S1-07)
+
+The real-simulator columns above are summarised per simulator, in separate matrices that are never merged:
+- [msfs2020-matrix.md](msfs2020-matrix.md) ← [msfs2020-test-plan.md](../testing/msfs2020-test-plan.md)
+- [msfs2024-matrix.md](msfs2024-matrix.md) ← [msfs2024-test-plan.md](../testing/msfs2024-test-plan.md)
+
+Evidence comes from `acceptance.mjs` reports ([recording-and-replay.md](../testing/recording-and-replay.md)). A
+field becomes *verified* only from a real-simulator recording with a passing cockpit check.
+
 ## How to verify on a Windows PC with MSFS
 
-See [windows-validation.md](windows-validation.md), part B. In short:
+See [windows-validation.md](windows-validation.md), part B, and the test plans above. In short:
 
 1. Copy `SimConnect.dll` from the installed MSFS SDK next to `flightsim-sim-bridge.exe`, or set
    `FLIGHTSIM_SIMCONNECT_DLL`.
@@ -95,5 +106,6 @@ See [windows-validation.md](windows-validation.md), part B. In short:
    `flightsim-sim-bridge.exe --adapter msfs2024 --probe 1800 --probe-out probe-msfs2024-a320.jsonl`.
 3. Replay through the lifecycle engine:
    `node packages/flight-core/bin/replay.mjs probe-msfs2024-a320.jsonl`.
-4. Fill in the tables above with the aircraft, the values observed in the simulator, and pass/fail.
-   Attach the probe files.
+4. Evaluate it against your markers and cockpit checks:
+   `node packages/flight-core/bin/acceptance.mjs probe-msfs2024-a320.jsonl --scenario nominal --md report.md`.
+5. Fill in the per-simulator matrix from the report. Attach the sanitised recording (`sanitize.mjs`).

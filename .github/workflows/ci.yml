@@ -26,6 +26,13 @@ jobs:
       - run: pnpm -r --filter "./packages/**" build
       - run: pnpm typecheck
       - run: pnpm test
+      - name: Recording tools from the checkout (replay, acceptance, sanitize on the simulated reference recording)
+        run: |
+          rec=fixtures/recordings/simulated/mock-nominal-markers.jsonl.gz
+          node packages/flight-core/bin/replay.mjs "$rec" | grep -q '"arrived": true'
+          node packages/flight-core/bin/acceptance.mjs "$rec" --scenario nominal --md acceptance-reference.md > /dev/null
+          grep -q "SIMULATED" acceptance-reference.md
+          node packages/flight-core/bin/sanitize.mjs "$rec" /tmp/sanitized.jsonl.gz
       - run: pnpm --filter @flightsim/desktop build
 
   bridge:
@@ -57,9 +64,10 @@ jobs:
         shell: pwsh
         run: |
           $exe = "apps/desktop/src-tauri/binaries/flightsim-sim-bridge-x86_64-pc-windows-msvc.exe"
-          & $exe --adapter mock --probe 4 --probe-out probe-mock.jsonl
+          "engines-started" | & $exe --adapter mock --probe 4 --probe-out probe-mock.jsonl
           $frames = @(Get-Content probe-mock.jsonl | Where-Object { $_ -match '"type":"telemetry.frame"' }).Count
           if ($frames -lt 3) { throw "expected mock telemetry frames, got $frames" }
+          if (-not (Select-String -Path probe-mock.jsonl -Pattern '"probe":"marker".*"text":"engines-started"' -Quiet)) { throw "tester marker from stdin was not recorded" }
           & $exe --adapter msfs2024 --probe 3 --probe-out probe-msfs.jsonl
           $header = Get-Content probe-msfs.jsonl -First 1 | ConvertFrom-Json
           if ($header.simconnect_sdk -ne "not_built" -or $header.simconnect_dll_loaded) { throw "unexpected SimConnect status: $($header | ConvertTo-Json -Compress)" }
@@ -116,6 +124,12 @@ jobs:
       - run: pnpm -r --filter "./packages/**" build
       - name: Start local Supabase stack (Postgres, GoTrue, PostgREST, Mailpit) and apply migrations
         run: infra/supabase-local/up.sh
+      - name: Privilege rules for the complete public schema (incl. migration 0004 safety)
+        working-directory: infra/supabase-local
+        run: |
+          source ./env.sh
+          PGPASSWORD="$SB_LOCAL_DB_PASSWORD" psql -q -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 54322 -U postgres -d postgres -f ../../db/migrations/0004_s1_06_privilege_hardening.sql
+          PGPASSWORD="$SB_LOCAL_DB_PASSWORD" psql -q -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 54322 -U postgres -d postgres -f ../../db/verify/privileges.sql
       - name: RLS and auth security tests
         run: pnpm --filter @flightsim/cloud test:integration
       - name: Desktop auth + sync end-to-end tests
@@ -179,6 +193,14 @@ jobs:
           $i0 = (Get-ChildItem installers/*_0.1.0_x64-setup.exe).FullName
           $i1 = (Get-ChildItem installers/*_0.1.1_x64-setup.exe).FullName
           pwsh scripts/windows-smoke.ps1 -Installer $i0 -UpgradeInstaller $i1 -UiTestExe (Resolve-Path uitest/flightsim-desktop.exe).Path -OutDir smoke-out
+      - name: Assemble simulator-tester kit (installer + recording tools; never SimConnect.dll)
+        shell: pwsh
+        run: pwsh scripts/make-tester-kit.ps1 -Installer (Get-ChildItem installers/*_0.1.0_x64-setup.exe).FullName -OutDir tester-kit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: turnline-tester-kit
+          path: tester-kit/
+          retention-days: 30
       - uses: actions/upload-artifact@v4
         if: always()
         with:

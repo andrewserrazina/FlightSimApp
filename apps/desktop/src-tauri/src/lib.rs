@@ -1,4 +1,5 @@
 mod bridge;
+mod bridge_log;
 mod secure;
 mod store;
 
@@ -7,8 +8,9 @@ pub fn run() {
         .setup(|app| {
             use tauri::Manager;
             let path = store::commands::database_path(app.handle());
+            let log_dir = path.parent().map(|d| d.join("logs"));
             app.manage(store::actor::StoreHandle::spawn(path));
-            bridge::start(app.handle().clone());
+            bridge::start(app.handle().clone(), log_dir.and_then(|d| bridge_log::prepare(&d)));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![bridge::bridge_command, bridge::bridge_snapshot, bridge::bridge_select_adapter,
