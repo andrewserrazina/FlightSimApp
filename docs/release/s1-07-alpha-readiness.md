@@ -13,7 +13,7 @@
 
 ## 1. Results by evidence class
 
-CI run for this report: see §5. The S1-06 baseline is run 38308410373 (all green).
+CI run for this report: **38631150412** (commit 1a22beb), with all 6 jobs green. The S1-06 baseline is run 38308410373.
 
 | Area | Simulated | CI-verified (Windows, no MSFS) | Real-simulator-verified |
 |---|---|---|---|
@@ -85,7 +85,24 @@ Test counts after S1-07:
 
 ## 5. CI results for this sprint
 
-Filled in from the CI run on the S1-07 commits. See the section added at the end of this file.
+Workflow **CI**, run **38631150412**, commit `1a22beb` (contains all S1-07 code). All 6 jobs passed:
+
+| Job | Result | What it now proves (CI-verified, no MSFS) |
+|---|---|---|
+| typescript | pass | All TS suites; the **recording CLIs run from the checkout** (replay, acceptance `--scenario nominal`, sanitize) on the simulated reference recording |
+| bridge (ubuntu-latest) | pass | 142 .NET tests |
+| bridge (windows-latest) | pass | 142 .NET tests on Windows, including the sample-hold tests; sidecar publish; probe with a **stdin marker recorded**; MSFS 2024 without the DLL → `sdk_unavailable` |
+| desktop-shell (Windows) | pass | clippy `-D warnings`; 46 Rust tests, including the bridge-log module and the Credential Manager round-trip |
+| cloud-integration | pass | migrations 0001–0004, **0004 re-applied (idempotent)**, `db/verify/privileges.sql` (all 6 rules), 30 RLS/auth tests, 8 desktop E2E tests |
+| windows-installer | pass | installers 0.1.0/0.1.1; Windows smoke (every check, including the new `logs.bridge_log_written` and `logs.bridge_log_has_no_token`); **tester kit assembled**, with the no-DLL guard and the acceptance self-check |
+
+Artifacts of run 38631150412:
+- `turnline-tester-kit` (id 11927671730, 25.8 MB, kept until 2026-11-13). This is **the tester build**.
+- `windows-installer-and-smoke` (id 11927546788)
+- `windows-sidecar` (id 11926505978)
+
+Unresolved CI failures: **none**. Run 42 was cancelled by the concurrency group when 1a22beb was pushed (no
+failure). The other contributor's run 41 (marketing) passed.
 
 ## 6. Recommendation
 
