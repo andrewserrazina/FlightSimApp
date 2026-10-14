@@ -30,7 +30,11 @@ footer{padding:35px 0;border-top:1px solid #ffffff25;color:#a8bdce;font-size:.83
   const form = document.getElementById('signup');
   const status = document.getElementById('status');
   const submit = document.getElementById('submit');
-  document.getElementById('year').textContent = String(new Date().getFullYear());\n  const result = new URLSearchParams(location.search).get('waitlist');\n  if(result==='confirmed')status.textContent='Your email is confirmed. You are on the Turnline update list.';\n  if(result==='unsubscribed')status.textContent='You have been unsubscribed from Turnline updates.';\n  if(result==='invalid')status.textContent='That link is invalid or expired. You can submit the form again.';
+  document.getElementById('year').textContent = String(new Date().getFullYear());
+  const result = new URLSearchParams(location.search).get('waitlist');
+  if(result==='confirmed')status.textContent='Your email is confirmed. You are on the Turnline update list.';
+  if(result==='unsubscribed')status.textContent='You have been unsubscribed from Turnline updates.';
+  if(result==='invalid')status.textContent='That link is invalid or expired. You can submit the form again.';
   if(cfg.turnstileSiteKey && /^https:\/\//.test(cfg.apiUrl || '')){
     const script=document.createElement('script');script.src='https://challenges.cloudflare.com/turnstile/v0/api.js';script.async=true;script.defer=true;
     script.onload=()=>window.turnstile?.render('#turnstile',{sitekey:cfg.turnstileSiteKey});document.head.appendChild(script);
