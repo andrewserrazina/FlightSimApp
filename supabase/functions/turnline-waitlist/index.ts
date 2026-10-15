@@ -48,16 +48,24 @@ Deno.serve(async(req)=>{
  }
  if(req.method!=="POST")return response({error:"method_not_allowed"},405);
  if(req.headers.get("origin")!==ORIGIN)return response({error:"invalid_origin"},403);
- if(Number(req.headers.get("content-length")||0)>5000)return response({error:"invalid_request"},413);
- let input:Record<string,unknown>;try{input=await req.json();}catch{return response({error:"invalid_request"},400);}
+ let input:Record<string,unknown>;try{const raw=await req.text();if(raw.length>5000)return response({error:"invalid_request"},413);input=JSON.parse(raw);if(!input||typeof input!=="object"||Array.isArray(input))throw Error("invalid");}catch{return response({error:"invalid_request"},400);}
  const email=String(input.email||"").trim().toLowerCase();
  if(email.length>254||! /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||input.consent!==true||typeof input.captcha!=="string"||input.captcha.length>4096)return response({error:"invalid_request"},400);
+ // Database-backed atomic limits; global and email limits still apply if proxy IP headers are absent.
+ const db=service();
+ const digest=async(v:string)=>sha(env("WAITLIST_SIGNING_SECRET")+":"+v);
+ const rate=async(label:string,identity:string,limit:number)=>{
+   const {data,error}=await db.rpc("turnline_waitlist_check_limit",{p_bucket:label+":"+await digest(identity),p_limit:limit});
+   return !error&&data===true;
+ };
+ const ip=req.headers.get("cf-connecting-ip")||req.headers.get("x-real-ip")||req.headers.get("x-forwarded-for")?.split(",").slice(-1)[0]?.trim()||"unknown";
+ if(!(await rate("global","waitlist",300))||!(await rate("ip",ip,20))||!(await rate("email",email,4)))
+   return response({error:"rate_limited"},429);
  const captcha=new URLSearchParams({secret:env("TURNSTILE_SECRET_KEY"),response:input.captcha});
  const cf=await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify",{method:"POST",body:captcha});
  if(!cf.ok)return response({error:"temporarily_unavailable"},503);
  const check=await cf.json();
  if(!check.success||check.hostname!==new URL(ORIGIN).hostname)return response({error:"verification_failed"},400);
- const db=service();
  const {data:existing,error:readError}=await db.from("turnline_waitlist").select("id,created_at,confirmed_at,unsubscribed_at,updated_at").eq("email_normalized",email).maybeSingle();
  if(readError)return response({error:"temporarily_unavailable"},503);
  // Avoid revealing whether an email already belongs to the list.
