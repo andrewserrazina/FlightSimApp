@@ -4,11 +4,14 @@
 // Usage: node scripts/windows-smoke-cdp.mjs <step> <outDir> [port]
 // Steps: connected | settings | fly | msfs | history
 // Prints one JSON result line; exits non-zero when the step's checks fail.
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const [step, outDir = "smoke-out", port = "9222"] = process.argv.slice(2);
 mkdirSync(outDir, { recursive: true });
+// Expected schema = number of shipped migrations, so a new migration does not need a smoke-test edit.
+const EXPECTED_SCHEMA = readdirSync(join(dirname(fileURLToPath(import.meta.url)), "../apps/desktop/src-tauri/migrations")).filter((f) => f.endsWith(".sql")).length;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function pageTarget() {
@@ -94,9 +97,9 @@ try {
     await screenshot("01-connected");
   } else if (step === "settings") {
     await nav("Settings");
-    await waitFor("database ready", textIncludes("Ready (schema v2)"), 30_000);
+    await waitFor(`database ready (schema v${EXPECTED_SCHEMA})`, textIncludes(`Ready (schema v${EXPECTED_SCHEMA})`), 30_000);
     const text = await bodyText();
-    result.checks.database_ready_schema_v2 = true;
+    result.checks.database_ready_schema = EXPECTED_SCHEMA;
     result.checks.database_in_appdata = /AppData\\Roaming\\dev\.flightsimapp\.desktop\\flightsim\.db/i.test(text);
     const report = await evaluate("document.querySelector('#diag-report')?.value ?? document.querySelector('textarea')?.value");
     const parsed = JSON.parse(report);
