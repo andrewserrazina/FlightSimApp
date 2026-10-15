@@ -72,6 +72,11 @@ export interface ImportedFlightPlan {
     offUtc: string | null;
     onUtc: string | null;
     inUtc: string | null;
+    /**
+     * SimBrief's estimated out/off/on/in (scheduled times adjusted by the computed taxi and flight
+     * times). Absent on plans imported before estimates were read; treat absent as unavailable.
+     */
+    estimated?: EstimatedTimes;
     /** Planned time en route (takeoff to landing). */
     enrouteSeconds: number | null;
     /** Planned block time (off-block to on-block). */
@@ -96,6 +101,13 @@ export interface ImportedFlightPlan {
     payload: PlanWeight | null;
     passengers: number | null;
   };
+}
+
+export interface EstimatedTimes {
+  outUtc: string | null;
+  offUtc: string | null;
+  onUtc: string | null;
+  inUtc: string | null;
 }
 
 /** Immutable copy of a plan attached to one recorded flight. Never updated by later imports. */
@@ -149,6 +161,8 @@ export function parseImportedFlightPlan(raw: unknown): ImportedFlightPlan | null
   if (!isObj(a) || !optStr(a.icaoType, 8) || !optStr(a.name, 200) || !optStr(a.registration, 16)) return null;
   if (!isObj(r) || !optStr(r.text, 8000) || !optNum(r.cruiseAltitudeFt) || !optStr(r.costIndex, 16) || !optNum(r.airDistanceNm)) return null;
   if (!isObj(sc) || ![sc.outUtc, sc.offUtc, sc.onUtc, sc.inUtc].every(optTs) || !optNum(sc.enrouteSeconds) || !optNum(sc.blockSeconds)) return null;
+  const est = sc.estimated;
+  if (est !== undefined && (!isObj(est) || ![est.outUtc, est.offUtc, est.onUtc, est.inUtc].every(optTs))) return null;
   if (!isObj(fuel) || !FUEL_KEYS.every((k) => isWeight(fuel[k]))) return null;
   if (!isObj(w) || !WEIGHT_KEYS.every((k) => isWeight(w[k])) || !optNum(w.passengers)) return null;
   return raw as unknown as ImportedFlightPlan;

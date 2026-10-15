@@ -65,14 +65,16 @@ The SimBrief alias or Pilot ID is stored with the other non-sensitive UI prefere
 
 `null` means **unavailable** and is shown as "Unavailable". Weights keep the planned value and unit (`original`)
 next to normalized kilograms (× 0.45359237, rounded to 0.1 kg). When `params.units` is missing or unrecognised,
-all weights are unavailable rather than guessed. Timestamps are SimBrief's Unix seconds, converted to UTC
-ISO-8601; an implausible value (before 2001 or after 2100, or not an integer) becomes unavailable.
+all weights are unavailable rather than guessed. Timestamps are accepted as Unix seconds **or** ISO-8601 with an
+explicit `Z` or offset (a public real OFP sends `"2026-10-03T21:50:00Z"`). Both forms are converted to UTC
+ISO-8601. A timestamp without a zone, an impossible date, or a value before 2001 or after 2100 becomes
+unavailable. Durations are accepted as whole seconds or `HH:MM[:SS]`.
 
 | Turnline field | SimBrief `json=v2` path | Provenance |
 |---|---|---|
 | source.requestId | `params.request_id` | documented |
 | source.pilotId | `params.user_id`, else `fetch.userid` | `fetch.userid` documented |
-| source.generatedAtUtc | `params.time_generated` (Unix s) | community, to be confirmed |
+| source.generatedAtUtc | `params.time_generated` (Unix s or ISO-8601) | seen in a real OFP |
 | source.airac | `params.airac` | community, to be confirmed |
 | source.units | `params.units` (`kgs`/`lbs`) | documented |
 | flight.airlineIcao, flight.flightNumber | `general.icao_airline`, `general.flight_number` | documented |
@@ -80,7 +82,9 @@ ISO-8601; an implausible value (before 2001 or after 2100, or not an integer) be
 | origin / destination / alternate | `origin`, `destination`, `alternate` (`icao_code`, `iata_code`, `name`, `plan_rwy`); for an alternate array, the first entry | documented (objects) |
 | aircraft | `aircraft.icaocode` (or `icao_code`), `name`, `reg` | community |
 | route | `general.route`, `general.initial_altitude` (ft), `general.costindex` (kept as text), `general.air_distance` | `initial_altitude` documented |
-| schedule | `times.sched_out/off/on/in` (Unix s), `est_time_enroute`, `est_block` or `sched_block` (s) | community |
+| schedule (scheduled) | `times.sched_out/off/on/in` | seen in a real OFP |
+| schedule.estimated | `times.est_out/off/on/in` (scheduled times adjusted by SimBrief's computed taxi and flight times) | seen in a real OFP |
+| schedule durations | `est_time_enroute` (else `sched_time_enroute`), `est_block` (else `sched_block`) | seen in a real OFP |
 | fuel | `fuel.plan_ramp`, `taxi`, `enroute_burn`, `contingency`, `alternate_burn`, `reserve`, `extra`, `min_takeoff`, `plan_takeoff`, `plan_landing` | `plan_ramp` documented |
 | weights | `weights.est_zfw`, `est_tow`, `est_ldw`, `payload`, `pax_count` | `est_zfw`, `payload`, `pax_count` documented |
 
@@ -177,8 +181,8 @@ the CI run for this branch.
    **Import Latest Flight Plan**.
    - **Expect:** "Contacting SimBrief…", then "Flight plan imported."
 4. Compare every field on the Dispatch page with the SimBrief OFP: flight, callsign, aircraft type, registration,
-   origin, destination, alternate, route, cruise altitude, cost index, scheduled off-block, takeoff, landing and
-   on-block (UTC), flight and block time, each fuel line, ZFW, TOW, landing weight, payload, passengers, AIRAC, OFP
+   origin, destination, alternate, route, cruise altitude, cost index, scheduled and estimated off-block, takeoff,
+   landing and on-block (UTC), flight and block time, each fuel line, ZFW, TOW, landing weight, payload, passengers, AIRAC, OFP
    id.
    - **Record:** any field that shows "Unavailable" while the OFP has it, or that differs.
    - **If your OFP uses lb:** check that each weight shows "… kg (… lb planned)" and that the lb value matches.
@@ -209,11 +213,15 @@ the CI run for this branch.
 
 ## Limitations
 
-- **Real-account verification:** field names marked "community" are unconfirmed until the real-account test.
+- **Real-account verification:** the first real-account import worked end-to-end. Field names still marked
+  "community" have not been checked individually.
 - **"No flight plan" text:** SimBrief's exact error text for this case has not been observed.
 - **Partial data only:** the navlog, NOTAMs, weather, ETOPS and fix list are not imported; route text only.
 - **Aircraft check:** depends on the simulator reporting an ICAO type, which MSFS usually does not.
-- **Clock comparisons:** treat SimBrief schedule times as UTC (SimBrief uses Unix time). If the sim clock and the
+- **Schedule times (2026-10-15 real-account test):** the first test showed wrong scheduled off-block, takeoff
+  and on-block times while landing was correct. Turnline now reads ISO-8601 as well as Unix times and shows
+  SimBrief's estimated times next to the scheduled ones. Re-verify against the OFP's OUT/OFF/ON/IN block.
+- **Clock comparisons:** SimBrief schedule times are treated as UTC. If the sim clock and the
   real clock differ, deviations are suppressed only when more than 6 h apart.
 - **Fuel:** fuel burn comparison is not implemented.
 - **One plan:** only the latest imported plan is kept, plus the snapshots attached to flights.

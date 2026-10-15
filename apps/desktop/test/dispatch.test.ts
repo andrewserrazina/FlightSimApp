@@ -7,7 +7,7 @@ import { comparePlanToFlight } from "../src/dispatch/comparison";
 import { DispatchService } from "../src/dispatch/DispatchService";
 import { parseImportedFlightPlan, type ImportedFlightPlan } from "../src/dispatch/model";
 import { buildRequestUrl, classifyFetchStatus, fetchLatestOfp, normalizeIdentity } from "../src/dispatch/simbrief/client";
-import { normalizeOfp, numeric, unixToUtc } from "../src/dispatch/simbrief/normalize";
+import { normalizeOfp, numeric, seconds, timestampUtc } from "../src/dispatch/simbrief/normalize";
 import { MemoryDispatchStore } from "../src/dispatch/store";
 import { parsePreferences } from "../src/preferences/preferences";
 import { FlightRecorder } from "../src/recording/FlightRecorder";
@@ -67,7 +67,7 @@ describe("normalization", () => {
     expect(p.alternate?.icao).toBe("KMDW");
     expect(p.aircraft).toEqual({ icaoType: "A20N", name: "A320-251N", registration: "N247TL" });
     expect(p.route).toEqual({ text: "SSOXS5 SSOXS DCT BUZRD Q448 MIDDLE BAE4 ORD", cruiseAltitudeFt: 36000, costIndex: "35", airDistanceNm: 781 });
-    expect(p.schedule).toEqual({ outUtc: "2026-10-15T14:35:00Z", offUtc: "2026-10-15T14:52:00Z", onUtc: "2026-10-15T17:08:00Z", inUtc: "2026-10-15T17:18:00Z", enrouteSeconds: 8160, blockSeconds: 9780 });
+    expect(p.schedule).toEqual({ outUtc: "2026-10-15T14:35:00Z", offUtc: "2026-10-15T14:52:00Z", onUtc: "2026-10-15T17:08:00Z", inUtc: "2026-10-15T17:18:00Z", estimated: { outUtc: null, offUtc: null, onUtc: null, inUtc: null }, enrouteSeconds: 8160, blockSeconds: 9780 });
     expect(p.fuel.block).toEqual({ kg: 7420, original: { value: 7420, unit: "kg" } });
     expect(p.fuel.extra).toEqual({ kg: 0, original: { value: 0, unit: "kg" } }); // a real planned 0 stays 0
     expect(p.weights.zeroFuel?.kg).toBe(60410);
@@ -105,7 +105,7 @@ describe("normalization", () => {
     expect(p.route.cruiseAltitudeFt).toBeNull(); // "FL350" is not a number of feet
     expect(p.route.text).toBeNull();
     expect(p.source.generatedAtUtc).toBeNull(); // "99" is not a plausible Unix time
-    expect(p.schedule).toEqual({ outUtc: null, offUtc: null, onUtc: null, inUtc: null, enrouteSeconds: null, blockSeconds: null });
+    expect(p.schedule).toEqual({ outUtc: null, offUtc: null, onUtc: null, inUtc: null, estimated: { outUtc: null, offUtc: null, onUtc: null, inUtc: null }, enrouteSeconds: null, blockSeconds: null });
   });
 
   it("rejects responses that are not usable OFPs", () => {
@@ -120,8 +120,60 @@ describe("normalization", () => {
     expect(numeric("12.5")).toBe(12.5);
     expect(numeric("1e5")).toBeNull();
     expect(numeric({})).toBeNull();
-    expect(unixToUtc("1792074900")).toBe("2026-10-15T14:35:00Z");
-    expect(unixToUtc("1792074900.5")).toBeNull();
+    expect(timestampUtc("1792074900")).toBe("2026-10-15T14:35:00Z");
+    expect(timestampUtc("1792074900.5")).toBeNull();
+  });
+
+  it("reads ISO-8601 schedule times and HH:MM:SS durations (the form seen in a real OFP)", () => {
+    const p = plan("ofp-v2-iso-times.json");
+    expect(p.schedule).toEqual({
+      outUtc: "2026-10-15T14:35:00Z",
+      offUtc: "2026-10-15T14:52:00Z",
+      onUtc: "2026-10-15T17:08:00Z",
+      inUtc: "2026-10-15T17:18:00Z",
+      estimated: { outUtc: "2026-10-15T14:35:00Z", offUtc: "2026-10-15T14:52:00Z", onUtc: "2026-10-15T17:11:30Z", inUtc: "2026-10-15T17:21:30Z" },
+      enrouteSeconds: 2 * 3600 + 19 * 60 + 30,
+      blockSeconds: 2 * 3600 + 46 * 60 + 30,
+    });
+    expect(p.source.generatedAtUtc).toBe("2026-10-15T13:50:00Z");
+    // Same instants whichever encoding SimBrief uses.
+    expect(plan("ofp-v2-kgs.json").schedule.outUtc).toBe(p.schedule.outUtc);
+    expect(parseImportedFlightPlan(JSON.parse(JSON.stringify(p)))).toEqual(p);
+  });
+
+  it("timestamps: offsets are converted to UTC; zoneless, impossible or implausible values are unavailable", () => {
+    expect(timestampUtc("2026-10-15T14:35:00Z")).toBe("2026-10-15T14:35:00Z");
+    expect(timestampUtc("2026-10-15T10:35:00-04:00")).toBe("2026-10-15T14:35:00Z");
+    expect(timestampUtc("2026-10-15T16:35+0200")).toBe("2026-10-15T14:35:00Z");
+    expect(timestampUtc(1792074900)).toBe("2026-10-15T14:35:00Z");
+    expect(timestampUtc("2026-10-15T14:35:00")).toBeNull(); // no zone: not guessed
+    expect(timestampUtc("2026-02-31T14:35:00Z")).toBeNull();
+    expect(timestampUtc("2026-10-15T24:00:00Z")).toBeNull();
+    expect(timestampUtc("1999-01-01T00:00:00Z")).toBeNull();
+    expect(timestampUtc("0")).toBeNull();
+    expect(timestampUtc({})).toBeNull();
+    expect(timestampUtc("")).toBeNull();
+  });
+
+  it("durations: seconds or HH:MM(:SS); zero, negative and absurd values are unavailable", () => {
+    expect(seconds("8160")).toBe(8160);
+    expect(seconds("02:16:00")).toBe(8160);
+    expect(seconds("02:16")).toBe(8160);
+    expect(seconds("00:00:00")).toBeNull();
+    expect(seconds("49:00:00")).toBeNull();
+    expect(seconds("02:61:00")).toBeNull();
+    expect(seconds("-60")).toBeNull();
+    expect(seconds({})).toBeNull();
+  });
+
+  it("missing estimates stay unavailable, and plans saved before estimates existed still load", () => {
+    const sched = fx("ofp-v2-kgs.json");
+    const p = normalizeOfp(sched, { requestedBy: "username", importedAtUtc: IMPORTED });
+    expect(p.ok && p.plan.schedule.estimated).toEqual({ outUtc: null, offUtc: null, onUtc: null, inUtc: null });
+    const legacy = JSON.parse(JSON.stringify(plan()));
+    delete legacy.schedule.estimated;
+    expect(parseImportedFlightPlan(legacy)).not.toBeNull();
+    expect(parseImportedFlightPlan({ ...legacy, schedule: { ...legacy.schedule, estimated: { outUtc: "garbage", offUtc: null, onUtc: null, inUtc: null } } })).toBeNull();
   });
 });
 

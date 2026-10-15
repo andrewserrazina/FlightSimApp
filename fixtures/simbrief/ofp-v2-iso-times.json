@@ -1,0 +1,112 @@
+{
+  "fetch": {
+    "userid": "000001",
+    "static_id": {},
+    "status": "Success",
+    "time": "0.0412"
+  },
+  "params": {
+    "request_id": "900000002",
+    "user_id": "000001",
+    "time_generated": "2026-10-15T13:50:00Z",
+    "static_id": {},
+    "ofp_layout": "LIDO",
+    "airac": "2610",
+    "units": "kgs"
+  },
+  "general": {
+    "icao_airline": "TLN",
+    "flight_number": "247",
+    "is_etops": "0",
+    "initial_altitude": "36000",
+    "costindex": "35",
+    "route": "SSOXS5 SSOXS DCT BUZRD Q448 MIDDLE BAE4 ORD",
+    "air_distance": "781",
+    "cruise_profile": "CI 35"
+  },
+  "atc": {
+    "callsign": "TLN247"
+  },
+  "origin": {
+    "icao_code": "KBOS",
+    "iata_code": "BOS",
+    "name": "Boston Logan Intl",
+    "plan_rwy": "22R"
+  },
+  "destination": {
+    "icao_code": "KORD",
+    "iata_code": "ORD",
+    "name": "Chicago O'Hare Intl",
+    "plan_rwy": "27L"
+  },
+  "alternate": {
+    "icao_code": "KMDW",
+    "iata_code": "MDW",
+    "name": "Chicago Midway Intl",
+    "plan_rwy": "31C"
+  },
+  "aircraft": {
+    "icaocode": "A20N",
+    "icao_code": "A20N",
+    "name": "A320-251N",
+    "reg": "N247TL",
+    "base_type": "A20N"
+  },
+  "times": {
+    "est_time_enroute": "02:19:30",
+    "sched_time_enroute": "02:16:00",
+    "sched_out": "2026-10-15T14:35:00Z",
+    "sched_off": "2026-10-15T14:52:00Z",
+    "sched_on": "2026-10-15T17:08:00Z",
+    "sched_in": "2026-10-15T17:18:00Z",
+    "sched_block": "02:43:00",
+    "est_out": "2026-10-15T14:35:00Z",
+    "est_off": "2026-10-15T14:52:00Z",
+    "est_on": "2026-10-15T17:11:30Z",
+    "est_in": "2026-10-15T17:21:30Z",
+    "est_block": "02:46:30",
+    "orig_timezone": "-04:00:00",
+    "dest_timezone": "-05:00:00",
+    "taxi_out": "00:17:00",
+    "taxi_in": "00:10:00"
+  },
+  "fuel": {
+    "plan_ramp": "7420",
+    "taxi": "200",
+    "enroute_burn": "5310",
+    "contingency": "266",
+    "alternate_burn": "880",
+    "reserve": "1100",
+    "extra": "0",
+    "min_takeoff": "7556",
+    "plan_takeoff": "7220",
+    "plan_landing": "1910"
+  },
+  "weights": {
+    "est_zfw": "60410",
+    "est_tow": "67630",
+    "est_ldw": "62320",
+    "payload": "15600",
+    "pax_count": "156",
+    "cargo": "1170"
+  },
+  "navlog": {
+    "fix": [
+      {
+        "ident": "BOS",
+        "type": "apt"
+      },
+      {
+        "ident": "SSOXS",
+        "type": "wpt"
+      },
+      {
+        "ident": "ORD",
+        "type": "apt"
+      }
+    ]
+  },
+  "fms_downloads": {
+    "directory": "https://example.invalid/"
+  }
+}

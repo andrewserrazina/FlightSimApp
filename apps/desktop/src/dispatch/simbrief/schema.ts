@@ -31,7 +31,20 @@ export interface SimbriefOfpV2 {
   destination?: SimbriefAirportRaw;
   alternate?: SimbriefAirportRaw | SimbriefAirportRaw[];
   aircraft?: { icaocode?: Leaf; icao_code?: Leaf; name?: Leaf; reg?: Leaf };
-  times?: { sched_out?: Leaf; sched_off?: Leaf; sched_on?: Leaf; sched_in?: Leaf; est_time_enroute?: Leaf; sched_block?: Leaf; est_block?: Leaf };
+  times?: {
+    sched_out?: Leaf;
+    sched_off?: Leaf;
+    sched_on?: Leaf;
+    sched_in?: Leaf;
+    est_out?: Leaf;
+    est_off?: Leaf;
+    est_on?: Leaf;
+    est_in?: Leaf;
+    est_time_enroute?: Leaf;
+    sched_time_enroute?: Leaf;
+    sched_block?: Leaf;
+    est_block?: Leaf;
+  };
   fuel?: {
     plan_ramp?: Leaf;
     taxi?: Leaf;
