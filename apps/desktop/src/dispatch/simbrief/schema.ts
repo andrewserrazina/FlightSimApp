@@ -1,8 +1,8 @@
 /**
  * SimBrief `xml.fetcher.php?json=v2` transport shape: ONLY the parts Turnline reads.
  *
- * SimBrief converts its XML OFP to JSON, so every leaf is a string (numbers are numeric strings),
- * and an empty XML element can arrive as "", {} or be absent. Every field is therefore typed as
+ * SimBrief converts its XML OFP to JSON, so many leaves are strings (numbers may be numeric strings),
+ * timestamps in json=v2 are ISO 8601 and durations HH:MM:SS; an empty XML element can arrive as "", {} or be absent. Every field is therefore typed as
  * `unknown` and read through the guarded helpers in ./normalize.ts — nothing here is trusted.
  *
  * Field provenance (see docs/dispatch/simbrief-import.md):
