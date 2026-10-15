@@ -1,0 +1,30 @@
+[package]
+name = "flightsim-desktop"
+version = "0.1.0"
+description = "FlightSimApp desktop shell"
+edition = "2021"
+rust-version = "1.77"
+publish = false
+
+[lib]
+name = "flightsim_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["process", "io-util", "net", "time", "sync", "macros", "rt-multi-thread", "fs"] }
+getrandom = "0.2"
+base64 = "0.22"
+# SQLite compiled in (no system library needed on Windows). Used only by the local flight store.
+rusqlite = { version = "0.32", features = ["bundled"] }
+# OS secure credential storage (Windows Credential Manager, macOS Keychain, Linux kernel keyring).
+keyring = { version = "3", features = ["windows-native", "apple-native", "linux-native"] }
+
+[profile.release]
+strip = true
+lto = true

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.flightsimapp.invalid/v1/flight-event.v1.schema.json",
+  "title": "FlightEventV1",
+  "description": "Canonical event envelope (docs/spec/02-architecture.md). Uniqueness is event_id; ordering is (session_id, seq), never timestamps.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "schema_version", "event_type", "tenant_id", "flight_id", "session_id", "occurred_at", "received_at", "seq", "source", "source_kind", "payload", "quality"],
+  "properties": {
+    "event_id": { "$ref": "common.schema.json#/$defs/uuid" },
+    "schema_version": { "const": 1 },
+    "event_type": { "type": "string", "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$", "maxLength": 128 },
+    "tenant_id": { "oneOf": [{ "$ref": "common.schema.json#/$defs/uuid" }, { "type": "null" }] },
+    "flight_id": { "oneOf": [{ "$ref": "common.schema.json#/$defs/uuid" }, { "type": "null" }] },
+    "session_id": { "$ref": "common.schema.json#/$defs/uuid" },
+    "occurred_at": { "$ref": "common.schema.json#/$defs/utc_timestamp" },
+    "received_at": { "$ref": "common.schema.json#/$defs/utc_timestamp" },
+    "seq": { "oneOf": [{ "$ref": "common.schema.json#/$defs/session_seq" }, { "type": "null" }] },
+    "source": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$", "maxLength": 64 },
+    "source_kind": { "enum": ["observed", "inferred", "simulated", "authoritative", "user"] },
+    "payload": { "type": "object" },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["confidence", "missing", "gap"],
+      "properties": {
+        "confidence": { "enum": ["high", "medium", "low"] },
+        "missing": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "gap": { "type": "boolean" }
+      }
+    }
+  }
+}

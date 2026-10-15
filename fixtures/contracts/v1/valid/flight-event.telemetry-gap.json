@@ -1,0 +1,27 @@
+{
+  "protocol": "flightsim.bridge",
+  "protocol_version": 1,
+  "type": "flight.event",
+  "data": {
+    "event_id": "0b6f2c4e-8a1d-4f3b-9e7c-5d2a1b0c9f8e",
+    "schema_version": 1,
+    "event_type": "sim.telemetry.gap",
+    "tenant_id": null,
+    "flight_id": null,
+    "session_id": "7d1c6a52-2f1e-4b8a-9c0d-3e5f6a7b8c9d",
+    "occurred_at": "2026-10-10T21:00:30Z",
+    "received_at": "2026-10-10T21:00:30.090Z",
+    "seq": 61,
+    "source": "simconnect-msfs2024",
+    "source_kind": "observed",
+    "payload": {
+      "from_seq": 60,
+      "gap_s": 31.5
+    },
+    "quality": {
+      "confidence": "high",
+      "missing": [],
+      "gap": true
+    }
+  }
+}

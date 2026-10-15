@@ -1,0 +1,8 @@
+{
+  "protocol": "flightsim.bridge",
+  "protocol_version": 1,
+  "type": "health.request",
+  "data": {
+    "token": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  }
+}

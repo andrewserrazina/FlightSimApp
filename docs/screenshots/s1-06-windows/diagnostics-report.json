@@ -1,0 +1,70 @@
+{
+  "generated_at_utc": "2026-10-12T21:21:24.702Z",
+  "app_version": "0.1.0",
+  "shell": {
+    "state": "running",
+    "message": "Sim bridge running.",
+    "attempt": 0
+  },
+  "configured_adapter": "mock",
+  "bridge": {
+    "version": "0.1.0",
+    "adapter": "mock",
+    "session": "ecd3…9d1f",
+    "simconnect_sdk": "not_applicable",
+    "frames_emitted": 1,
+    "frames_rejected": 0,
+    "uptime_s": 0.182
+  },
+  "connection": {
+    "state": "CONNECTED",
+    "since": "2026-10-12T21:21:20.284Z",
+    "attempt": 0,
+    "reason": null
+  },
+  "telemetry": {
+    "freshness": "live",
+    "age_ms": 0,
+    "last_seq": 10,
+    "simulator_version": "mock-1"
+  },
+  "counters": {
+    "invalid_messages_dropped": 0,
+    "telemetry_gaps": 0,
+    "connections_lost": 0
+  },
+  "last_error": null,
+  "recording": {
+    "store": "ready",
+    "store_error": null,
+    "flight": null,
+    "status": "idle",
+    "phase": "NOT_STARTED",
+    "pending_items": 0,
+    "write_error": null,
+    "dropped_samples": 0
+  },
+  "cloud": null,
+  "recent_connection_events": [
+    {
+      "atUtc": "2026-10-12T21:21:20.536Z",
+      "source": "shell",
+      "state": "running",
+      "detail": null
+    },
+    {
+      "atUtc": "2026-10-12T21:21:20.284Z",
+      "source": "bridge",
+      "state": "CONNECTED",
+      "detail": null
+    }
+  ],
+  "preferences": {
+    "schemaVersion": 1,
+    "mockMode": true,
+    "simulator": "msfs2024",
+    "staleWarningSeconds": 3,
+    "showLocalTime": false,
+    "keepDetailedFlights": 100
+  }
+}

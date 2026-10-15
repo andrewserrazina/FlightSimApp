@@ -1,0 +1,56 @@
+22:07:03 launched offset=700
+22:07:06 shot 01-settings-signed-out
+22:07:20 start flight 1 (pre-opt-in)
+22:07:20 shot 02-live-flight1-started
+22:07:33 shot 03-register-form
+22:07:46 register submitted
+22:07:46 shot 04-verify-code
+22:08:17 verification code submitted
+22:08:18 shot 05-signed-in
+22:08:28 shot 06-live-flight1
+22:09:15 shot 07-live-flight1-arrival
+22:10:41 shot 08-live-flight1-arrived
+22:10:52 flight 1 completion confirmed (pre-opt-in)
+22:10:54 shot 09-history-flight1-local-only
+22:11:08 sync enabled (opt-in)
+22:11:08 shot 10-sync-enabled
+22:11:38 launched offset=700
+22:11:40 shot 11-restart-session-restored
+22:12:05 start flight 2 (after opt-in)
+22:12:05 shot 12-live-flight2-started
+22:15:03 shot 13-live-flight2-arrived
+22:15:28 flight 2 completion confirmed (after opt-in)
+22:15:30 shot 14-history-flight2-synced
+22:15:56 shot 15-settings-after-sync
+22:15:58 shot 16-backfill-consent-dialog
+22:16:19 backfill consented
+22:16:19 shot 17-settings-after-backfill
+22:16:21 shot 18-history-both-synced
+22:16:53 launched offset=700
+22:16:53 relaunched with cloud unreachable
+22:16:55 shot 19-offline-settings
+22:17:00 start flight 3 (offline)
+22:17:01 shot 20-offline-flight3-started
+22:18:47 shot 21-offline-flight3-arrival
+22:19:58 shot 21-offline-flight3-arrival
+22:20:11 flight 3 completed while cloud unreachable
+22:20:13 shot 22-offline-history-retry-pending
+22:20:16 shot 23-offline-settings-status
+22:20:28 cloud restored (gateway restarted)
+22:21:46 shot 24-recovered-history-synced
+22:22:14 signed out A
+22:22:15 shot 25-signed-out
+22:22:45 signed in as B
+22:22:46 shot 27-account-switch-other-account
+22:23:48 launched offset=0
+22:26:38 B enabled sync (rebinds future flights to B)
+22:26:39 shot 28-b-enabled
+22:26:59 shot 29-end-flight-dialog
+22:31:33 launched offset=0
+22:31:36 shot 31-final-settings-b
+22:31:38 shot 32-final-history-other-account
+22:31:51 tall shot 33-final-settings-tall-diagnostics
+22:32:05 signed out B
+22:32:05 shot 34-final-signed-out-local-intact
+22:32:07 shot 35-final-history-signed-out
+22:32:11 no orphan bridge

@@ -1,0 +1,17 @@
+{
+  "protocol": "flightsim.bridge",
+  "protocol_version": 1,
+  "type": "bridge.health",
+  "data": {
+    "schema_version": 1,
+    "bridge_version": "0.1.0",
+    "protocol_version": 1,
+    "adapter": "mock",
+    "connection_state": "CONNECTED",
+    "simconnect_sdk": "not_applicable",
+    "last_frame_at": "2026-10-10T21:00:00.500Z",
+    "frames_emitted": 2,
+    "frames_rejected": 0,
+    "uptime_s": 1.2
+  }
+}

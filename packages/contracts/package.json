@@ -1,0 +1,35 @@
+{
+  "name": "@flightsim/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Versioned FlightSimApp wire contracts: canonical JSON Schemas plus TypeScript typings and validators.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./schemas/v1/*": "./schemas/v1/*"
+  },
+  "files": [
+    "dist",
+    "schemas"
+  ],
+  "scripts": {
+    "generate": "node scripts/generate-validators.mjs",
+    "build": "pnpm generate && tsc -p tsconfig.build.json && node scripts/copy-generated.mjs",
+    "typecheck": "pnpm generate && tsc -p tsconfig.json",
+    "lint": "pnpm typecheck",
+    "test": "pnpm generate && vitest run"
+  },
+  "dependencies": {
+    "ajv": "8.17.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.3",
+    "typescript": "5.8.3",
+    "vitest": "3.1.2"
+  }
+}

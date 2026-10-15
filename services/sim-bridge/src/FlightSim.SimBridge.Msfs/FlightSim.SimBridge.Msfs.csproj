@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>FlightSim.SimBridge.Msfs</RootNamespace>
+    <Description>MSFS 2020/2024 SimConnect adapter. Native SimConnect client (P/Invoke); builds without the MSFS SDK, needs SimConnect.dll at runtime.</Description>
+  </PropertyGroup>
+
+  <!--
+    The SimConnect client is a P/Invoke binding to the native SimConnect C API (Native/SimConnectDll.cs),
+    so the adapter always compiles — on every OS, in CI — without the MSFS SDK. At runtime the bridge
+    needs SimConnect.dll (from the MSFS SDK) next to its executable, or FLIGHTSIM_SIMCONNECT_DLL.
+    Optionally copy it into the build output:
+      dotnet build -c Release -p:SimConnectSdkDir="C:\MSFS 2024 SDK\SimConnect SDK"
+  -->
+  <ItemGroup Condition="'$(SimConnectSdkDir)' != '' And Exists('$(SimConnectSdkDir)\lib\SimConnect.dll')">
+    <None Include="$(SimConnectSdkDir)\lib\SimConnect.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FlightSim.SimBridge.Core\FlightSim.SimBridge.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="FlightSim.SimBridge.Tests" />
+  </ItemGroup>
+</Project>

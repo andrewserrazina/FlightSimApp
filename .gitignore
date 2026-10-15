@@ -1,0 +1,40 @@
+# Dependencies / build output
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Rust / Tauri
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/schemas/
+apps/desktop/src-tauri/binaries/
+
+# .NET
+bin/
+!packages/flight-core/bin/
+obj/
+TestResults/
+*.user
+.vs/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.pem
+*.key
+*.snk
+**/tauri-signing*.key
+supabase/.temp/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+ui-smoke-out/
+apps/desktop/src-tauri/tauri.upgrade-test.conf.json

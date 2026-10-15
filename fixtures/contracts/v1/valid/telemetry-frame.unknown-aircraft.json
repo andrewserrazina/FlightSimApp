@@ -1,0 +1,98 @@
+{
+  "protocol": "flightsim.bridge",
+  "protocol_version": 1,
+  "type": "telemetry.frame",
+  "data": {
+    "schema": "flightsim.telemetry.frame",
+    "schema_version": 1,
+    "session_id": "7d1c6a52-2f1e-4b8a-9c0d-3e5f6a7b8c9d",
+    "seq": 2,
+    "observed_at": "2026-10-10T21:00:00.000Z",
+    "simulator": "msfs2024",
+    "simulator_version": "1.0.0",
+    "aircraft": {
+      "title": {
+        "value": null,
+        "unit": "text",
+        "quality": "unavailable"
+      },
+      "icao_type": {
+        "value": null,
+        "unit": "text",
+        "quality": "unavailable"
+      }
+    },
+    "readings": {
+      "on_ground": {
+        "value": true,
+        "unit": "bool",
+        "quality": "ok"
+      },
+      "lat_deg": {
+        "value": 47.4502,
+        "unit": "deg",
+        "quality": "ok"
+      },
+      "lon_deg": {
+        "value": -122.3088,
+        "unit": "deg",
+        "quality": "ok"
+      },
+      "indicated_altitude_ft": {
+        "value": 433,
+        "unit": "ft",
+        "quality": "ok"
+      },
+      "pressure_altitude_ft": {
+        "value": 420,
+        "unit": "ft",
+        "quality": "ok"
+      },
+      "radio_altitude_ft": {
+        "value": null,
+        "unit": "ft",
+        "quality": "unavailable"
+      },
+      "indicated_airspeed_kt": {
+        "value": 0,
+        "unit": "kt",
+        "quality": "ok"
+      },
+      "ground_speed_kt": {
+        "value": 0,
+        "unit": "kt",
+        "quality": "ok"
+      },
+      "vertical_speed_fpm": {
+        "value": 0,
+        "unit": "fpm",
+        "quality": "ok"
+      },
+      "heading_true_deg": {
+        "value": 179.5,
+        "unit": "deg",
+        "quality": "ok"
+      },
+      "total_fuel_kg": {
+        "value": null,
+        "unit": "kg",
+        "quality": "unavailable"
+      },
+      "engine_count": {
+        "value": null,
+        "unit": "count",
+        "quality": "unavailable"
+      },
+      "engines_running_count": {
+        "value": null,
+        "unit": "count",
+        "quality": "unavailable"
+      },
+      "parking_brake_set": {
+        "value": null,
+        "unit": "bool",
+        "quality": "unavailable"
+      }
+    }
+  }
+}

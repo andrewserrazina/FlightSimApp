@@ -1,0 +1,9 @@
+{
+  "protocol": "flightsim.bridge",
+  "protocol_version": 1,
+  "type": "hello",
+  "data": {
+    "token": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "client": "flightsim-desktop"
+  }
+}

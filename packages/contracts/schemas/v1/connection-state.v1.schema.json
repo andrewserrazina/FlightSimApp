@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.flightsimapp.invalid/v1/connection-state.v1.schema.json",
+  "title": "ConnectionStateV1",
+  "description": "Bridge-to-simulator connection state. Simulator-unavailable is a supported, non-fatal state (DISCONNECTED or RECONNECTING with a reason).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "state", "simulator", "since", "attempt", "next_retry_at", "reason"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "state": { "$ref": "common.schema.json#/$defs/connection_state_name" },
+    "simulator": { "$ref": "common.schema.json#/$defs/simulator_id" },
+    "since": { "$ref": "common.schema.json#/$defs/utc_timestamp" },
+    "attempt": { "description": "Consecutive failed connection attempts; 0 once connected.", "type": "integer", "minimum": 0 },
+    "next_retry_at": { "oneOf": [{ "$ref": "common.schema.json#/$defs/utc_timestamp" }, { "type": "null" }] },
+    "reason": { "oneOf": [{ "$ref": "common.schema.json#/$defs/reason" }, { "type": "null" }] }
+  }
+}
