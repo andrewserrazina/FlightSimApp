@@ -1,61 +1,523 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#0b1f3a"><title>Turnline | Every flight. The whole operation.</title>
-<style>
-:root{--navy:#0b1f3a;--bg:#071527;--card:#102844;--gold:#f4b400;--text:#f5f8fc;--muted:#bdcada;--line:#35516b;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;color-scheme:dark}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);line-height:1.6}a{color:inherit}a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #f4b400;outline-offset:3px}button,input{font:inherit}button{cursor:pointer}.wrap{width:min(1130px,calc(100% - 40px));margin:auto}
-header{border-bottom:1px solid #ffffff22}header .wrap{display:flex;justify-content:space-between;align-items:center;padding:20px 0}.logo{font-weight:850;letter-spacing:.16em;font-size:1.2rem}.logo span{color:var(--gold)}.toplink{text-decoration:none;font-size:.9rem;color:var(--muted)}
-.hero{padding:100px 0 95px;display:grid;grid-template-columns:1.2fr .8fr;gap:45px;align-items:center}.eyebrow{color:var(--gold);font-size:.78rem;text-transform:uppercase;font-weight:750;letter-spacing:.18em}
-h1{font-size:clamp(2.9rem,5.7vw,5.7rem);line-height:1.04;letter-spacing:-.055em;margin:20px 0}h1 em{font-style:normal;color:var(--gold)}.lead{font-size:1.16rem;max-width:700px;color:var(--muted)}.button{display:inline-flex;border:0;border-radius:8px;padding:13px 20px;text-decoration:none;font-weight:750;background:var(--gold);color:#08182b}
-.terminal{background:linear-gradient(140deg,#173554,#091c31);border:1px solid #ffffff30;border-radius:16px;overflow:hidden;box-shadow:0 22px 72px #0006}.term-top{padding:15px 20px;border-bottom:1px solid #ffffff22;font-size:.77rem;color:#c5d0db;letter-spacing:.12em}.term-body{padding:25px}.term-row{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #ffffff1a;padding:13px 0;font-size:.87rem}.term-row strong{color:var(--gold)}.term-caption{font-size:.78rem;color:#9db4ca;margin-top:16px}
-.section{padding:40px 0 90px}h2{font-size:clamp(1.7rem,3vw,2.8rem);letter-spacing:-.03em;margin:10px 0}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:27px}.card{border:1px solid #ffffff25;background:var(--card);border-radius:13px;padding:25px}.card h3{margin:0 0 9px}.card p{margin:0;color:var(--muted)}
-.wait{background:linear-gradient(125deg,#142d4b,#0c213b);border:1px solid #ffffff30;border-radius:18px;padding:36px;max-width:780px;margin:0 auto 90px}.wait p{color:var(--muted)}.form-row{display:flex;gap:10px;margin-top:16px}.form-row input{flex:1;min-width:0;border:1px solid #657d93;background:#071b30;color:white;border-radius:8px;padding:13px 15px}.check{display:flex;align-items:flex-start;gap:12px;font-size:.89rem;color:#d3dfeb;margin:17px 0}.check input{margin-top:6px;flex:none}.fine{font-size:.78rem;color:#b3c4d7}.fine a{text-decoration:underline}.status{min-height:27px;font-weight:650;margin-top:12px}.note{font-size:.84rem;color:#adbfd0}
-footer{padding:35px 0;border-top:1px solid #ffffff25;color:#a8bdce;font-size:.83rem}.footerrow{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
-@media(max-width:830px){.hero{grid-template-columns:1fr;padding:65px 0}.grid{grid-template-columns:1fr}.form-row{flex-direction:column}.wait{padding:25px}}
-@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-</style></head>
-<body><header><div class="wrap"><div class="logo"><span>↗</span> TURNLINE</div><a href="#early-access" class="toplink">Early access</a></div></header>
-<main class="wrap">
-<section class="hero"><div><p class="eyebrow">A new airline operations experience for MSFS</p><h1>Every flight.<br><em>The whole operation.</em></h1><p class="lead">Airline flying is more than the cockpit. Turnline is being built to connect dispatch, passengers, ground services, turnarounds and meaningful debriefs into one realistic flight experience.</p><a class="button" href="#early-access">Get development updates →</a><p class="note">In development · Windows / Microsoft Flight Simulator 2020 & 2024 planned</p></div>
-<div class="terminal" aria-label="Illustrative future operations overview, not live application data"><div class="term-top">TURNLINE / OPERATIONS OVERVIEW</div><div class="term-body"><div class="term-row"><span>Dispatch release</span><strong>PLANNED</strong></div><div class="term-row"><span>Passenger manifests</span><strong>PLANNED</strong></div><div class="term-row"><span>Ground turnaround</span><strong>PLANNED</strong></div><div class="term-row"><span>Flight recording</span><strong>IN DEVELOPMENT</strong></div><div class="term-row"><span>Operations debrief</span><strong>IN DEVELOPMENT</strong></div><p class="term-caption">Concept display · Not connected to a simulator</p></div></div></section>
-<section class="section"><p class="eyebrow">Pilot-first</p><h2>Fly the aircraft. Experience the airline.</h2><div class="grid"><article class="card"><h3>Dispatch & preparation</h3><p>Planned SimBrief workflows, fuel planning, OFPs and operational decisions before departure.</p></article><article class="card"><h3>Cabin & turnaround</h3><p>Planned passenger manifests, boarding, cargo and GSX coordination built into the flight timeline.</p></article><article class="card"><h3>Debrief & history</h3><p>Persistent flight records, phase tracking and a foundation for advanced operational analysis.</p></article></div></section>
-<section class="wait" id="early-access" aria-labelledby="early-title"><p class="eyebrow">Follow development</p><h2 id="early-title">Be first to hear about Turnline.</h2><p>Opt in for product development updates and future beta invitations. No purchase or paid subscription is available yet.</p>
-<form id="signup" novalidate><label for="email">Email address</label><div class="form-row"><input id="email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="pilot@example.com" required maxlength="254"><button class="button" id="submit" type="submit">Join the list</button></div>
-<label class="check"><input type="checkbox" id="consent" required><span>I agree to receive Turnline development news and beta invitations by email. I can unsubscribe at any time.</span></label>
-<div id="turnstile" aria-label="Spam prevention check"></div><p class="fine">We use your email only for the updates you request. See our <a href="privacy.html">privacy notice</a>.</p><p class="status" id="status" role="status" aria-live="polite"></p></form></section>
-</main><footer><div class="wrap footerrow"><span>© <span id="year">2026</span> Turnline · Working brand, subject to clearance.</span><span>Independent project; not affiliated with Microsoft, Navigraph/SimBrief or FSDreamTeam/GSX.</span></div></footer>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Launch posture: keep noindex,nofollow until the owner approves discoverability and brand clearance. -->
+<meta name="robots" content="noindex,nofollow">
+<title>Turnline | Airline operations simulation for Microsoft Flight Simulator</title>
+<meta name="description" content="Turnline is an airline operations simulation platform in development for Microsoft Flight Simulator 2020 and 2024, connecting dispatch, ground handling, passengers, live flight and postflight debrief into one operation.">
+<meta name="theme-color" content="#0b1f3a">
+<link rel="canonical" href="https://turnlineops.com/">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Turnline">
+<meta property="og:title" content="Turnline | Every flight. The whole operation.">
+<meta property="og:description" content="An airline operations simulation platform in development for Microsoft Flight Simulator 2020 and 2024. Join the early-access list for development updates.">
+<meta property="og:url" content="https://turnlineops.com/">
+<meta property="og:image" content="https://turnlineops.com/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Turnline: Every flight. The whole operation.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Turnline | Every flight. The whole operation.">
+<meta name="twitter:description" content="An airline operations simulation platform in development for Microsoft Flight Simulator 2020 and 2024.">
+<meta name="twitter:image" content="https://turnlineops.com/assets/og-image.png">
+<script>document.documentElement.classList.replace('no-js', 'js');</script>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-dispatch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17.5" rx="2"/><path d="M9 3.5h6v3H9zM8.5 11h7M8.5 14.5h7M8.5 18h4"/></symbol>
+    <symbol id="i-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 21l1.5-1.1 1.5 1.1v-1.9l-1.2-1.1.2-5.5 8 3.2v-2l-8-4.8V4.1C12.5 3 12.2 2.5 12 2.5s-.5.5-.5 1.6v4.8l-8 4.8v2l8-3.2.2 5.5-1.2 1.1z"/></symbol>
+    <symbol id="i-ground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16.5V9h9v7.5M12 11.5h4.5l3 3v2H12"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/></symbol>
+    <symbol id="i-people" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.4 3-5.3 6-5.3s5.4 1.9 6 5.3"/><circle cx="17" cy="9" r="2.4"/><path d="M16.5 14.6c2.3.2 3.9 1.8 4.5 4.4"/></symbol>
+    <symbol id="i-tower" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10l-1.5 4h-7zM9.5 11 9 21M14.5 11l.5 10M7 21h10M12 7V3"/></symbol>
+    <symbol id="i-ops" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12l5-5"/></symbol>
+    <symbol id="i-live" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-6 5 12 2.5-6h4"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v5M15 3v5M7 8h10v3a5 5 0 0 1-10 0zM12 16v5"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 12h12"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.3v.2"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6 8.5 7 8.5-7"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-flask" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5.5 9.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3M7.5 15h9"/></symbol>
+  </defs>
+</svg>
+
+<header class="site-header">
+  <nav class="wrap nav" aria-label="Main">
+    <a class="brand" href="#top" aria-label="Turnline home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#0b1f3a" stroke="#2a4a74"/><path d="M8 21.5c4.5-1 8.5-4.5 10.5-10.5" fill="none" stroke="#f4b400" stroke-width="2.6" stroke-linecap="round"/><path d="M14.5 10.5h5v5" fill="none" stroke="#f4b400" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="21.5" r="2" fill="#fff"/></svg>
+      <span>TURNLINE</span>
+    </a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="nav-menu">
+      <span class="bars" aria-hidden="true"><span></span><span></span><span></span></span>
+      <span>Menu</span>
+    </button>
+    <div class="nav-menu" id="nav-menu">
+      <ul class="nav-links">
+        <li><a href="#platform">Platform</a></li>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#integrations">Integrations</a></li>
+        <li><a href="#roadmap">Roadmap</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li class="nav-cta"><a class="btn btn-primary btn-small" href="#early-access" data-focus-email>Join early access</a></li>
+      </ul>
+    </div>
+  </nav>
+</header>
+
+<main id="main">
+
+<!-- A. Hero -->
+<section class="hero" id="top" aria-labelledby="hero-title">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="eyebrow">Coming to Microsoft Flight Simulator</p>
+      <h1 id="hero-title">Your aircraft flies the route. <em>Turnline brings the airline operation to life.</em></h1>
+      <p class="hero-lead">From dispatch to departure, cabin operations to turnaround, and touchdown to debrief—Turnline is being built to connect every part of your virtual airline flight into one evolving operational experience.</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#early-access" data-focus-email>Join the Early Access List</a>
+        <a class="btn btn-secondary" href="#platform">Explore the Platform</a>
+      </div>
+      <p class="hero-support"><span class="pulse" aria-hidden="true"></span>In development for MSFS 2020 &amp; MSFS 2024</p>
+    </div>
+
+    <figure class="reveal" style="margin:0">
+      <div class="dash" role="img" aria-label="Concept illustration of a future Turnline operations dashboard for fictional flight TURNLINE 247 from Boston to Chicago. It shows dispatch released at 13:30, scheduled departure 14:35 revised to 14:43 after a boarding delay, boarding 142 of 168 passengers, and a milestone timeline. Illustrative only; not live software.">
+        <div class="dash-top" aria-hidden="true">
+          <div class="dash-dots"><i></i><i></i><i></i></div>
+          <span class="dash-title">TURNLINE · FLIGHT OPERATIONS</span>
+          <span class="concept-tag">Concept</span>
+        </div>
+        <div class="dash-body" aria-hidden="true">
+          <div class="flight-head">
+            <div>
+              <div class="flight-id">TURNLINE 247</div>
+              <div class="flight-route"><b>BOS</b><span class="leg"></span><b>ORD</b></div>
+              <div class="flight-meta">A320neo · Gate B12 · 168 seats</div>
+            </div>
+            <span class="status dev">Boarding</span>
+          </div>
+          <div class="tiles">
+            <div class="tile ok"><div class="tile-label">Dispatch</div><div class="tile-value">RELEASED</div><div class="tile-sub">13:30 · OFP rev 1</div></div>
+            <div class="tile"><div class="tile-label">Sched dep</div><div class="tile-value">14:35</div><div class="tile-sub">Block 2h 03m</div></div>
+            <div class="tile warn"><div class="tile-label">Est dep</div><div class="tile-value">14:43</div><div class="tile-sub"><span class="delta">+8 min</span> revised</div></div>
+            <div class="tile"><div class="tile-label">Boarding</div><div class="tile-value">142/168</div><div class="bar"><span style="--w:85%"></span></div></div>
+          </div>
+          <ol class="milestones">
+            <li class="done"><span class="t">13:30</span><span class="m"></span><span class="n">Dispatch release received</span><span class="s">Complete</span></li>
+            <li class="done"><span class="t">13:55</span><span class="m"></span><span class="n">Boarding started</span><span class="s">On time</span></li>
+            <li class="alert"><span class="t">14:12</span><span class="m"></span><span class="n">Boarding delay: late connections</span><span class="s">+8 min</span></li>
+            <li class="next"><span class="t">14:32</span><span class="m"></span><span class="n">Doors closed · aircraft ready</span><span class="s">Estimated</span></li>
+            <li class="next"><span class="t">14:43</span><span class="m"></span><span class="n">Pushback</span><span class="s">Estimated</span></li>
+          </ol>
+          <div class="impact">
+            <svg><use href="#i-alert"/></svg>
+            <span>Departure estimate revised +8 min · cause recorded for the debrief: boarding</span>
+          </div>
+        </div>
+      </div>
+      <figcaption class="dash-caption">
+        <span class="concept-tag">Concept illustration</span>
+        <span class="concept-note">Fictional flight and values. Not live software or an actual product screenshot.</span>
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- B. What is Turnline -->
+<section class="section light" id="platform" aria-labelledby="platform-title">
+  <div class="wrap what-grid">
+    <div class="what-copy reveal">
+      <p class="eyebrow">What is Turnline?</p>
+      <h2 id="platform-title" style="font-size:clamp(1.9rem,3.6vw,3rem);margin:12px 0 22px;letter-spacing:-.03em">More than flying. The entire operation.</h2>
+      <p>A real airline flight doesn’t start when the engines do. Long before pushback, a dispatcher has planned the route and fuel, ground crews are preparing the aircraft, passengers are boarding, and an operations team is watching the whole schedule.</p>
+      <p>Turnline is a next-generation airline operations simulation platform for Microsoft Flight Simulator, designed to connect flight planning, aircraft operations, passengers, ground handling, operational decisions, and postflight analysis into one cohesive experience.</p>
+      <p class="pull">Every flight has a plan. Every operation has moving parts. Every decision affects what happens next.</p>
+    </div>
+    <div class="roles reveal" role="list" aria-label="The groups that work together on an airline flight">
+      <div class="role" role="listitem"><div class="role-icon"><svg aria-hidden="true"><use href="#i-dispatch"/></svg></div><h3>Flight dispatch</h3><p>Plans the route, fuel and paperwork the flight is released with.</p></div>
+      <div class="role" role="listitem"><div class="role-icon"><svg aria-hidden="true"><use href="#i-plane"/></svg></div><h3>Pilots &amp; aircraft</h3><p>Fly the plan and handle what changes along the way. That’s you.</p></div>
+      <div class="role" role="listitem"><div class="role-icon"><svg aria-hidden="true"><use href="#i-ground"/></svg></div><h3>Ground services</h3><p>Fuel, catering, baggage and pushback at the gate.</p></div>
+      <div class="role" role="listitem"><div class="role-icon"><svg aria-hidden="true"><use href="#i-people"/></svg></div><h3>Passengers &amp; cabin</h3><p>Boarding, cabin service and the people the flight is for.</p></div>
+      <div class="role" role="listitem"><div class="role-icon"><svg aria-hidden="true"><use href="#i-tower"/></svg></div><h3>Air traffic control</h3><p>Clearances, slots and sequencing that shape the timeline.</p></div>
+      <div class="role" role="listitem"><div class="role-icon"><svg aria-hidden="true"><use href="#i-ops"/></svg></div><h3>Operations control</h3><p>Keeps the schedule running and decides how to handle disruption.</p></div>
+      <div class="roles-hub" role="listitem">Turnline connects them around one flight <span>TURNLINE 247</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- C. How it works -->
+<section class="section" id="how" aria-labelledby="how-title">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">How Turnline works</p>
+      <h2 id="how-title">Six stages. One continuous flight.</h2>
+      <p>Each stage hands something to the next: the plan sets expectations, preparation decides when you’re ready, what happens on departure shapes the rest of the flight, and the debrief explains why it went the way it did.</p>
+    </div>
+    <ol class="stages">
+      <li class="stage reveal"><span class="stage-num" aria-hidden="true">01</span><div class="stage-card"><h3>Plan</h3><span class="status plan">Planned</span><p>Import a dispatch plan, review route and fuel information, and establish the operational baseline.</p><p class="link">Sets the schedule every later stage is measured against.</p></div></li>
+      <li class="stage reveal"><span class="stage-num" aria-hidden="true">02</span><div class="stage-card"><h3>Prepare</h3><span class="status plan">Planned</span><p>Manage gate readiness, aircraft preparation, passenger boarding, and ground-service milestones.</p><p class="link">Boarding and servicing progress decide when you’re ready.</p></div></li>
+      <li class="stage reveal"><span class="stage-num" aria-hidden="true">03</span><div class="stage-card"><h3>Depart</h3><span class="status dev">In active development</span><p>Track operational milestones and respond to delays or constraints.</p><p class="link">A late milestone moves the departure estimate.</p></div></li>
+      <li class="stage reveal"><span class="stage-num" aria-hidden="true">04</span><div class="stage-card"><h3>Operate</h3><span class="status dev">In active development</span><p>Monitor the flight and operational consequences as events unfold.</p><p class="link">Phases and events are recorded as they happen.</p></div></li>
+      <li class="stage reveal"><span class="stage-num" aria-hidden="true">05</span><div class="stage-card"><h3>Arrive</h3><span class="status dev">In active development</span><p>Manage arrival, turnaround completion, and final flight status.</p><p class="link">Arrival is compared with the plan; the flight closes out.</p></div></li>
+      <li class="stage reveal"><span class="stage-num" aria-hidden="true">06</span><div class="stage-card"><h3>Debrief</h3><span class="status dev">In active development</span><p>Understand performance, disruption causes, decisions, and overall operational results.</p><p class="link">Explains what happened, why, and what it led to.</p></div></li>
+    </ol>
+    <p class="stages-note">Stage labels describe the experience as a whole. Today’s internal builds detect flight phases and record a flight timeline; dispatch import, turnaround workflows, delay handling and cause-based debriefs are planned. The Feature Explorer below lists each capability’s status.</p>
+  </div>
+</section>
+
+<!-- D. Feature explorer -->
+<section class="section band" id="features" aria-labelledby="features-title">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">Feature explorer</p>
+      <h2 id="features-title">What Turnline is being built to do</h2>
+      <p>Every capability carries an honest status. Nothing on this page is publicly available yet.</p>
+    </div>
+
+    <dl class="legend" aria-label="Status definitions">
+      <div><dt><span class="status impl">Implemented internally</span></dt><dd>Built and tested in internal development builds. Not publicly available; not yet validated with MSFS.</dd></div>
+      <div><dt><span class="status dev">In active development</span></dt><dd>Being built or validated now.</dd></div>
+      <div><dt><span class="status plan">Planned</span></dt><dd>Designed and on the roadmap; not built yet.</dd></div>
+      <div><dt><span class="status research">Research</span></dt><dd>Feasibility under investigation; may change or not ship.</dd></div>
+    </dl>
+
+    <div class="explorer">
+      <div class="tablist" role="tablist" aria-label="Feature categories" aria-orientation="vertical">
+        <button class="tab" role="tab" id="tab-dispatch" aria-controls="panel-dispatch" aria-selected="true"><svg aria-hidden="true"><use href="#i-dispatch"/></svg>Flight Dispatch &amp; Planning</button>
+        <button class="tab" role="tab" id="tab-ground" aria-controls="panel-ground" aria-selected="false" tabindex="-1"><svg aria-hidden="true"><use href="#i-ground"/></svg>Ground Ops &amp; Turnarounds</button>
+        <button class="tab" role="tab" id="tab-cabin" aria-controls="panel-cabin" aria-selected="false" tabindex="-1"><svg aria-hidden="true"><use href="#i-people"/></svg>Passengers &amp; Cabin</button>
+        <button class="tab" role="tab" id="tab-live" aria-controls="panel-live" aria-selected="false" tabindex="-1"><svg aria-hidden="true"><use href="#i-live"/></svg>Live Flight Operations</button>
+        <button class="tab" role="tab" id="tab-integrations" aria-controls="panel-integrations" aria-selected="false" tabindex="-1"><svg aria-hidden="true"><use href="#i-plug"/></svg>Aircraft &amp; Integrations</button>
+        <button class="tab" role="tab" id="tab-debrief" aria-controls="panel-debrief" aria-selected="false" tabindex="-1"><svg aria-hidden="true"><use href="#i-chart"/></svg>Operational Debrief</button>
+      </div>
+
+      <div class="panels">
+        <section class="panel" id="panel-dispatch" role="tabpanel" aria-labelledby="tab-dispatch" tabindex="0">
+          <div class="panel-head"><div class="panel-icon"><svg aria-hidden="true"><use href="#i-dispatch"/></svg></div><div><h3>Flight Dispatch &amp; Planning</h3><p>The plan the whole flight is measured against.</p></div></div>
+          <ul class="feature-list">
+            <li><div class="fl-top"><strong>SimBrief integration</strong><span class="status plan">Planned</span></div><p>Bring an existing SimBrief plan into Turnline instead of re-entering it, using documented interfaces.</p></li>
+            <li><div class="fl-top"><strong>Operational flight plan information</strong><span class="status plan">Planned</span></div><p>Key plan details available alongside the flight, not buried in a separate document.</p></li>
+            <li><div class="fl-top"><strong>Scheduled &amp; estimated times</strong><span class="status plan">Planned</span></div><p>Scheduled departure and arrival, with estimates that update as the operation changes.</p></li>
+            <li><div class="fl-top"><strong>Fuel &amp; route information</strong><span class="status plan">Planned</span></div><p>Planned fuel and route as the baseline for decisions and the debrief.</p></li>
+            <li><div class="fl-top"><strong>Flight-release workflow</strong><span class="status plan">Planned</span></div><p>A clear point where the flight is released and the operation begins.</p></li>
+          </ul>
+        </section>
+
+        <section class="panel" id="panel-ground" role="tabpanel" aria-labelledby="tab-ground" tabindex="0">
+          <div class="panel-head"><div class="panel-icon"><svg aria-hidden="true"><use href="#i-ground"/></svg></div><div><h3>Ground Operations &amp; Turnarounds</h3><p>Everything that has to happen at the gate before you can push.</p></div></div>
+          <ul class="feature-list">
+            <li><div class="fl-top"><strong>Aircraft turnaround timeline</strong><span class="status plan">Planned</span></div><p>Turnaround activities laid out against the departure time they feed.</p></li>
+            <li><div class="fl-top"><strong>Boarding &amp; baggage milestones</strong><span class="status plan">Planned</span></div><p>Progress you can see, with late milestones flowing into departure readiness.</p></li>
+            <li><div class="fl-top"><strong>Catering &amp; servicing concepts</strong><span class="status plan">Planned</span></div><p>Servicing steps represented in the turnaround, at a level that stays manageable.</p></li>
+            <li><div class="fl-top"><strong>Pushback &amp; departure readiness</strong><span class="status plan">Planned</span></div><p>A single answer to “are we ready to go?” built from the milestones above.</p></li>
+            <li><div class="fl-top"><strong>GSX Pro interoperability</strong><span class="status research">Research</span></div><p>Investigating whether ground-service events can be reflected in the Turnline timeline. Not supported or endorsed today.</p></li>
+          </ul>
+        </section>
+
+        <section class="panel" id="panel-cabin" role="tabpanel" aria-labelledby="tab-cabin" tabindex="0">
+          <div class="panel-head"><div class="panel-icon"><svg aria-hidden="true"><use href="#i-people"/></svg></div><div><h3>Passengers &amp; Cabin</h3><p>The people on board, and how the operation affects them.</p></div></div>
+          <ul class="feature-list">
+            <li><div class="fl-top"><strong>Passenger manifest concepts</strong><span class="status plan">Planned</span></div><p>Who’s booked and who’s boarded, at a level that informs operational decisions.</p></li>
+            <li><div class="fl-top"><strong>Boarding progress</strong><span class="status plan">Planned</span></div><p>Boarding that takes time, can run late, and affects departure.</p></li>
+            <li><div class="fl-top"><strong>Cabin-service coordination</strong><span class="status plan">Planned</span></div><p>Cabin activities placed on the same timeline as the flight.</p></li>
+            <li><div class="fl-top"><strong>Operational passenger impact</strong><span class="status plan">Planned</span></div><p>Delays and decisions reflected in what passengers experience.</p></li>
+            <li><div class="fl-top"><strong>Passenger-experience modeling</strong><span class="status plan">Planned</span></div><p>A longer-term model of how the operation shapes the passenger journey.</p></li>
+          </ul>
+        </section>
+
+        <section class="panel" id="panel-live" role="tabpanel" aria-labelledby="tab-live" tabindex="0">
+          <div class="panel-head"><div class="panel-icon"><svg aria-hidden="true"><use href="#i-live"/></svg></div><div><h3>Live Flight Operations</h3><p>What your aircraft is doing, recorded as part of the operation.</p></div></div>
+          <ul class="feature-list">
+            <li><div class="fl-top"><strong>Simulator telemetry</strong><span class="status dev">In active development</span></div><p>A simulator connection for MSFS 2020 and 2024. Built and tested against simulated data; validation with real MSFS is under way.</p></li>
+            <li><div class="fl-top"><strong>Aircraft state &amp; flight phases</strong><span class="status impl">Implemented internally</span></div><p>Taxi, takeoff, climb, cruise, descent, approach, landing and taxi-in detected from aircraft state.</p></li>
+            <li><div class="fl-top"><strong>Operational milestones</strong><span class="status impl">Implemented internally</span></div><p>Key moments such as departure, takeoff, landing and arrival captured on the flight’s timeline.</p></li>
+            <li><div class="fl-top"><strong>Disruption &amp; delay modeling</strong><span class="status plan">Planned</span></div><p>Events that create delays, and delays that carry consequences downstream.</p></li>
+            <li><div class="fl-top"><strong>Flight-event history</strong><span class="status impl">Implemented internally</span></div><p>Events, interruptions and phase changes stored with the flight.</p></li>
+          </ul>
+        </section>
+
+        <section class="panel" id="panel-integrations" role="tabpanel" aria-labelledby="tab-integrations" tabindex="0">
+          <div class="panel-head"><div class="panel-icon"><svg aria-hidden="true"><use href="#i-plug"/></svg></div><div><h3>Aircraft &amp; Third-Party Integrations</h3><p>Working alongside the simulator and tools you already use.</p></div></div>
+          <ul class="feature-list">
+            <li><div class="fl-top"><strong>SimBrief integration</strong><span class="status plan">Planned</span></div><p>Dispatch plan import, subject to the provider’s documented interfaces and terms.</p></li>
+            <li><div class="fl-top"><strong>SayIntentions interoperability</strong><span class="status research">Research</span></div><p>Under investigation. No working integration or partnership exists.</p></li>
+            <li><div class="fl-top"><strong>GSX Pro integration</strong><span class="status research">Research</span></div><p>Under investigation. No working integration or partnership exists.</p></li>
+            <li><div class="fl-top"><strong>Aircraft ACARS / AOC</strong><span class="status research">Research</span></div><p>Researching what individual aircraft expose and what can be supported responsibly.</p></li>
+            <li><div class="fl-top"><strong>MSFS 2020 / 2024 compatibility</strong><span class="status dev">In active development</span></div><p>Separate validation for each simulator on real hardware. Not yet complete for either.</p></li>
+          </ul>
+        </section>
+
+        <section class="panel" id="panel-debrief" role="tabpanel" aria-labelledby="tab-debrief" tabindex="0">
+          <div class="panel-head"><div class="panel-icon"><svg aria-hidden="true"><use href="#i-chart"/></svg></div><div><h3>Operational Debrief</h3><p>Not just what happened: why, and what it led to.</p></div></div>
+          <ul class="feature-list">
+            <li><div class="fl-top"><strong>Flight timeline</strong><span class="status impl">Implemented internally</span></div><p>A phase-by-phase timeline of each recorded flight.</p></li>
+            <li><div class="fl-top"><strong>Departure &amp; arrival performance</strong><span class="status plan">Planned</span></div><p>Actual times compared with the schedule the flight was planned against.</p></li>
+            <li><div class="fl-top"><strong>Delay classification</strong><span class="status plan">Planned</span></div><p>Delays attributed to causes such as boarding, servicing or air traffic.</p></li>
+            <li><div class="fl-top"><strong>Decision-based analysis</strong><span class="status plan">Planned</span></div><p>The decisions you made and the consequences that followed.</p></li>
+            <li><div class="fl-top"><strong>Persistent flight records</strong><span class="status impl">Implemented internally</span></div><p>Flights stored locally on your PC, so your history doesn’t depend on a cloud account.</p></li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- E. Why different -->
+<section class="section light" id="different" aria-labelledby="different-title">
+  <div class="wrap">
+    <div class="section-head center reveal">
+      <p class="eyebrow">Why Turnline is different</p>
+      <h2 id="different-title">One flight. One connected operation.</h2>
+      <p>Turnline’s focus isn’t a longer feature list. It’s operational cause and effect: what happens in one part of the flight carrying through to the next.</p>
+    </div>
+    <div class="compare">
+      <div class="compare-col reveal">
+        <h3>A typical multi-tool flight today</h3>
+        <p class="sub">Great tools, each running on its own clock.</p>
+        <div class="lanes" aria-hidden="true">
+          <div class="lane"><span class="lane-name">Planning</span><span class="track"><span class="seg" style="left:2%;width:24%"></span></span></div>
+          <div class="lane"><span class="lane-name">Ground</span><span class="track"><span class="seg" style="left:22%;width:20%"></span></span></div>
+          <div class="lane"><span class="lane-name">Cabin</span><span class="track"><span class="seg" style="left:30%;width:16%"></span></span></div>
+          <div class="lane"><span class="lane-name">Flight</span><span class="track"><span class="seg" style="left:46%;width:40%"></span></span></div>
+          <div class="lane"><span class="lane-name">Review</span><span class="track"><span class="seg" style="left:88%;width:10%"></span></span></div>
+        </div>
+        <ul class="check-list">
+          <li><svg aria-hidden="true"><use href="#i-minus"/></svg>Separate tools</li>
+          <li><svg aria-hidden="true"><use href="#i-minus"/></svg>Disconnected timelines</li>
+          <li><svg aria-hidden="true"><use href="#i-minus"/></svg>Independent events</li>
+          <li><svg aria-hidden="true"><use href="#i-minus"/></svg>Limited cross-system consequences</li>
+        </ul>
+      </div>
+      <div class="compare-col connected reveal">
+        <h3>The connected operation Turnline is designed for</h3>
+        <p class="sub">One timeline, where a late milestone moves everything after it.</p>
+        <div class="lanes linked" aria-hidden="true">
+          <div class="lane"><span class="lane-name">Planning</span><span class="track"><span class="seg" style="left:2%;width:24%"></span></span></div>
+          <div class="lane"><span class="lane-name">Ground</span><span class="track"><span class="seg" style="left:26%;width:20%"></span></span></div>
+          <div class="lane"><span class="lane-name">Cabin</span><span class="track"><span class="seg hot" style="left:30%;width:22%"></span></span></div>
+          <div class="lane"><span class="lane-name">Flight</span><span class="track"><span class="seg" style="left:52%;width:36%"></span></span></div>
+          <div class="lane"><span class="lane-name">Debrief</span><span class="track"><span class="seg hot" style="left:88%;width:10%"></span></span></div>
+          <div class="flow"><span class="spine" style="--x:52%"></span></div>
+        </div>
+        <ul class="check-list">
+          <li><svg aria-hidden="true"><use href="#i-check"/></svg>Unified operational timeline</li>
+          <li><svg aria-hidden="true"><use href="#i-check"/></svg>Events influencing downstream operations</li>
+          <li><svg aria-hidden="true"><use href="#i-check"/></svg>Aircraft-aware workflows</li>
+          <li><svg aria-hidden="true"><use href="#i-check"/></svg>Connected operational decisions</li>
+          <li><svg aria-hidden="true"><use href="#i-check"/></svg>Meaningful postflight analysis</li>
+        </ul>
+      </div>
+    </div>
+    <div class="compare-foot reveal">
+      <p><strong>Designed to work alongside your add-ons, not replace them.</strong> Planning tools, ATC services, ground-handling add-ons and aircraft systems each do their job well. Turnline aims to sit across them and give the flight a single operational story.</p>
+      <p><strong>A design goal, not a verdict.</strong> We’re describing what Turnline is being built to do. How well it delivers on that is for you to judge once you can try it.</p>
+    </div>
+  </div>
+</section>
+
+<!-- F. Scenario -->
+<section class="section" id="scenario" aria-labelledby="scenario-title">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">An operation, minute by minute</p>
+      <h2 id="scenario-title">How one boarding delay travels through a flight</h2>
+      <p>A fictional flight showing the kind of cause and effect Turnline is designed to model. <span class="concept-tag">Illustrative scenario</span></p>
+    </div>
+    <div class="scenario">
+      <div class="scn-card reveal" id="scenario-card" data-view="operated">
+        <div class="scn-head">
+          <div>
+            <div class="flight-id">TURNLINE 247</div>
+            <div class="route">Boston (BOS) → Chicago O’Hare (ORD) · fictional flight</div>
+          </div>
+          <div class="view-toggle" role="group" aria-label="Timeline view">
+            <button type="button" data-view="planned" aria-pressed="false">As planned</button>
+            <button type="button" data-view="operated" aria-pressed="true">As operated</button>
+          </div>
+        </div>
+        <ol class="timeline" aria-live="polite">
+          <li><span class="tl-time">13:30</span><span class="tl-dot" aria-hidden="true"></span><div><h3>Dispatch release received</h3><p>Route, fuel and schedule set the baseline: departure 14:35.</p></div></li>
+          <li><span class="tl-time">13:55</span><span class="tl-dot" aria-hidden="true"></span><div><h3>Boarding begins</h3><p>Planned to finish by 14:25 for an on-time departure.</p></div></li>
+          <li class="tl-alert asop"><span class="tl-time">14:12</span><span class="tl-dot" aria-hidden="true"></span><div><h3>Boarding delay identified</h3><p>Nine passengers from a late connecting flight. Decision: hold boarding for them.</p><span class="chip">Cause: passengers / boarding</span></div></li>
+          <li class="tl-effect asop"><span class="tl-time">14:20</span><span class="tl-dot" aria-hidden="true"></span><div><h3>Departure estimate revised</h3><p>Estimated departure moves from 14:35 to 14:43.</p><span class="chip">Est. departure +8 min</span></div></li>
+          <li><span class="tl-time"><span class="asop">14:32</span><span class="plan-only">14:25</span><s class="asop">14:25</s></span><span class="tl-dot" aria-hidden="true"></span><div><h3>Aircraft ready</h3><p class="asop">Doors closed and boarding complete, 7 minutes after plan.</p><p class="plan-only">Doors closed, boarding complete.</p></div></li>
+          <li><span class="tl-time"><span class="asop">14:43</span><span class="plan-only">14:35</span><s class="asop">14:35</s></span><span class="tl-dot" aria-hidden="true"></span><div><h3>Pushback</h3><p class="asop">Off blocks 8 minutes late.</p><p class="plan-only">Off blocks on schedule.</p></div></li>
+          <li><span class="tl-time"><span class="asop">15:02</span><span class="plan-only">14:54</span><s class="asop">14:54</s></span><span class="tl-dot" aria-hidden="true"></span><div><h3>Airborne</h3><p class="asop">Normal taxi; the delay carries into the air.</p><p class="plan-only">Planned takeoff.</p></div></li>
+          <li class="tl-end"><span class="tl-time">Arrival</span><span class="tl-dot" aria-hidden="true"></span><div><h3>Operational debrief</h3><p class="asop">The debrief connects the late departure to the boarding decision that caused it.</p><p class="plan-only">On-time arrival planned at 16:38.</p><span class="chip calm asop">Debrief ready</span></div></li>
+        </ol>
+      </div>
+
+      <aside class="debrief reveal" aria-labelledby="debrief-title">
+        <h3 id="debrief-title">Flight debrief <span class="concept-tag">Concept</span></h3>
+        <dl>
+          <div><dt>Scheduled departure</dt><dd>14:35</dd></div>
+          <div><dt>Actual departure</dt><dd class="late">14:43 (+8)</dd></div>
+          <div><dt>Arrival vs. schedule</dt><dd class="late">+5 min</dd></div>
+          <div><dt>Recovered en route</dt><dd>3 min</dd></div>
+          <div><dt>Primary delay cause</dt><dd>Boarding</dd></div>
+        </dl>
+        <p class="cause"><strong>Decision:</strong> boarding was held for nine connecting passengers. It cost eight minutes at departure, and they made their flight.</p>
+        <p class="concept-note" style="margin-top:14px">Illustrative values. Delay classification and decision analysis are planned features.</p>
+      </aside>
+    </div>
+
+    <div class="why">
+      <div class="reveal"><h3>Decisions have weight</h3><p>Holding for passengers, accepting a late servicing slot or adding fuel each trade one outcome for another. Consequences make those choices mean something.</p></div>
+      <div class="reveal"><h3>Delays have causes</h3><p>A late departure tells you little on its own. Knowing it started with boarding at 14:12 tells you what to do differently.</p></div>
+      <div class="reveal"><h3>The debrief tells the story</h3><p>Connecting cause and effect turns a log of times into an account of how your operation actually ran.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- G. Integrations -->
+<section class="section light" id="integrations" aria-labelledby="integrations-title">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">Integration ecosystem</p>
+      <h2 id="integrations-title">Built to connect your flight sim world.</h2>
+      <p>Turnline is designed to complement the simulator and add-ons you already fly with. Here is where each potential connection stands today.</p>
+    </div>
+    <ul class="providers" role="list">
+      <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">2020</span><span class="status dev">In active development</span></div><h3>Microsoft Flight Simulator 2020</h3><p>Target platform. Simulator connection built; compatibility validation on real hardware is under way.</p></li>
+      <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">2024</span><span class="status dev">In active development</span></div><h3>Microsoft Flight Simulator 2024</h3><p>Target platform, validated separately from 2020. Compatibility validation is under way.</p></li>
+      <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">OFP</span><span class="status plan">Planned</span></div><h3>SimBrief</h3><p>Planned dispatch-plan import using documented interfaces, subject to the provider’s terms.</p></li>
+      <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">ATC</span><span class="status research">Research</span></div><h3>SayIntentions</h3><p>Interoperability under investigation. Not a working integration or a partnership.</p></li>
+      <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">GND</span><span class="status research">Research</span></div><h3>GSX Pro</h3><p>Ground-service interoperability under investigation. Not a working integration or a partnership.</p></li>
+      <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">AOC</span><span class="status research">Research</span></div><h3>Aircraft ACARS / AOC ecosystems</h3><p>Researching aircraft-specific messaging. Support would vary by aircraft and what it exposes.</p></li>
+    </ul>
+    <div class="integration-notes">
+      <p>Integration support depends on documented interfaces, each aircraft’s capabilities, and the permission of the provider involved. Some connections may prove impractical, and we’ll say so if they do. Statuses here are updated as work progresses; “Research” means we’re investigating, not that support is coming.</p>
+      <p class="disclaimer">Product names are shown as plain text for identification only. Turnline is not affiliated with, endorsed by or sponsored by Microsoft, Navigraph (SimBrief), SayIntentions, FSDreamTeam (GSX), or any aircraft developer. No logos are used.</p>
+    </div>
+  </div>
+</section>
+
+<!-- H. Roadmap -->
+<section class="section" id="roadmap" aria-labelledby="roadmap-title">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">Development roadmap</p>
+      <h2 id="roadmap-title">Where Turnline is headed</h2>
+      <p>Phases, not dates. Each phase builds on the one before it.</p>
+    </div>
+    <ol class="roadmap">
+      <li class="phase current reveal"><span class="phase-step">PHASE 1</span><h3>Foundation</h3><span class="status dev">In validation</span><ul><li>Windows desktop shell</li><li>Simulator bridge</li><li>Local flight storage</li><li>Telemetry and lifecycle engine</li><li>Physical MSFS compatibility validation</li></ul></li>
+      <li class="phase reveal"><span class="phase-step">PHASE 2</span><h3>Connected Flight</h3><span class="status plan">Next</span><ul><li>Verified MSFS 2020/2024 telemetry</li><li>SimBrief import</li><li>Improved live flight timeline</li><li>Reliable flight history and debrief</li></ul></li>
+      <li class="phase reveal"><span class="phase-step">PHASE 3</span><h3>Airline Operations</h3><span class="status plan">Planned</span><ul><li>Turnaround workflows</li><li>Passenger and cabin operations</li><li>Operational event and consequence engine</li><li>More advanced delay modeling</li></ul></li>
+      <li class="phase reveal"><span class="phase-step">PHASE 4</span><h3>Interoperability</h3><span class="status research">Research &amp; planned</span><ul><li>SayIntentions</li><li>GSX</li><li>Aircraft ACARS/AOC integrations</li><li>Aircraft-specific capability profiles</li></ul></li>
+      <li class="phase reveal"><span class="phase-step">PHASE 5</span><h3>Expanded Operations</h3><span class="status research">Long-term vision</span><ul><li>Persistent airline operations</li><li>Deeper scheduling</li><li>Performance analytics</li><li>Expanded operational scenarios</li></ul></li>
+    </ol>
+    <p class="roadmap-note">The roadmap is directional and not a commitment. Scope, order and timing may change as we learn from development and testing. We don’t publish delivery dates we can’t stand behind.</p>
+  </div>
+</section>
+
+<!-- I. FAQ -->
+<section class="section light" id="faq" aria-labelledby="faq-title">
+  <div class="wrap faq-grid">
+    <div class="section-head reveal">
+      <p class="eyebrow">FAQ</p>
+      <h2 id="faq-title">Questions, answered honestly</h2>
+      <p>Can’t find what you’re looking for? Email <a href="mailto:support@turnlineops.com" style="color:inherit;font-weight:650">support@turnlineops.com</a>.</p>
+    </div>
+    <div class="faq-list">
+      <details><summary>What is Turnline?</summary><div class="answer"><p>Turnline is an airline operations simulation platform in development for Microsoft Flight Simulator. It aims to connect flight planning, ground handling, passengers, the live flight and the postflight debrief into one operation, so decisions and delays carry through the whole flight.</p></div></details>
+      <details><summary>Is Turnline a flight tracker or an airline management game?</summary><div class="answer"><p>Neither, exactly. A flight tracker records where you flew; an airline management game usually has you run a company from a spreadsheet. Turnline focuses on the operation around each flight you actually fly: the plan, the preparation, what happens on the day, and the debrief.</p></div></details>
+      <details><summary>Which flight simulators will Turnline support?</summary><div class="answer"><p>Turnline is being built for Microsoft Flight Simulator 2020 and Microsoft Flight Simulator 2024 on Windows PCs. Compatibility with each simulator is being validated separately and isn’t confirmed yet for either.</p></div></details>
+      <details><summary>Will Turnline work with SimBrief?</summary><div class="answer"><p>SimBrief import is planned. It isn’t available yet, and it will depend on the provider’s documented interfaces and terms. Turnline isn’t affiliated with Navigraph or SimBrief.</p></div></details>
+      <details><summary>Will it work with SayIntentions and GSX?</summary><div class="answer"><p>Both are under investigation. There’s no working integration or partnership today, and we can’t promise one. Whether it’s possible depends on what each product exposes and on its developer’s permission.</p></div></details>
+      <details><summary>Will aircraft ACARS systems be supported?</summary><div class="answer"><p>We’re researching it. ACARS/AOC features differ from aircraft to aircraft, so any support would be aircraft-specific and depend on what each aircraft makes available. No aircraft is supported today.</p></div></details>
+      <details><summary>Can I use Turnline with my existing add-ons?</summary><div class="answer"><p>That’s the intent. Turnline is designed to run alongside your aircraft, planning tools, ATC and ground-handling add-ons rather than replace them. Specific compatibility will be confirmed through testing before we make any claims.</p></div></details>
+      <details><summary>Is Turnline available now?</summary><div class="answer"><p>No. Turnline is in development and there’s no public download yet. Joining the early-access list is the best way to hear when that changes.</p></div></details>
+      <details><summary>Will Turnline be free?</summary><div class="answer"><p>Pricing hasn’t been decided or announced. We won’t speculate until we can give you a straight answer.</p></div></details>
+      <details><summary>What do I get by joining the early-access list?</summary><div class="answer"><p>Development updates, a look at new features as they’re built, and notice when opportunities to test Turnline become available. Joining doesn’t guarantee access to testing, and there’s nothing to buy.</p><p>You can unsubscribe at any time. See the <a href="privacy.html">privacy notice</a> for how your email is handled.</p></div></details>
+    </div>
+  </div>
+</section>
+
+<!-- J. Early access -->
+<section class="join" id="early-access" aria-labelledby="early-title">
+  <div class="wrap">
+    <div class="join-card reveal">
+      <div class="join-pitch">
+        <p class="eyebrow">Early access</p>
+        <h2 id="early-title">Be part of the next generation of flight simulation.</h2>
+        <p>Get development updates, see new features as they’re built, and hear when opportunities to test Turnline become available.</p>
+        <ul class="benefits">
+          <li><svg aria-hidden="true"><use href="#i-mail"/></svg><div><strong>Development updates</strong><span>Progress as it happens, including what didn’t work.</span></div></li>
+          <li><svg aria-hidden="true"><use href="#i-eye"/></svg><div><strong>New features, as they’re built</strong><span>See the operation take shape stage by stage.</span></div></li>
+          <li><svg aria-hidden="true"><use href="#i-flask"/></svg><div><strong>Testing opportunities</strong><span>Hear first when there’s a chance to try Turnline.</span></div></li>
+        </ul>
+        <p class="join-honest">No purchase or subscription is available. Joining doesn’t guarantee access to testing. Your email is used only for the updates you ask for.</p>
+      </div>
+
+      <div class="join-form">
+        <h3>Join the Turnline Waitlist</h3>
+        <p class="lede">We’ll send one email to confirm your address first.</p>
+        <form id="signup" novalidate>
+          <div class="field">
+            <label for="email">Email address</label>
+            <input id="email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="pilot@example.com" required maxlength="254" aria-describedby="status">
+          </div>
+          <label class="consent"><input type="checkbox" id="consent" required><span>I agree to receive Turnline development news and beta invitations by email. I can unsubscribe at any time.</span></label>
+          <div id="turnstile" class="turnstile-slot" aria-label="Spam prevention check"></div>
+          <button class="btn btn-primary" id="submit" type="submit">Join the Turnline Waitlist</button>
+          <p class="fine">We use your email only for the updates you request. See our <a href="privacy.html">privacy notice</a>.</p>
+          <p class="form-status" id="status" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- K. Footer -->
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="#top" aria-label="Turnline, back to top">
+          <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#0b1f3a" stroke="#2a4a74"/><path d="M8 21.5c4.5-1 8.5-4.5 10.5-10.5" fill="none" stroke="#f4b400" stroke-width="2.6" stroke-linecap="round"/><path d="M14.5 10.5h5v5" fill="none" stroke="#f4b400" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="21.5" r="2" fill="#fff"/></svg>
+          <span>TURNLINE</span>
+        </a>
+        <p class="footer-tag">Every flight. The whole operation.</p>
+        <p class="footer-tag">An airline operations simulation platform in development for Microsoft Flight Simulator 2020 and 2024.</p>
+      </div>
+      <div>
+        <h2>Explore</h2>
+        <ul>
+          <li><a href="#early-access" data-focus-email>Early access</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#roadmap">Roadmap</a></li>
+          <li><a href="#faq">FAQ</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2>Contact &amp; legal</h2>
+        <ul>
+          <li><a href="mailto:support@turnlineops.com">support@turnlineops.com</a></li>
+          <li><a href="privacy.html">Privacy notice</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="legal">
+      <p>© <span id="year">2026</span> Turnline. Turnline is operated by Apex Aviation Training Group LLC. Turnline is a working product name.</p>
+      <p>Microsoft Flight Simulator is a trademark of Microsoft Corporation. SimBrief, SayIntentions, GSX and all other product names are trademarks of their respective owners and are used for identification only. Turnline is an independent product and is not affiliated with, endorsed by or sponsored by Microsoft, Navigraph, SayIntentions, FSDreamTeam or any aircraft developer.</p>
+      <p>Product visuals on this page are concept illustrations of planned functionality, not screenshots of released software.</p>
+    </div>
+  </div>
+</footer>
+
 <script src="config.js"></script>
-<script>
-(() => {
-  const cfg = window.TURNLINE_CONFIG || {};
-  const form = document.getElementById('signup');
-  const status = document.getElementById('status');
-  const submit = document.getElementById('submit');
-  document.getElementById('year').textContent = String(new Date().getFullYear());
-  const result = new URLSearchParams(location.search).get('waitlist');
-  if(result==='confirmed')status.textContent='Your email is confirmed. You are on the Turnline update list.';
-  if(result==='unsubscribed')status.textContent='You have been unsubscribed from Turnline updates.';
-  if(result==='invalid')status.textContent='That link is invalid or expired. You can submit the form again.';
-  if(cfg.turnstileSiteKey && /^https:\/\//.test(cfg.apiUrl || '')){
-    const script=document.createElement('script');script.src='https://challenges.cloudflare.com/turnstile/v0/api.js';script.async=true;script.defer=true;
-    script.onload=()=>window.turnstile?.render('#turnstile',{sitekey:cfg.turnstileSiteKey});document.head.appendChild(script);
-  }
-  form.addEventListener('submit',async e=>{
-    e.preventDefault();status.textContent='';
-    const email=document.getElementById('email').value.trim();
-    if(!form.reportValidity())return;
-    if(!document.getElementById('consent').checked){status.textContent='Please agree to receive these emails.';return;}
-    if(!cfg.apiUrl || !cfg.turnstileSiteKey){status.textContent='Signups are not open yet. Please check back soon.';return;}
-    const captcha=form.querySelector('[name="cf-turnstile-response"]')?.value;
-    if(!captcha){status.textContent='Please complete the verification check.';return;}
-    submit.disabled=true;submit.textContent='Submitting…';
-    try{
-      const params=new URLSearchParams(location.search);
-      const response=await fetch(cfg.apiUrl,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,consent:true,captcha,source:'turnline_waitlist',utm_source:(params.get('utm_source')||'').slice(0,100),utm_medium:(params.get('utm_medium')||'').slice(0,100),utm_campaign:(params.get('utm_campaign')||'').slice(0,100)})});
-      if(!response.ok)throw Error('unavailable');
-      status.textContent='If this address needs confirmation, you will receive an email shortly. Check your inbox.';
-      form.reset();
-    }catch{status.textContent='We could not submit your request. Please try again later.';}
-    finally{submit.disabled=false;submit.textContent='Join the list';window.turnstile?.reset();}
-  });
-})();
-</script></body></html>
+<script src="assets/site.js"></script>
+</body>
+</html>

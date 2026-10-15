@@ -38,20 +38,23 @@ Deno.serve(async(req)=>{
    const {error}=await service().from("turnline_waitlist").update({unsubscribed_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",id);
    return redirect(error?"error":"unsubscribed");
  }
- if(req.method==="GET"){
-   const id=url.searchParams.get("id")||"",token=url.searchParams.get("token")||"",action=url.searchParams.get("action")||"";
-   if(!/^[0-9a-f-]{36}$/i.test(id)||!token||token.length>200)return redirect("invalid");
+ // Require an intentional POST to confirm email; GET is safe against mail scanner prefetch.
+ if(url.searchParams.get("action")==="confirm"&&(req.method==="GET"||req.method==="POST")){
+   const id=url.searchParams.get("id")||"",token=url.searchParams.get("token")||"";
+   if(!/^[0-9a-f-]{36}$/i.test(id)||token.length<32||token.length>200)return redirect("invalid");
    const db=service();
-   if(action==="confirm"){
-     const {data,error}=await db.from("turnline_waitlist").select("id,verification_hash,verification_expires_at,unsubscribed_at,confirmed_at").eq("id",id).maybeSingle();
-     if(error||!data||data.unsubscribed_at)return redirect("invalid");
-     if(data.confirmed_at)return redirect("confirmed");
-     if(Date.parse(data.verification_expires_at)<Date.now()||(await sha(token))!==data.verification_hash)return redirect("invalid");
-     const {error:upErr}=await db.from("turnline_waitlist").update({confirmed_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",id).eq("verification_hash",data.verification_hash).is("unsubscribed_at",null);
-     return redirect(upErr?"error":"confirmed");
+   const {data,error}=await db.from("turnline_waitlist").select("id,verification_hash,verification_expires_at,unsubscribed_at,confirmed_at").eq("id",id).maybeSingle();
+   if(error||!data||data.unsubscribed_at)return redirect("invalid");
+   if(data.confirmed_at)return redirect("confirmed");
+   if(Date.parse(data.verification_expires_at)<Date.now()||(await sha(token))!==data.verification_hash)return redirect("invalid");
+   if(req.method==="GET"){
+     const html='<!doctype html><html lang="en"><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>Confirm Turnline email</title><body style="font:18px system-ui;max-width:640px;margin:10vh auto;padding:20px"><h1>Confirm your Turnline email</h1><p>Confirm that you want Turnline development updates and beta invitations.</p><form method="POST"><button type="submit" style="background:#f4b400;padding:14px 22px;border:0;border-radius:7px;font-weight:bold">Confirm my email</button></form></body></html>';
+     return new Response(html,{headers:{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store","Referrer-Policy":"no-referrer","X-Content-Type-Options":"nosniff"}});
    }
-   return redirect("invalid");
+   const {data:updated,error:upErr}=await db.from("turnline_waitlist").update({confirmed_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",id).eq("verification_hash",data.verification_hash).is("unsubscribed_at",null).is("confirmed_at",null).select("id").maybeSingle();
+   return redirect(upErr||!updated?"error":"confirmed");
  }
+
  if(req.method!=="POST")return response({error:"method_not_allowed"},405);
  if(req.headers.get("origin")!==ORIGIN)return response({error:"invalid_origin"},403);
  let input:Record<string,unknown>;try{const raw=await req.text();if(raw.length>5000)return response({error:"invalid_request"},413);input=JSON.parse(raw);if(!input||typeof input!=="object"||Array.isArray(input))throw Error("invalid");}catch{return response({error:"invalid_request"},400);}
