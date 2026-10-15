@@ -157,6 +157,31 @@ for (const width of [320, 390, 768, 1024, 1280, 1440]) {
   await ctx.close();
 }
 
+// ---------- 3b. footer and privacy navigation ----------
+{
+  const { page, ctx } = await openPage({ width: 1280 });
+  const footer = await page.evaluate(() => [...document.querySelectorAll('footer a')].map((a) => a.getAttribute('href')));
+  check('footer links: early access, roadmap, FAQ, privacy notice, support email', ['#early-access', '#roadmap', '#faq', 'privacy.html', 'mailto:support@turnlineops.com'].every((h) => footer.includes(h)), footer.join(' '));
+  const legal = await page.textContent('footer');
+  check('footer carries tagline, © 2026, operator and non-affiliation language', ['Every flight. The whole operation.', '© 2026 Turnline', 'Apex Aviation Training Group LLC', 'not affiliated with'].every((t) => legal.includes(t)));
+  await ctx.close();
+}
+for (const width of [390, 1280]) {
+  const { page, ctx, log } = await openPage({ width, query: 'privacy.html' });
+  const [sw, iw] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
+  const links = await page.evaluate(() => [...document.querySelectorAll('a[href]')].map((a) => a.getAttribute('href')));
+  const needed = ['index.html', 'index.html#early-access', 'index.html#roadmap', 'index.html#faq', 'mailto:support@turnlineops.com'];
+  check(`privacy page at ${width}px: no horizontal scroll, V2 navigation back to the site, no console errors`, sw <= iw && needed.every((h) => links.includes(h)) && log.errors.length === 0, `scrollWidth ${sw}`);
+  if (width === 1280) {
+    const txt = await page.textContent('main');
+    check('privacy page keeps operator, retention, rights and contact text', ['Apex Aviation Training Group LLC', 'deleted after 30 days', '24 months', 'support@turnlineops.com', '75 Tioga Street'].every((t) => txt.includes(t)));
+    await page.click('a[href="index.html#faq"]');
+    await page.waitForURL(/index\.html#faq$/);
+    check('privacy page footer link lands on the FAQ section', await page.evaluate(() => Math.abs(document.getElementById('faq').getBoundingClientRect().top) < 140));
+  }
+  await ctx.close();
+}
+
 // ---------- 4. interactive sections ----------
 {
   const { page, ctx } = await openPage({ width: 1280 });

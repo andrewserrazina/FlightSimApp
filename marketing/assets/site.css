@@ -538,3 +538,19 @@ section { position: relative; }
   .site-header, .menu-toggle, .view-toggle, .tablist { display: none !important; }
   body { background: #fff; color: #000; }
 }
+
+/* ---------- legal pages (privacy notice) ---------- */
+.legal-nav { display: flex; align-items: center; gap: 14px; }
+.back-link { color: var(--muted); text-decoration: none; font-size: .93rem; font-weight: 550; }
+.back-link:hover { color: var(--white); text-decoration: underline; }
+.legal-main { background: var(--slate-50); color: var(--ink); padding: 72px 0 96px; }
+.prose { max-width: 760px; font-size: 1.04rem; line-height: 1.75; }
+.prose h1 { font-size: clamp(2rem, 4vw, 2.8rem); letter-spacing: -.03em; margin-bottom: 6px; }
+.prose h2 { font-size: 1.3rem; margin: 36px 0 10px; }
+.prose p { margin-top: 14px; color: var(--slate-700); }
+.prose p strong { color: var(--ink); }
+.prose a { color: var(--ink); font-weight: 650; }
+.prose small { color: var(--slate-600); font-size: .9rem; }
+.prose .signoff { margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--slate-200); }
+.legal-main :focus-visible { outline-color: var(--navy); }
+@media (max-width: 520px) { .back-link { display: none; } }
