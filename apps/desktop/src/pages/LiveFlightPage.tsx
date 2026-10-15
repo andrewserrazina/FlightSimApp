@@ -13,6 +13,9 @@ import { StatusIndicator } from "../ui/StatusIndicator";
 import { Tag } from "../ui/Tag";
 import { useRecorderView } from "../recording/RecorderContext";
 import { FlightControls } from "./FlightControls";
+import { FlightPlanBaseline } from "../dispatch/PlanWidgets";
+import { useDispatchView } from "../dispatch/DispatchContext";
+import { routeTitle } from "../dispatch/presentation";
 import { PHASE_LABEL, SIMULATOR_SHORT } from "./labels";
 
 export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
@@ -25,13 +28,16 @@ export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
   const stale = freshness.kind === "stale";
   const rec = useRecorderView().lifecycle;
   const flightOpen = rec.status === "active" || rec.status === "interrupted";
+  const dispatchView = useDispatchView();
+  const flightSnap = flightOpen && rec.flightId ? dispatchView.snapshots[rec.flightId] : undefined;
+  const routeText = flightSnap?.kind === "ready" ? `${routeTitle(flightSnap.snapshot.plan)} (attached plan)` : dispatchView.plan.kind === "ready" ? `${routeTitle(dispatchView.plan.plan)} (imported plan)` : null;
   const phaseText = !flightOpen ? null : rec.status === "interrupted" ? "Interrupted" : rec.phase === "NOT_STARTED" ? null : (PHASE_LABEL[rec.phase] ?? rec.phase);
 
   const flightStrip = (
     <section className="flight-strip" aria-label="Flight summary">
       <dl className="flight-strip__items">
         <StaticMetric label="Flight" value={flightOpen && rec.flightId ? `${rec.status === "interrupted" ? "Interrupted" : "Recording"} · ${rec.flightId.slice(0, 8)}` : "No flight in progress"} unavailable={!flightOpen} />
-        <StaticMetric label="Route" value="Unavailable" unavailable />
+        <StaticMetric label="Route" value={routeText ?? "Unavailable"} unavailable={routeText === null} />
         <StaticMetric label="Flight phase" value={phaseText ? (rec.status === "interrupted" ? phaseText : `${phaseText} (detected)`) : "Not detected"} unavailable={!phaseText} />
         <div className="metric">
           <dt className="metric__label">Connection</dt>
@@ -48,7 +54,7 @@ export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
           </dd>
         </div>
       </dl>
-      <p className="flight-strip__note">Routes and flight numbers come from dispatch import, which is not implemented yet. Phases are detected from telemetry while a flight is recorded.</p>
+      <p className="flight-strip__note">Routes and flight numbers come from a SimBrief plan imported on the Dispatch page. Phases are detected from telemetry while a flight is recorded.</p>
     </section>
   );
 
@@ -57,6 +63,7 @@ export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
       <div className="page">
         {flightStrip}
         <FlightControls navigate={navigate} />
+        <FlightPlanBaseline flightId={flightOpen ? rec.flightId : null} navigate={navigate} />
         <EmptyState title="No live telemetry" action={<Button onClick={() => navigate("welcome")}>Go to connection</Button>}>
           <p>{p.summary}</p>
           <p>Telemetry appears here once the simulator connection reports data. Nothing is shown until then.</p>
@@ -70,6 +77,7 @@ export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
     <div className="page">
       {flightStrip}
       <FlightControls navigate={navigate} />
+      <FlightPlanBaseline flightId={flightOpen ? rec.flightId : null} navigate={navigate} />
       {stale && (
         <div className="banner banner--warn" role="alert">
           <strong>Telemetry is stale.</strong> The values below were last received at <time dateTime={frame.observed_at}>{utcDateTime(frame.observed_at)}</time> and may not reflect the aircraft now.

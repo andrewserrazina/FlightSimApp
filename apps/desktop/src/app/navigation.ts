@@ -1,5 +1,7 @@
 export const PAGES = [
   { id: "welcome", label: "Connection", title: "Welcome & connection", shortcut: "1" },
+  // Alt+6 keeps the established Alt+1…5 shortcuts unchanged.
+  { id: "dispatch", label: "Dispatch", title: "Dispatch", shortcut: "6" },
   { id: "live", label: "Live Flight", title: "Live flight", shortcut: "2" },
   { id: "history", label: "Flight History", title: "Flight history", shortcut: "3" },
   { id: "debrief", label: "Debrief", title: "Flight debrief", shortcut: "4" },

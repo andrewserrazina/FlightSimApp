@@ -1,0 +1,103 @@
+{
+ "fetch": {
+  "userid": "000001",
+  "static_id": {},
+  "status": "Success",
+  "time": "0.0412"
+ },
+ "params": {
+  "request_id": "900000001",
+  "user_id": "000001",
+  "time_generated": "1792066200",
+  "static_id": {},
+  "ofp_layout": "LIDO",
+  "airac": "2610",
+  "units": "kgs"
+ },
+ "general": {
+  "icao_airline": "TLN",
+  "flight_number": "247",
+  "is_etops": "0",
+  "initial_altitude": "36000",
+  "costindex": "35",
+  "route": "SSOXS5 SSOXS DCT BUZRD Q448 MIDDLE BAE4 ORD",
+  "air_distance": "781",
+  "cruise_profile": "CI 35"
+ },
+ "atc": {
+  "callsign": "TLN247"
+ },
+ "origin": {
+  "icao_code": "KBOS",
+  "iata_code": "BOS",
+  "name": "Boston Logan Intl",
+  "plan_rwy": "22R"
+ },
+ "destination": {
+  "icao_code": "KORD",
+  "iata_code": "ORD",
+  "name": "Chicago O'Hare Intl",
+  "plan_rwy": "27L"
+ },
+ "alternate": {
+  "icao_code": "KMDW",
+  "iata_code": "MDW",
+  "name": "Chicago Midway Intl",
+  "plan_rwy": "31C"
+ },
+ "aircraft": {
+  "icaocode": "A20N",
+  "icao_code": "A20N",
+  "name": "A320-251N",
+  "reg": "N247TL",
+  "base_type": "A20N"
+ },
+ "times": {
+  "sched_out": "1792074900",
+  "sched_off": "1792075920",
+  "sched_on": "1792084080",
+  "sched_in": "1792084680",
+  "est_time_enroute": "8160",
+  "sched_block": "9780",
+  "est_block": "9780"
+ },
+ "fuel": {
+  "plan_ramp": "7420",
+  "taxi": "200",
+  "enroute_burn": "5310",
+  "contingency": "266",
+  "alternate_burn": "880",
+  "reserve": "1100",
+  "extra": "0",
+  "min_takeoff": "7556",
+  "plan_takeoff": "7220",
+  "plan_landing": "1910"
+ },
+ "weights": {
+  "est_zfw": "60410",
+  "est_tow": "67630",
+  "est_ldw": "62320",
+  "payload": "15600",
+  "pax_count": "156",
+  "cargo": "1170"
+ },
+ "navlog": {
+  "fix": [
+   {
+    "ident": "BOS",
+    "type": "apt"
+   },
+   {
+    "ident": "SSOXS",
+    "type": "wpt"
+   },
+   {
+    "ident": "ORD",
+    "type": "apt"
+   }
+  ]
+ },
+ "fms_downloads": {
+  "directory": "https://example.invalid/"
+ }
+}

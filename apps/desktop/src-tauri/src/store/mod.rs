@@ -9,6 +9,7 @@
 
 pub mod actor;
 pub mod commands;
+pub mod dispatch;
 pub mod sync;
 
 use std::path::{Path, PathBuf};
@@ -22,6 +23,7 @@ pub const DB_FILE: &str = "flightsim.db";
 const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../../migrations/0001_local_flight_store.sql")),
     (2, include_str!("../../migrations/0002_cloud_sync.sql")),
+    (3, include_str!("../../migrations/0003_dispatch.sql")),
 ];
 
 pub fn latest_schema_version() -> i64 {

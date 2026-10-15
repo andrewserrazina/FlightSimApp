@@ -10,6 +10,9 @@ import { FlightRecorder, type RecorderConfig } from "./recording/FlightRecorder"
 import { RecorderProvider } from "./recording/RecorderContext";
 import type { FlightStore } from "./recording/types";
 import { CloudProvider, type CloudServices } from "./cloud/CloudContext";
+import { DispatchProvider } from "./dispatch/DispatchContext";
+import { DispatchService } from "./dispatch/DispatchService";
+import type { DispatchStore } from "./dispatch/store";
 
 export interface AppProps {
   transport: BridgeTransport | null;
@@ -24,6 +27,10 @@ export interface AppProps {
   recorder?: FlightRecorder;
   /** Optional cloud account + sync services (null = local-only build). Started by the caller. */
   cloud?: CloudServices | null;
+  /** Local store for imported flight plans (SQLite in the native shell). Null outside the shell. */
+  dispatchStore?: DispatchStore | null;
+  /** Injected dispatch service (tests); created from `dispatchStore` otherwise. */
+  dispatch?: DispatchService;
 }
 
 function RetentionSync({ recorder }: { recorder: FlightRecorder }) {
@@ -32,7 +39,12 @@ function RetentionSync({ recorder }: { recorder: FlightRecorder }) {
   return null;
 }
 
-export function App({ transport, storage, store = null, history, initialPage, recorderConfig, recorder: injected, cloud = null }: AppProps) {
+export function App({ transport, storage, store = null, history, initialPage, recorderConfig, recorder: injected, cloud = null, dispatchStore = null, dispatch: injectedDispatch }: AppProps) {
+  // Independent of the recorder: dispatch failures can never reach the recording path.
+  const [dispatch] = useState(() => injectedDispatch ?? new DispatchService({ store: dispatchStore }));
+  useEffect(() => {
+    void dispatch.init();
+  }, [dispatch]);
   const [recorder] = useState(
     () =>
       injected ??
@@ -57,7 +69,9 @@ export function App({ transport, storage, store = null, history, initialPage, re
         <RetentionSync recorder={recorder} />
         <BridgeProvider transport={transport} onAction={(a) => recorder.observe(a)}>
           <FlightHistoryContext.Provider value={repository}>
-            <AppShell {...(initialPage ? { initialPage } : {})} />
+            <DispatchProvider service={dispatch}>
+              <AppShell {...(initialPage ? { initialPage } : {})} />
+            </DispatchProvider>
           </FlightHistoryContext.Provider>
         </BridgeProvider>
       </RecorderProvider>

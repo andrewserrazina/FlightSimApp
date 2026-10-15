@@ -1,0 +1,40 @@
+{
+ "fetch": {
+  "status": "Success"
+ },
+ "params": {
+  "request_id": "900000003",
+  "time_generated": "99",
+  "units": {}
+ },
+ "general": {
+  "icao_airline": "TLN",
+  "flight_number": "9",
+  "initial_altitude": "FL350",
+  "costindex": {},
+  "route": ""
+ },
+ "origin": {
+  "icao_code": "egll",
+  "name": "London Heathrow"
+ },
+ "destination": {
+  "icao_code": "LFPG"
+ },
+ "alternate": {},
+ "aircraft": {
+  "icaocode": "A21N"
+ },
+ "times": {
+  "sched_out": "not-a-time",
+  "est_time_enroute": "-60"
+ },
+ "fuel": {
+  "plan_ramp": "12abc",
+  "taxi": "0"
+ },
+ "weights": {
+  "est_zfw": "",
+  "pax_count": "1.5"
+ }
+}

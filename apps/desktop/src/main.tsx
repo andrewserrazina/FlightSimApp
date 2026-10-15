@@ -8,6 +8,7 @@ import { createTauriTransport, isTauriRuntime, type BridgeTransport } from "./br
 import type { CloudServices } from "./cloud/CloudContext";
 import { safeLocalStorage } from "./preferences/preferences";
 import { createTauriFlightStore } from "./recording/tauriStore";
+import { createTauriDispatchStore, type DispatchStore } from "./dispatch/store";
 import type { FlightStore } from "./recording/types";
 import { SyncEngine } from "./sync/SyncEngine";
 import { createTauriLocalSyncPort } from "./sync/types";
@@ -34,11 +35,12 @@ async function createCloud(): Promise<CloudServices | null> {
 async function boot() {
   let transport: BridgeTransport | null = null;
   let store: FlightStore | null = null;
-  if (isTauriRuntime()) [transport, store] = await Promise.all([createTauriTransport(), createTauriFlightStore()]);
+  let dispatchStore: DispatchStore | null = null;
+  if (isTauriRuntime()) [transport, store, dispatchStore] = await Promise.all([createTauriTransport(), createTauriFlightStore(), createTauriDispatchStore()]);
   const cloud = await createCloud().catch(() => null);
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <App transport={transport} storage={safeLocalStorage()} store={store} cloud={cloud} />
+      <App transport={transport} storage={safeLocalStorage()} store={store} cloud={cloud} dispatchStore={dispatchStore} />
     </StrictMode>,
   );
 }

@@ -28,14 +28,14 @@ const send = async (t: FakeTransport, ...payloads: unknown[]) => {
 };
 
 describe("navigation", () => {
-  it("offers all five pages and marks the current one", async () => {
+  it("offers all six pages and marks the current one", async () => {
     await renderApp();
     const nav = screen.getByRole("navigation", { name: "Primary" });
     const items = within(nav).getAllByRole("button");
-    expect(items.map((b) => b.textContent?.replace(/Alt\+\d/, ""))).toEqual(["Connection", "Live Flight", "Flight History", "Debrief", "Settings"]);
+    expect(items.map((b) => b.textContent?.replace(/Alt\+\d/, ""))).toEqual(["Connection", "Dispatch", "Live Flight", "Flight History", "Debrief", "Settings"]);
     expect(within(nav).getByRole("button", { name: /Connection/ })).toHaveAttribute("aria-current", "page");
 
-    for (const [label, heading] of [["Live Flight", "Live flight"], ["Flight History", "Flight history"], ["Debrief", "Flight debrief"], ["Settings", "Settings & diagnostics"], ["Connection", "Welcome & connection"]] as const) {
+    for (const [label, heading] of [["Dispatch", "Dispatch"], ["Live Flight", "Live flight"], ["Flight History", "Flight history"], ["Debrief", "Flight debrief"], ["Settings", "Settings & diagnostics"], ["Connection", "Welcome & connection"]] as const) {
       fireEvent.click(within(nav).getByRole("button", { name: new RegExp(label) }));
       const h1 = screen.getByRole("heading", { level: 1 });
       expect(h1).toHaveTextContent(heading);
@@ -50,6 +50,9 @@ describe("navigation", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Flight history");
     fireEvent.keyDown(window, { key: "5", altKey: true });
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Settings & diagnostics");
+    fireEvent.keyDown(window, { key: "6", altKey: true });
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Dispatch");
+    fireEvent.keyDown(window, { key: "5", altKey: true });
     fireEvent.keyDown(window, { key: "2" }); // no modifier: ignored
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Settings & diagnostics");
   });

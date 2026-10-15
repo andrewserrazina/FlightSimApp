@@ -19,7 +19,7 @@ export interface DebriefSection {
 
 /** Planned future sections and what they still need. */
 const FUTURE: Array<{ id: string; title: string; detail: string }> = [
-  { id: "departure-arrival", title: "Departure and arrival performance", detail: "Needs planned off-block/on-block times from a dispatch release, which is not implemented yet." },
+  { id: "departure-arrival", title: "Departure and arrival performance", detail: "Takeoff, landing and flight time are compared with an attached SimBrief plan (Planned versus actual). Gate times, boarding and delays are not detected from telemetry." },
   { id: "flight-data", title: "Flight data analysis", detail: "Track points are recorded; analysis (profiles, exceedances) is planned for a later sprint." },
   { id: "fuel", title: "Fuel performance", detail: "Needs planned fuel from dispatch. Recorded fuel is reported only where the aircraft supplies it; no fuel variance is calculated." },
   { id: "delays", title: "Operational delays", detail: "Needs dispatch and turnaround data (later sprint). No delay causes are assigned." },

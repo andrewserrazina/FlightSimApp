@@ -274,7 +274,7 @@ fn completed(id: &str, ended: &str) -> CommitBatch {
 #[test]
 fn migrates_to_schema_v2_with_sync_disabled_by_default() {
     let s = Store::open_in_memory().unwrap();
-    assert_eq!(s.schema_version().unwrap(), 2);
+    assert!(s.schema_version().unwrap() >= 2);
     let st = s.sync_settings().unwrap();
     assert!(!st.enabled);
     assert_eq!(st.bound_account_id, None);
@@ -388,4 +388,118 @@ fn rejects_invalid_sync_input() {
     assert!(s.sync_due("acct", "yesterday", 10).is_err());
     let bad = SyncMark { flight_id: "f".into(), account_id: "a".into(), state: "teleported".into(), attempts: None, next_attempt_at_utc: None, last_error: None, cloud_event_count: None, cloud_interruption_count: None };
     assert!(s.sync_mark(&bad).is_err());
+}
+
+// ---------- dispatch (schema v3) ----------
+
+use super::dispatch::AssociateOutcome;
+
+fn plan_json(request_id: &str) -> serde_json::Value {
+    serde_json::json!({ "schema": "turnline.flight_plan", "version": 1, "source": { "requestId": request_id }, "route": { "text": "DCT" } })
+}
+
+fn snapshot_json(flight_id: &str, request_id: &str) -> serde_json::Value {
+    serde_json::json!({ "schema": "turnline.flight_plan_snapshot", "version": 1, "flightId": flight_id, "associatedAtUtc": "2026-10-15T14:00:00Z", "plan": plan_json(request_id) })
+}
+
+#[test]
+fn dispatch_plan_is_saved_replaced_cleared_and_survives_reopen() {
+    let path = temp_db("dispatch-plan");
+    {
+        let mut s = Store::open(&path).unwrap();
+        assert_eq!(s.schema_version().unwrap(), 3);
+        assert_eq!(s.dispatch_plan().unwrap(), None);
+        s.save_dispatch_plan(&plan_json("111"), "2026-10-15T12:00:00Z").unwrap();
+        s.save_dispatch_plan(&plan_json("222"), "2026-10-15T13:00:00Z").unwrap();
+    }
+    let mut s = Store::open(&path).unwrap(); // restart
+    let got = s.dispatch_plan().unwrap().unwrap();
+    assert_eq!(got.plan.pointer("/source/requestId").unwrap(), "222");
+    assert_eq!(got.imported_at_utc, "2026-10-15T13:00:00Z");
+    s.clear_dispatch_plan().unwrap();
+    assert_eq!(s.dispatch_plan().unwrap(), None);
+}
+
+#[test]
+fn dispatch_plan_rejects_wrong_schema_bad_timestamps_and_oversize() {
+    let mut s = Store::open_in_memory().unwrap();
+    assert!(s.save_dispatch_plan(&serde_json::json!({ "schema": "other" }), "2026-10-15T12:00:00Z").is_err());
+    assert!(s.save_dispatch_plan(&serde_json::json!([1, 2]), "2026-10-15T12:00:00Z").is_err());
+    assert!(s.save_dispatch_plan(&plan_json("1"), "yesterday").is_err());
+    let big = serde_json::json!({ "schema": "turnline.flight_plan", "route": { "text": "X".repeat(70_000) } });
+    assert!(s.save_dispatch_plan(&big, "2026-10-15T12:00:00Z").is_err());
+}
+
+#[test]
+fn corrupt_cached_plan_is_reported_as_null_not_an_error() {
+    let mut s = Store::open_in_memory().unwrap();
+    s.save_dispatch_plan(&plan_json("1"), "2026-10-15T12:00:00Z").unwrap();
+    s.conn.execute("UPDATE dispatch_plan SET plan_json = '{not json' WHERE id = 1", []).unwrap();
+    let got = s.dispatch_plan().unwrap().unwrap();
+    assert_eq!(got.plan, serde_json::Value::Null);
+}
+
+#[test]
+fn snapshot_is_created_once_and_is_immutable() {
+    let mut s = Store::open_in_memory().unwrap();
+    s.commit(&batch(flight("f1", "active", "2026-10-15T13:00:00.000Z"))).unwrap();
+    assert_eq!(s.associate_plan("f1", &snapshot_json("f1", "111")).unwrap(), AssociateOutcome::Created);
+    // A later association (e.g. after a newer import) never replaces the first snapshot.
+    assert_eq!(s.associate_plan("f1", &snapshot_json("f1", "222")).unwrap(), AssociateOutcome::AlreadyAssociated);
+    // Neither do later imports of the current plan.
+    s.save_dispatch_plan(&plan_json("333"), "2026-10-15T15:00:00Z").unwrap();
+    let snap = s.plan_snapshot("f1").unwrap().unwrap();
+    assert_eq!(snap.snapshot.pointer("/plan/source/requestId").unwrap(), "111");
+    // The database itself refuses updates.
+    let err = s.conn.execute("UPDATE flight_plan_snapshots SET snapshot_json = '{}' WHERE flight_id = 'f1'", []).unwrap_err();
+    assert!(err.to_string().contains("immutable"), "{err}");
+    assert_eq!(s.plan_snapshot("f1").unwrap().unwrap().snapshot.pointer("/plan/source/requestId").unwrap(), "111");
+}
+
+#[test]
+fn snapshot_needs_an_existing_flight_and_a_matching_id() {
+    let mut s = Store::open_in_memory().unwrap();
+    assert!(s.associate_plan("nope", &snapshot_json("nope", "1")).is_err());
+    s.commit(&batch(flight("f2", "active", "2026-10-15T13:00:00.000Z"))).unwrap();
+    assert!(s.associate_plan("f2", &snapshot_json("other", "1")).is_err());
+    let mut bad = snapshot_json("f2", "1");
+    bad["associatedAtUtc"] = serde_json::json!("soon");
+    assert!(s.associate_plan("f2", &bad).is_err());
+    assert_eq!(s.plan_snapshot("f2").unwrap(), None);
+}
+
+#[test]
+fn associating_a_plan_never_changes_the_recorded_flight() {
+    let mut s = Store::open_in_memory().unwrap();
+    let mut b = batch(flight("f3", "active", "2026-10-15T13:00:00.000Z"));
+    b.events = vec![event(1, "flight.started")];
+    b.samples = vec![sample(1)];
+    s.commit(&b).unwrap();
+    let before = serde_json::to_value(s.flight_detail("f3").unwrap().unwrap()).unwrap();
+    s.associate_plan("f3", &snapshot_json("f3", "1")).unwrap();
+    // Recording continues normally after association.
+    let mut b2 = batch(flight("f3", "active", "2026-10-15T13:00:00.000Z"));
+    b2.events = vec![event(2, "phase.changed")];
+    s.commit(&b2).unwrap();
+    let after = serde_json::to_value(s.flight_detail("f3").unwrap().unwrap()).unwrap();
+    assert_eq!(before["summary"]["id"], after["summary"]["id"]);
+    assert_eq!(after["events"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn upgrading_a_v2_database_keeps_flights_and_adds_dispatch_tables() {
+    let path = temp_db("v2-upgrade");
+    {
+        // Build a genuine v2 database holding a flight: write with the current store, then remove
+        // everything migration 3 added and mark the file as schema 2.
+        let mut s = Store::open(&path).unwrap();
+        s.commit(&batch(flight("old", "completed", "2026-10-01T10:00:00.000Z"))).unwrap();
+        s.conn.execute_batch("DROP TRIGGER flight_plan_snapshots_immutable; DROP TABLE flight_plan_snapshots; DROP TABLE dispatch_plan; DELETE FROM schema_migrations WHERE version = 3;").unwrap();
+        s.conn.pragma_update(None, "user_version", 2).unwrap();
+    }
+    let mut s = Store::open(&path).unwrap();
+    assert_eq!(s.schema_version().unwrap(), 3);
+    assert_eq!(s.list_flights(10, 0).unwrap().len(), 1);
+    assert_eq!(s.dispatch_plan().unwrap(), None);
+    assert_eq!(s.associate_plan("old", &snapshot_json("old", "9")).unwrap(), AssociateOutcome::Created);
 }

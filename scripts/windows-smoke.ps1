@@ -19,6 +19,8 @@ $ErrorActionPreference = "Stop"
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 $root = Split-Path -Parent $PSScriptRoot
 $cdp = Join-Path $root "scripts/windows-smoke-cdp.mjs"
+# Expected local database schema = number of migrations shipped (apps/desktop/src-tauri/migrations).
+$ExpectedSchema = [string](@(Get-ChildItem (Join-Path $root "apps/desktop/src-tauri/migrations") -Filter "*.sql").Count)
 $results = [ordered]@{}
 $failed = $false
 function Check([string]$name, [bool]$ok, $detail = $null) {
@@ -81,7 +83,7 @@ $pipes = [System.IO.Directory]::GetFiles("\\.\pipe\") | Where-Object { $_ -match
 Check "start.named_pipe_present" (@($pipes).Count -ge 1) (@($pipes).Count)
 Cdp "settings" | Out-Null
 Check "data.database_created" (Test-Path $db) $db
-Check "data.schema_version" ((DbQuery "PRAGMA user_version") -eq "2") (DbQuery "PRAGMA user_version")
+Check "data.schema_version" ((DbQuery "PRAGMA user_version") -eq $ExpectedSchema) "$(DbQuery "PRAGMA user_version") (expected $ExpectedSchema)"
 Cdp "fly" | Out-Null
 $completed = DbQuery "select count(*) from flights where status = 'completed'"
 Check "data.completed_flight_persisted" ([int]$completed -ge 1) $completed
@@ -132,7 +134,7 @@ $exe = AppExe (InstallDir)
 $app = Launch $exe.FullName
 Start-Sleep -Seconds 10
 Check "upgrade.app_starts" ($null -ne (Get-Process -Id $app.Id -ErrorAction SilentlyContinue))
-Check "upgrade.schema_version" ((DbQuery "PRAGMA user_version") -eq "2")
+Check "upgrade.schema_version" ((DbQuery "PRAGMA user_version") -eq $ExpectedSchema) "$(DbQuery "PRAGMA user_version") (expected $ExpectedSchema)"
 $null = $app.CloseMainWindow()
 WaitGone { BridgeProcs } 20 | Out-Null
 Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
