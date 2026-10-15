@@ -40,8 +40,27 @@ export function unixToUtc(v: unknown): string | null {
   return new Date(n * 1000).toISOString().replace(/\.000Z$/, "Z");
 }
 
+/** JSON v2 uses ISO 8601 UTC timestamps; older/XML output may use Unix seconds.
+ * Reject ambiguous local timestamps and out-of-range calendar dates.
+ */
+export function simbriefUtc(v: unknown): string | null {
+  const legacy = unixToUtc(v);
+  if (legacy !== null) return legacy;
+  const t = text(v, 40);
+  if (!t || !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?(?:Z|[+-]\\d{2}:\\d{2})$/.test(t)) return null;
+  const ms = Date.parse(t);
+  return Number.isFinite(ms) && ms >= MIN_EPOCH * 1000 && ms <= MAX_EPOCH * 1000
+    ? new Date(ms).toISOString().replace(/\\.000Z$/, "Z") : null;
+}
+
 /** Durations in seconds, 0 < d ≤ 48 h. */
 export function seconds(v: unknown): number | null {
+  const t = text(v, 40);
+  if (t && /^\\d{1,2}:\\d{2}:\\d{2}$/.test(t)) {
+    const [hours, minutes, secs] = t.split(":").map(Number);
+    const total = hours * 3600 + minutes * 60 + secs;
+    return minutes < 60 && secs < 60 && total > 0 && total <= 48 * 3600 ? total : null;
+  }
   const n = numeric(v);
   return n !== null && Number.isInteger(n) && n > 0 && n <= 48 * 3600 ? n : null;
 }
@@ -115,7 +134,7 @@ export function normalizeOfp(raw: SimbriefOfpV2 | unknown, opts: NormalizeOption
       provider: "simbrief",
       requestId: text(params.request_id, 64),
       pilotId: text(params.user_id, 32) ?? text(isObj(o.fetch) ? o.fetch.userid : undefined, 32),
-      generatedAtUtc: unixToUtc(params.time_generated),
+      generatedAtUtc: simbriefUtc(params.time_generated),
       airac: text(params.airac, 16),
       units,
       requestedBy: opts.requestedBy,
@@ -144,10 +163,10 @@ export function normalizeOfp(raw: SimbriefOfpV2 | unknown, opts: NormalizeOption
       })(),
     },
     schedule: {
-      outUtc: unixToUtc(times.sched_out),
-      offUtc: unixToUtc(times.sched_off),
-      onUtc: unixToUtc(times.sched_on),
-      inUtc: unixToUtc(times.sched_in),
+      outUtc: simbriefUtc(times.sched_out),
+      offUtc: simbriefUtc(times.sched_off),
+      onUtc: simbriefUtc(times.sched_on),
+      inUtc: simbriefUtc(times.sched_in),
       enrouteSeconds: seconds(times.est_time_enroute),
       blockSeconds: seconds(times.est_block) ?? seconds(times.sched_block),
     },
