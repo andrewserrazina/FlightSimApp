@@ -7,7 +7,7 @@ import { comparePlanToFlight } from "../src/dispatch/comparison";
 import { DispatchService } from "../src/dispatch/DispatchService";
 import { parseImportedFlightPlan, type ImportedFlightPlan } from "../src/dispatch/model";
 import { buildRequestUrl, classifyFetchStatus, fetchLatestOfp, normalizeIdentity } from "../src/dispatch/simbrief/client";
-import { normalizeOfp, numeric, unixToUtc } from "../src/dispatch/simbrief/normalize";
+import { normalizeOfp, numeric, simbriefUtc, seconds, unixToUtc } from "../src/dispatch/simbrief/normalize";
 import { MemoryDispatchStore } from "../src/dispatch/store";
 import { parsePreferences } from "../src/preferences/preferences";
 import { FlightRecorder } from "../src/recording/FlightRecorder";
@@ -74,6 +74,41 @@ describe("normalization", () => {
     expect(p.weights.passengers).toBe(156);
     expect(p.source).toEqual({ provider: "simbrief", requestId: "900000001", pilotId: "000001", generatedAtUtc: "2026-10-15T12:10:00Z", airac: "2610", units: "kg", requestedBy: "username" });
     expect(parseImportedFlightPlan(JSON.parse(JSON.stringify(p)))).not.toBeNull();
+  });
+
+  it("parses SimBrief json=v2 ISO schedule and HH:MM:SS durations", () => {
+    const fixture = fx("ofp-v2-kgs.json");
+    fixture.params.time_generated = "2026-10-15T12:10:00Z";
+    fixture.times = {
+      sched_out: "2026-10-15T14:35:00Z",
+      sched_off: "2026-10-15T14:52:00Z",
+      sched_on: "2026-10-15T17:08:00Z",
+      sched_in: "2026-10-15T17:18:00Z",
+      est_time_enroute: "02:16:00",
+      est_block: "02:43:00",
+    };
+    const result = normalizeOfp(fixture, { requestedBy: "username", importedAtUtc: IMPORTED });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.plan.source.generatedAtUtc).toBe("2026-10-15T12:10:00Z");
+    expect(result.plan.schedule).toEqual({
+      outUtc: "2026-10-15T14:35:00Z",
+      offUtc: "2026-10-15T14:52:00Z",
+      onUtc: "2026-10-15T17:08:00Z",
+      inUtc: "2026-10-15T17:18:00Z",
+      enrouteSeconds: 8160,
+      blockSeconds: 9780,
+    });
+  });
+
+  it("rejects ambiguous dates and invalid durations but accepts timezone offsets", () => {
+    expect(simbriefUtc("2026-10-15T14:35:00Z")).toBe("2026-10-15T14:35:00Z");
+    expect(simbriefUtc("2026-10-15T10:35:00-04:00")).toBe("2026-10-15T14:35:00Z");
+    expect(simbriefUtc("2026-10-15 14:35:00")).toBeNull();
+    expect(simbriefUtc("2026-13-15T14:35:00Z")).toBeNull();
+    expect(seconds("02:16:00")).toBe(8160);
+    expect(seconds("00:65:00")).toBeNull();
+    expect(seconds("01:00:90")).toBeNull();
   });
 
   it("converts pounds to kilograms and keeps the original pounds", () => {
