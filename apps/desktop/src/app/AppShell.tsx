@@ -3,6 +3,7 @@ import { useBridgeState } from "../bridge/BridgeContext";
 import { presentConnection } from "../domain/connectionPresentation";
 import { describeFreshness, telemetryFreshness } from "../domain/freshness";
 import { DebriefPage } from "../pages/DebriefPage";
+import { DispatchPage } from "../pages/DispatchPage";
 import { FlightHistoryPage } from "../pages/FlightHistoryPage";
 import { LiveFlightPage } from "../pages/LiveFlightPage";
 import { SettingsPage } from "../pages/SettingsPage";
@@ -138,6 +139,7 @@ export function AppShell({ initialPage = "welcome" }: { initialPage?: Navigation
         </ErrorBoundary>
         <ErrorBoundary key={nav.page} label={current.label}>
           {nav.page === "welcome" && <WelcomePage navigate={navigate} />}
+          {nav.page === "dispatch" && <DispatchPage navigate={navigate} />}
           {nav.page === "live" && <LiveFlightPage navigate={navigate} />}
           {nav.page === "history" && <FlightHistoryPage navigate={navigate} />}
           {nav.page === "debrief" && <DebriefPage flightId={nav.debriefFlightId} navigate={navigate} />}

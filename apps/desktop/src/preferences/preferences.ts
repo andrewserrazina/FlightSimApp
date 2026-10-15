@@ -13,6 +13,9 @@ export interface Preferences {
   showLocalTime: boolean;
   /** Retention: keep detailed track samples for this many most recent flights. */
   keepDetailedFlights: number;
+  /** SimBrief lookup: Navigraph alias (preferred) or numeric Pilot ID. Public identifiers, not credentials. */
+  simbriefIdKind: "username" | "pilot_id";
+  simbriefId: string;
 }
 
 export const STORAGE_KEY = "flightsim.preferences.v1";
@@ -28,7 +31,12 @@ export const DEFAULT_PREFERENCES: Preferences = {
   staleWarningSeconds: 3,
   showLocalTime: false,
   keepDetailedFlights: 100,
+  simbriefIdKind: "username",
+  simbriefId: "",
 };
+
+/** Same character rules as the SimBrief client; anything else is not stored. */
+const SIMBRIEF_ID_RE = { username: /^[A-Za-z0-9 _.\-]{0,64}$/, pilot_id: /^\d{0,10}$/ } as const;
 
 /** Accept only well-formed fields; anything else falls back to the default for that field. */
 export function parsePreferences(raw: unknown): Preferences {
@@ -45,7 +53,14 @@ export function parsePreferences(raw: unknown): Preferences {
       typeof o.keepDetailedFlights === "number" && Number.isInteger(o.keepDetailedFlights) && o.keepDetailedFlights >= RETENTION_MIN && o.keepDetailedFlights <= RETENTION_MAX
         ? o.keepDetailedFlights
         : DEFAULT_PREFERENCES.keepDetailedFlights,
+    ...parseSimbrief(o),
   };
+}
+
+function parseSimbrief(o: Record<string, unknown>): Pick<Preferences, "simbriefIdKind" | "simbriefId"> {
+  const kind = o.simbriefIdKind === "pilot_id" ? "pilot_id" : "username";
+  const id = typeof o.simbriefId === "string" && SIMBRIEF_ID_RE[kind].test(o.simbriefId) ? o.simbriefId : "";
+  return { simbriefIdKind: kind, simbriefId: id };
 }
 
 export function effectiveAdapter(p: Preferences): SimulatorId {

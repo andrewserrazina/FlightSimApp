@@ -145,3 +145,32 @@ pub async fn sync_overview(store: State<'_, StoreHandle>) -> Result<SyncOverview
 pub async fn sync_local_only_ids(store: State<'_, StoreHandle>) -> Result<Vec<String>, StoreError> {
     store.call(|slot| slot.get()?.sync_local_only_ids()).await
 }
+
+// ---------- dispatch (imported flight plans, schema v3; local only) ----------
+
+use super::dispatch::{AssociateOutcome, SnapshotOut, StoredPlanOut};
+
+#[tauri::command]
+pub async fn dispatch_plan_get(store: State<'_, StoreHandle>) -> Result<Option<StoredPlanOut>, StoreError> {
+    store.call(|slot| slot.get()?.dispatch_plan()).await
+}
+
+#[tauri::command]
+pub async fn dispatch_plan_save(store: State<'_, StoreHandle>, plan: serde_json::Value, imported_at_utc: String) -> Result<(), StoreError> {
+    store.call(move |slot| slot.get()?.save_dispatch_plan(&plan, &imported_at_utc)).await
+}
+
+#[tauri::command]
+pub async fn dispatch_plan_clear(store: State<'_, StoreHandle>) -> Result<(), StoreError> {
+    store.call(|slot| slot.get()?.clear_dispatch_plan()).await
+}
+
+#[tauri::command]
+pub async fn flight_plan_associate(store: State<'_, StoreHandle>, flight_id: String, snapshot: serde_json::Value) -> Result<AssociateOutcome, StoreError> {
+    store.call(move |slot| slot.get()?.associate_plan(&flight_id, &snapshot)).await
+}
+
+#[tauri::command]
+pub async fn flight_plan_snapshot(store: State<'_, StoreHandle>, flight_id: String) -> Result<Option<SnapshotOut>, StoreError> {
+    store.call(move |slot| slot.get()?.plan_snapshot(&flight_id)).await
+}

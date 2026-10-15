@@ -9,6 +9,7 @@ import { EmptyState } from "../ui/EmptyState";
 import { StaticMetric } from "../ui/Metric";
 import { Panel } from "../ui/Panel";
 import { Tag } from "../ui/Tag";
+import { PlanComparisonPanel } from "../dispatch/PlanWidgets";
 
 const AVAILABILITY: Record<SectionAvailability, { label: string; tone: "ok" | "neutral" | "info" }> = {
   available: { label: "Recorded data", tone: "ok" },
@@ -68,6 +69,7 @@ export function DebriefPage({ flightId, navigate }: { flightId: string | null; n
       <p className="muted">The debrief only shows what was actually recorded. It does not produce landing scores, safety ratings, passenger satisfaction, fuel variance or delay causes.</p>
 
       <div className="grid grid--debrief">
+        {detail && <PlanComparisonPanel detail={detail} />}
         {sections.map((s) => (
           <Panel key={s.id} title={s.title} className={s.id === "overview" || s.id === "timeline" ? "span-all" : ""} actions={<Tag tone={AVAILABILITY[s.availability].tone}>{AVAILABILITY[s.availability].label}</Tag>}>
             {s.availability !== "available" && <p className="unavailable-text">{s.detail}</p>}
