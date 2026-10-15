@@ -65,8 +65,8 @@ The SimBrief alias or Pilot ID is stored with the other non-sensitive UI prefere
 
 `null` means **unavailable** and is shown as "Unavailable". Weights keep the planned value and unit (`original`)
 next to normalized kilograms (× 0.45359237, rounded to 0.1 kg). When `params.units` is missing or unrecognised,
-all weights are unavailable rather than guessed. Timestamps are SimBrief's Unix seconds, converted to UTC
-ISO-8601; an implausible value (before 2001 or after 2100, or not an integer) becomes unavailable.
+all weights are unavailable rather than guessed. Timestamps are SimBrief json=v2 ISO 8601 (with legacy Unix seconds accepted), converted to UTC
+ISO-8601; an implausible value (before 2001 or after 2100, or malformed) becomes unavailable. Duration fields accept json=v2 HH:MM:SS and legacy integer seconds.
 
 | Turnline field | SimBrief `json=v2` path | Provenance |
 |---|---|---|
@@ -80,7 +80,7 @@ ISO-8601; an implausible value (before 2001 or after 2100, or not an integer) be
 | origin / destination / alternate | `origin`, `destination`, `alternate` (`icao_code`, `iata_code`, `name`, `plan_rwy`); for an alternate array, the first entry | documented (objects) |
 | aircraft | `aircraft.icaocode` (or `icao_code`), `name`, `reg` | community |
 | route | `general.route`, `general.initial_altitude` (ft), `general.costindex` (kept as text), `general.air_distance` | `initial_altitude` documented |
-| schedule | `times.sched_out/off/on/in` (Unix s), `est_time_enroute`, `est_block` or `sched_block` (s) | community |
+| schedule | `times.sched_out/off/on/in` (ISO 8601 in json=v2), `est_time_enroute`, `est_block` or `sched_block` (HH:MM:SS in json=v2) | community |
 | fuel | `fuel.plan_ramp`, `taxi`, `enroute_burn`, `contingency`, `alternate_burn`, `reserve`, `extra`, `min_takeoff`, `plan_takeoff`, `plan_landing` | `plan_ramp` documented |
 | weights | `weights.est_zfw`, `est_tow`, `est_ldw`, `payload`, `pax_count` | `est_zfw`, `payload`, `pax_count` documented |
 
@@ -217,3 +217,7 @@ the CI run for this branch.
   real clock differ, deviations are suppressed only when more than 6 h apart.
 - **Fuel:** fuel burn comparison is not implemented.
 - **One plan:** only the latest imported plan is kept, plus the snapshots attached to flights.
+
+## 2026-10-15 real-account finding
+
+First real account acceptance: import, duplicate handling, persistence and flight attachment passed, but scheduled off-block/takeoff/on-block displayed incorrectly or unavailable. Cause: original parser expected Unix seconds while json=v2 uses ISO timestamps, and also expected numeric durations instead of HH:MM:SS. Fixed in the feature branch; **not yet revalidated on Windows against the user's live OFP**. Offline and debrief acceptance are still pending. Existing attached flight snapshots are immutable and are **not retroactively repaired** by a newer import: verify the corrected current import and attach to a new flight for debrief.
