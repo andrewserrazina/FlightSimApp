@@ -54,11 +54,21 @@ stays on every page until the owner approves discoverability and brand clearance
 - **Not covered by automation:** the live production signup, delivery and confirmation flow
   (`docs/testing/waitlist-live-acceptance.md`). That is a manual owner test.
 
-### Recommendations (not done in V2)
-- **Content-Security-Policy:** consider a Cloudflare Pages `_headers` file with a CSP (allow
-  `challenges.cloudflare.com` for scripts and frames, and the edge-function origin for `connect-src`). No CSP
-  exists today; adding one changes the deployment posture, so it needs owner approval and a live Turnstile
-  check.
+### Post-V2 production hardening
+- `_headers` now adds X-Content-Type-Options, frame protection, referrer and permissions restrictions, and
+  a **Content-Security-Policy-Report-Only** policy. This CSP does not block resources yet: inspect browser
+  console warnings (Safari and Chromium) with real Turnstile and signup before enforcing. It currently permits
+  inline scripts/styles because of the existing bootstrap, styling, and Turnstile integration; reduce these
+  exceptions after checking production behavior. Cloudflare Pages applies these to static assets only.
+- Root `404.html` avoids Cloudflare Pages' SPA fallback returning the homepage for missing assets. Verify
+  `/assets/definitely-missing.css` gives a true HTTP 404, while `/assets/site.css` returns CSS.
+- Keep `noindex,nofollow` and the X-Robots-Tag until explicit public-search/brand approval.
+- These changes require a new production Pages deployment; GitHub commit alone does not verify the live site.
+- **Safari acceptance (owner, iPhone):** 8/8 key mobile interactions reported passed on 2026-10-15,
+  including navigation, tabs, scenario toggle, roadmap, FAQ, Turnstile rendering and privacy links.
+  This was a manual browser check, not a production signup or security penetration test.
+- **Still pending:** live confirm/unsubscribe regression for the latest Edge Function, rate-limit/invalid-captcha
+  public HTTP tests, Safari CSP warning review, accessibility screen-reader pass and trademark review.
 
 ## Earlier MVP notes (V1)
 

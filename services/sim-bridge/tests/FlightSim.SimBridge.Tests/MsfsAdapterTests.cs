@@ -323,7 +323,10 @@ public class MsfsAdapterTests
         var raw = new ConcurrentQueue<MsfsDiagnostic>();
         adapter.Diagnostics = raw.Enqueue;
         var output = new CollectingOutput();
-        var session = new BridgeSession(adapter, output, TestSamples.FastOptions);
+        // Staleness must outlast the 400 ms hold: with FastOptions (LostAfter 400 ms) the session reconnects
+        // before the hold expires, every reconnect restarts it, and no frame ever arrives on a slow runner.
+        var options = new BridgeSessionOptions { StaleAfter = TimeSpan.FromSeconds(3), LostAfter = TimeSpan.FromSeconds(6), Backoff = TestSamples.FastOptions.Backoff, AdapterShutdownGrace = TestSamples.FastOptions.AdapterShutdownGrace };
+        var session = new BridgeSession(adapter, output, options);
         using var cts = new CancellationTokenSource();
         var run = session.RunAsync(cts.Token);
 
