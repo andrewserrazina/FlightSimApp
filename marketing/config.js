@@ -1,6 +1,6 @@
-// PUBLIC variables ONLY. Copy to config.js when deploying an approved staging site.
-// Never put Supabase service-role, Turnstile secret or Resend API keys here.
+// PUBLIC variables ONLY. Never put Supabase service-role, Turnstile secret or Resend API keys here.
+// Signup API deliberately disabled until backend hardening and validation are complete.
 window.TURNLINE_CONFIG = {
   apiUrl: "",
-  turnstileSiteKey: ""
+  turnstileSiteKey: "0x4AAAAAAFXH8aeHSw0iRd2j"
 };
