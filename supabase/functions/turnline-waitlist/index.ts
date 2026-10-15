@@ -27,6 +27,17 @@ Deno.serve(async(req)=>{
  if(!allowConfigured())return response({error:"service_unconfigured"},503);
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors});
  const url=new URL(req.url);
+ // Email clients and security scanners may prefetch GET URLs. Never unsubscribe on GET.
+ if(url.searchParams.get("action")==="unsubscribe"&&(req.method==="GET"||req.method==="POST")){
+   const id=url.searchParams.get("id")||"",token=url.searchParams.get("token")||"";
+   if(!/^[0-9a-f-]{36}$/i.test(id)||!/^[0-9a-f]{64}$/.test(token)||(await hmac("unsubscribe:"+id))!==token)return redirect("invalid");
+   if(req.method==="GET"){
+     const html='<!doctype html><html lang="en"><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>Unsubscribe from Turnline</title><body style="font:18px system-ui;max-width:640px;margin:10vh auto;padding:20px"><h1>Turnline email preferences</h1><p>Confirm that you want to unsubscribe from Turnline updates.</p><form method="POST"><button type="submit" style="background:#f4b400;padding:14px 22px;border:0;border-radius:7px;font-weight:bold">Unsubscribe me</button></form></body></html>';
+     return new Response(html,{headers:{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store","Referrer-Policy":"no-referrer","X-Content-Type-Options":"nosniff"}});
+   }
+   const {error}=await service().from("turnline_waitlist").update({unsubscribed_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",id);
+   return redirect(error?"error":"unsubscribed");
+ }
  if(req.method==="GET"){
    const id=url.searchParams.get("id")||"",token=url.searchParams.get("token")||"",action=url.searchParams.get("action")||"";
    if(!/^[0-9a-f-]{36}$/i.test(id)||!token||token.length>200)return redirect("invalid");
@@ -38,11 +49,6 @@ Deno.serve(async(req)=>{
      if(Date.parse(data.verification_expires_at)<Date.now()||(await sha(token))!==data.verification_hash)return redirect("invalid");
      const {error:upErr}=await db.from("turnline_waitlist").update({confirmed_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",id).eq("verification_hash",data.verification_hash).is("unsubscribed_at",null);
      return redirect(upErr?"error":"confirmed");
-   }
-   if(action==="unsubscribe"){
-     if((await hmac("unsubscribe:"+id))!==token)return redirect("invalid");
-     const {error}=await db.from("turnline_waitlist").update({unsubscribed_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",id);
-     return redirect(error?"error":"unsubscribed");
    }
    return redirect("invalid");
  }
