@@ -67,6 +67,25 @@ async function importWith(f: Awaited<ReturnType<typeof renderDispatch>>, body: u
 }
 
 describe("Dispatch page", () => {
+  it("shows scheduled and estimated out/off/on/in from an ISO-time OFP", async () => {
+    const f = await renderDispatch();
+    await importWith(f, fx("ofp-v2-iso-times.json"));
+    const table = screen.getAllByRole("table").find((t) => within(t).queryByRole("columnheader", { name: "Estimated" }))!;
+    const row = (label: string) => within(table).getByRole("row", { name: new RegExp(`^${label}`) });
+    expect(row("Off-block")).toHaveTextContent(/14:35Z.*14:35Z/);
+    expect(row("Takeoff")).toHaveTextContent(/14:52Z.*14:52Z/);
+    expect(row("Landing")).toHaveTextContent(/17:08Z.*17:11Z/);
+    expect(row("On-block")).toHaveTextContent(/17:18Z.*17:21Z/);
+    expect(within(table).queryByText("Unavailable")).toBeNull();
+  });
+
+  it("shows estimated times as unavailable when the OFP has none", async () => {
+    const f = await renderDispatch();
+    await importWith(f, fx("ofp-v2-kgs.json"));
+    const table = screen.getAllByRole("table").find((t) => within(t).queryByRole("columnheader", { name: "Estimated" }))!;
+    expect(within(table).getByRole("row", { name: /^Off-block/ })).toHaveTextContent(/14:35Z.*Unavailable/);
+  });
+
   it("starts empty and only allows an import once an alias is entered", async () => {
     await renderDispatch();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Dispatch");

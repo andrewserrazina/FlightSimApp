@@ -294,13 +294,36 @@ function PlanOverview({ plan, onClear, onAssociated, navigate }: { plan: Importe
         </Panel>
 
         <Panel title="Schedule (UTC)">
+          <table className="table table--compact">
+            <thead>
+              <tr>
+                <th scope="col">
+                  <span className="visually-hidden">Event</span>
+                </th>
+                <th scope="col">Scheduled</th>
+                <th scope="col">Estimated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(
+                [
+                  ["Off-block", s.outUtc, s.estimated?.outUtc ?? null],
+                  ["Takeoff", s.offUtc, s.estimated?.offUtc ?? null],
+                  ["Landing", s.onUtc, s.estimated?.onUtc ?? null],
+                  ["On-block", s.inUtc, s.estimated?.inUtc ?? null],
+                ] as const
+              ).map(([label, sched, est]) => (
+                <tr key={label}>
+                  <th scope="row">{label}</th>
+                  <td className="num">{unavailableClass(fmtUtcTime(sched))}</td>
+                  <td className="num">{unavailableClass(fmtUtcTime(est))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
           <KeyValueList
             columns={1}
             items={[
-              ["Scheduled off-block", unavailableClass(fmtUtcTime(s.outUtc))],
-              ["Scheduled takeoff", unavailableClass(fmtUtcTime(s.offUtc))],
-              ["Scheduled landing", unavailableClass(fmtUtcTime(s.onUtc))],
-              ["Scheduled on-block", unavailableClass(fmtUtcTime(s.inUtc))],
               ["Estimated flight time", unavailableClass(fmtDuration(s.enrouteSeconds))],
               ["Estimated block time", unavailableClass(fmtDuration(s.blockSeconds))],
             ]}

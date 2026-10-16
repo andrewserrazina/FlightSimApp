@@ -33,17 +33,53 @@ export function numeric(v: unknown): number | null {
 const MIN_EPOCH = Date.UTC(2001, 0, 1) / 1000;
 const MAX_EPOCH = Date.UTC(2100, 0, 1) / 1000;
 
-/** SimBrief timestamps are Unix seconds (as strings). Implausible values → null. */
-export function unixToUtc(v: unknown): string | null {
+const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|[+-]\d{2}:?\d{2})$/i;
+
+/**
+ * A SimBrief timestamp → canonical UTC ISO ("…Z"). Accepted forms: Unix seconds (number or numeric
+ * string) and ISO 8601 with an explicit `Z` or offset. Real OFPs have been seen in both forms, so
+ * neither is assumed. A timestamp without a zone is ambiguous and is not guessed. Implausible → null.
+ */
+export function timestampUtc(v: unknown): string | null {
+  let ms: number | null = null;
   const n = numeric(v);
-  if (n === null || !Number.isInteger(n) || n < MIN_EPOCH || n > MAX_EPOCH) return null;
-  return new Date(n * 1000).toISOString().replace(/\.000Z$/, "Z");
+  if (n !== null) {
+    if (!Number.isInteger(n)) return null;
+    ms = n * 1000;
+  } else {
+    const t = text(v, 40);
+    const m = t ? ISO_RE.exec(t) : null;
+    if (!m) return null;
+    const [, y, mo, d, h, mi, sec = "00", zone] = m;
+    const local = Date.UTC(+y!, +mo! - 1, +d!, +h!, +mi!, +sec);
+    const check = new Date(local);
+    // Reject impossible calendar values (Date.UTC silently rolls 2026-02-31 into March).
+    if (check.getUTCMonth() !== +mo! - 1 || check.getUTCDate() !== +d! || +h! > 23 || +mi! > 59 || +sec > 59) return null;
+    let offsetMin = 0;
+    if (zone!.toUpperCase() !== "Z") {
+      const z = zone!.replace(":", "");
+      const oh = +z.slice(1, 3);
+      const om = +z.slice(3, 5);
+      if (oh > 14 || om > 59) return null;
+      offsetMin = (z[0] === "-" ? -1 : 1) * (oh * 60 + om);
+    }
+    ms = local - offsetMin * 60_000;
+  }
+  if (ms < MIN_EPOCH * 1000 || ms > MAX_EPOCH * 1000) return null;
+  return new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
-/** Durations in seconds, 0 < d ≤ 48 h. */
+const MAX_DURATION_S = 48 * 3600;
+
+/** Durations: whole seconds (number or numeric string) or "HH:MM" / "HH:MM:SS". 0 < d ≤ 48 h. */
 export function seconds(v: unknown): number | null {
-  const n = numeric(v);
-  return n !== null && Number.isInteger(n) && n > 0 && n <= 48 * 3600 ? n : null;
+  let n = numeric(v);
+  if (n === null) {
+    const m = /^(\d{1,2}):([0-5]\d)(?::([0-5]\d))?$/.exec(text(v, 16) ?? "");
+    if (!m) return null;
+    n = +m[1]! * 3600 + +m[2]! * 60 + +(m[3] ?? 0);
+  }
+  return Number.isInteger(n) && n > 0 && n <= MAX_DURATION_S ? n : null;
 }
 
 /** `params.units`: "kgs" / "lbs" (any case/plural). Anything else is not guessed. */
@@ -115,7 +151,7 @@ export function normalizeOfp(raw: SimbriefOfpV2 | unknown, opts: NormalizeOption
       provider: "simbrief",
       requestId: text(params.request_id, 64),
       pilotId: text(params.user_id, 32) ?? text(isObj(o.fetch) ? o.fetch.userid : undefined, 32),
-      generatedAtUtc: unixToUtc(params.time_generated),
+      generatedAtUtc: timestampUtc(params.time_generated),
       airac: text(params.airac, 16),
       units,
       requestedBy: opts.requestedBy,
@@ -144,11 +180,17 @@ export function normalizeOfp(raw: SimbriefOfpV2 | unknown, opts: NormalizeOption
       })(),
     },
     schedule: {
-      outUtc: unixToUtc(times.sched_out),
-      offUtc: unixToUtc(times.sched_off),
-      onUtc: unixToUtc(times.sched_on),
-      inUtc: unixToUtc(times.sched_in),
-      enrouteSeconds: seconds(times.est_time_enroute),
+      outUtc: timestampUtc(times.sched_out),
+      offUtc: timestampUtc(times.sched_off),
+      onUtc: timestampUtc(times.sched_on),
+      inUtc: timestampUtc(times.sched_in),
+      estimated: {
+        outUtc: timestampUtc(times.est_out),
+        offUtc: timestampUtc(times.est_off),
+        onUtc: timestampUtc(times.est_on),
+        inUtc: timestampUtc(times.est_in),
+      },
+      enrouteSeconds: seconds(times.est_time_enroute) ?? seconds(times.sched_time_enroute),
       blockSeconds: seconds(times.est_block) ?? seconds(times.sched_block),
     },
     fuel: {
