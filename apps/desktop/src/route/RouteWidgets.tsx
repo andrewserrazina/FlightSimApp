@@ -13,6 +13,8 @@ import { useBridgeState } from "../bridge/BridgeContext";
 import { useFlightHistory } from "../data/flightHistory";
 import { useDispatch, useDispatchView } from "../dispatch/DispatchContext";
 import type { ImportedFlightPlan } from "../dispatch/model";
+import { planBasisForFlight } from "../dispatch/planBasis";
+import { PlanBasisNote, PlanBasisTag } from "../dispatch/PlanBasisWidgets";
 import { fixLabel, plannedRemainingNm, positionStatusOf, type NavFix, type PlanNavlog, type PositionStatus } from "../dispatch/navlog";
 import { fmtAltitude, fmtDuration, fmtUtcTime, fmtWeight, routeTitle, UNAVAILABLE } from "../dispatch/presentation";
 import { telemetryFreshness } from "../domain/freshness";
@@ -227,10 +229,6 @@ export function RouteMap({ geometry, position, label }: { geometry: RouteGeometr
 
 // ---------------------------------------------------------------- live monitoring
 
-function planFor(flightPlan: ImportedFlightPlan | null, imported: ImportedFlightPlan | null): { plan: ImportedFlightPlan | null; bound: boolean } {
-  if (flightPlan) return { plan: flightPlan, bound: true };
-  return { plan: imported, bound: false };
-}
 
 function ProgressBody({ progress, navlog }: { progress: RouteProgress; navlog: PlanNavlog }) {
   if (progress.status === "unavailable") {
@@ -316,7 +314,10 @@ export function RouteMonitor({ navigate }: { navigate: NavigateFn }) {
     if (flightId) void dispatch.loadSnapshot(flightId);
   }, [dispatch, flightId]);
   const snap = flightId ? view.snapshots[flightId] : undefined;
-  const { plan, bound } = planFor(snap?.kind === "ready" ? snap.snapshot.plan : null, view.plan.kind === "ready" ? view.plan.plan : null);
+  // Same basis as the Flight plan and Operations panels: attached snapshot, else the open release, else the imported preview.
+  const basis = planBasisForFlight({ snapshot: snap?.kind === "ready" ? snap.snapshot : null, flightOpen: flightOpen ? true : null, openRelease: dispatch.openRelease, importedPlan: view.plan.kind === "ready" ? view.plan.plan : null });
+  const plan = basis?.plan ?? null;
+  const bound = basis !== null && (basis.kind === "release_attached_current" || basis.kind === "legacy_attached");
   const navlog = plan?.navlog ?? null;
   const geometry = useMemo(() => (navlog ? buildRouteGeometry(navlog) : null), [navlog]);
 
@@ -339,7 +340,7 @@ export function RouteMonitor({ navigate }: { navigate: NavigateFn }) {
     force((x) => x + 1);
   }, [geometry, frame, fresh.kind]);
 
-  if (!plan) {
+  if (!plan || !basis) {
     return (
       <Panel title="Route monitoring" className="span-all">
         <p className="muted">
@@ -361,13 +362,15 @@ export function RouteMonitor({ navigate }: { navigate: NavigateFn }) {
     <Panel
       title="Route monitoring"
       className="span-all"
-      actions={bound ? <Tag tone="ok">Attached plan {routeTitle(plan)}</Tag> : <Tag tone="warn">Preview · not attached to a flight</Tag>}
+      actions={
+        <>
+          <Tag tone="neutral">{routeTitle(plan)}</Tag>
+          <PlanBasisTag basis={basis} />
+        </>
+      }
     >
-      {!bound && (
-        <p className="muted" role="note">
-          Showing the imported plan {routeTitle(plan)} as an unbound preview{flightOpen ? ". Attach it to this flight to monitor the flight against it" : ""}. It is not part of any recorded flight.
-        </p>
-      )}
+      <PlanBasisNote basis={basis} />
+      {!bound && flightOpen && <p className="muted">Attach a plan to this flight to make it the flight&apos;s baseline. Until then this is a preview.</p>}
       {navlog ? <ProgressBody progress={live} navlog={navlog} /> : <p className="unavailable-text">This flight plan has no navigation log, so route progress is unavailable. Plans imported before waypoint support have none.</p>}
       {geometry && geometry.legs.length > 0 && <RouteMap geometry={geometry} position={pos && pos.lat !== null && pos.lon !== null ? { lat: pos.lat, lon: pos.lon } : null} label={`Route map ${routeTitle(plan)}`} />}
       <p className="muted">Route progress is computed by Turnline from the planned waypoints and the simulator position. It is not read from the aircraft FMS, and it never affects recording.</p>
@@ -401,6 +404,7 @@ export function NavigationDebrief({ detail }: { detail: FlightDetail }) {
   }, [repo, id]);
   const snap = view.snapshots[id];
   const navlog = snap?.kind === "ready" ? (snap.snapshot.plan.navlog ?? null) : null;
+  const basis = planBasisForFlight({ snapshot: snap?.kind === "ready" ? snap.snapshot : null, flightOpen: detail.summary.status === "active" || detail.summary.status === "interrupted", openRelease: null, importedPlan: null });
   const geometry = useMemo(() => (navlog ? buildRouteGeometry(navlog) : null), [navlog]);
   const obs = useMemo(
     () => (track.kind === "ready" ? navObservations({ navlog, geometry, samples: track.samples, interruptions: detail.interruptions.length, samplesPruned: detail.samplesPruned }) : null),
@@ -408,7 +412,15 @@ export function NavigationDebrief({ detail }: { detail: FlightDetail }) {
   );
 
   return (
-    <Panel title="Navigation" className="span-all" actions={<Tag tone="neutral">Observations only · not graded</Tag>}>
+    <Panel
+      title="Navigation"
+      className="span-all"
+      actions={
+        <>
+          {basis && <PlanBasisTag basis={basis} />} <Tag tone="neutral">Observations only · not graded</Tag>
+        </>
+      }
+    >
       {track.kind === "loading" && (
         <p className="muted" role="status">
           Loading the recorded track…

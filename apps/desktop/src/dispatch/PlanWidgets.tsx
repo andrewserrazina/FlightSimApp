@@ -8,6 +8,8 @@ import { comparePlanToFlight } from "./comparison";
 import { useDispatch, useDispatchView } from "./DispatchContext";
 import type { ImportedFlightPlan } from "./model";
 import { flightTitle, fmtAltitude, fmtUtcTime, routeTitle, UNAVAILABLE } from "./presentation";
+import { planBasisForFlight } from "./planBasis";
+import { PlanBasisNote, PlanBasisTag } from "./PlanBasisWidgets";
 import { releaseLabel } from "./release";
 
 function Baseline({ plan }: { plan: ImportedFlightPlan }) {
@@ -54,44 +56,42 @@ export function FlightPlanBaseline({ flightId, navigate }: { flightId: string | 
   const current = view.plan.kind === "ready" ? view.plan.plan : null;
 
   const open = dispatch.openRelease;
-  if (snap?.kind === "ready") {
-    const rid = snap.snapshot.releaseId;
+  const basis = planBasisForFlight({ snapshot: snap?.kind === "ready" ? snap.snapshot : null, flightOpen: flightId ? true : null, openRelease: open, importedPlan: current });
+  if (basis && snap?.kind === "ready") {
     return (
-      <Panel
-        title="Flight plan"
-        className="span-all"
-        actions={
-          <>
-            {rid && <Tag tone="accent">Release {releaseLabel(rid)}</Tag>} <Tag tone="ok">Attached to this flight</Tag>
-          </>
-        }
-      >
-        <Baseline plan={snap.snapshot.plan} />
+      <Panel title="Flight plan" className="span-all" actions={<PlanBasisTag basis={basis} />}>
+        <PlanBasisNote basis={basis} />
+        <Baseline plan={basis.plan} />
         <p className="muted">
           Fixed snapshot attached {fmtUtcTime(snap.snapshot.associatedAtUtc)}
-          {rid ? " from a dispatch release" : ""}. Later SimBrief imports do not change it.
+          {snap.snapshot.releaseId ? " from a dispatch release" : ""}. Later SimBrief imports do not change it.
         </p>
       </Panel>
     );
   }
-  if (open && flightId) {
+  if (basis?.kind === "release_open" && open) {
     return (
-      <Panel title="Flight plan" className="span-all" actions={<Tag tone="accent">Release {releaseLabel(open.record.releaseId)} open</Tag>}>
-        <Baseline plan={open.record.plan} />
-        <div className="button-row">
-          <Button
-            variant="primary"
-            disabled={busy || snap?.kind === "loading"}
-            onClick={async () => {
-              setBusy(true);
-              const r = await dispatch.attachRelease(flightId);
-              setBusy(false);
-              setMessage(r.ok ? `Release ${releaseLabel(open.record.releaseId)} attached to this flight.` : `Could not attach the release: ${r.message}`);
-            }}
-          >
-            Attach release {releaseLabel(open.record.releaseId)} to this flight
-          </Button>
-        </div>
+      <Panel title="Flight plan" className="span-all" actions={<PlanBasisTag basis={basis} />}>
+        <PlanBasisNote basis={basis} />
+        <Baseline plan={basis.plan} />
+        {flightId ? (
+          <div className="button-row">
+            <Button
+              variant="primary"
+              disabled={busy || snap?.kind === "loading"}
+              onClick={async () => {
+                setBusy(true);
+                const r = await dispatch.attachRelease(flightId);
+                setBusy(false);
+                setMessage(r.ok ? `Release ${releaseLabel(open.record.releaseId)} attached to this flight.` : `Could not attach the release: ${r.message}`);
+              }}
+            >
+              Attach release {releaseLabel(open.record.releaseId)} to this flight
+            </Button>
+          </div>
+        ) : (
+          <p className="muted">Start a flight to attach release {releaseLabel(open.record.releaseId)} to it.</p>
+        )}
         {message && (
           <p className="muted" role="status">
             {message}
@@ -113,7 +113,8 @@ export function FlightPlanBaseline({ flightId, navigate }: { flightId: string | 
     );
   }
   return (
-    <Panel title="Flight plan" className="span-all" actions={<Tag tone="info">Imported, not attached</Tag>}>
+    <Panel title="Flight plan" className="span-all" actions={basis ? <PlanBasisTag basis={basis} /> : undefined}>
+      {basis && <PlanBasisNote basis={basis} />}
       <Baseline plan={current} />
       {flightId ? (
         <div className="button-row">
@@ -190,8 +191,11 @@ export function PlanComparisonPanel({ detail }: { detail: FlightDetail }) {
   const plan = snap.snapshot.plan;
   const ops = view.flightOps[id];
   const rows = comparePlanToFlight(plan, detail.summary, detail.interruptions.length, ops?.kind === "ready" ? ops.manual : undefined);
+  const flightOpen = detail.summary.status === "active" || detail.summary.status === "interrupted";
+  const basis = planBasisForFlight({ snapshot: snap.snapshot, flightOpen, openRelease: null, importedPlan: null });
   return (
-    <Panel title="Planned versus actual" className="span-all" actions={<Tag tone="ok">Flight plan attached</Tag>}>
+    <Panel title="Planned versus actual" className="span-all" actions={basis ? <PlanBasisTag basis={basis} /> : undefined}>
+      {basis && <PlanBasisNote basis={basis} />}
       <p className="muted">
         {flightTitle(plan) === UNAVAILABLE ? "SimBrief OFP" : flightTitle(plan)} {routeTitle(plan)} · attached {fmtUtcTime(snap.snapshot.associatedAtUtc)}. Takeoff and landing are detected from telemetry; off-block and on-block appear only if you recorded them (Manual · Real-world UTC). Actual times use this computer&apos;s UTC clock, not simulator time. Deviations are actual minus scheduled and are not calculated when the flight was flown more than 6 hours away from its schedule; block time is compared as a duration. No delays are inferred.
       </p>

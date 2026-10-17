@@ -118,8 +118,16 @@ describe("Dispatch page", () => {
     expect(within(route).getByText(/KMDW/)).toBeInTheDocument();
     expect(within(route).getByText("FL360 (36,000 ft)")).toBeInTheDocument();
     const schedule = screen.getByRole("region", { name: "Schedule (UTC)" });
-    expect(within(schedule).getByText("14:35Z · 15 Oct 2026")).toBeInTheDocument();
+    expect(within(schedule).getByRole("row", { name: /Off-block/ })).toHaveTextContent("14:35Z · 15 Oct 2026");
     expect(within(schedule).getByText("2 h 16 min")).toBeInTheDocument();
+    // Issue #12: the table scrolls inside its panel at worst, and each cell may wrap only between time and date.
+    const table = within(schedule).getByRole("table");
+    expect(table.parentElement).toHaveClass("table-wrap");
+    expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Event", "Scheduled", "Estimated"]);
+    const outCells = within(within(table).getByRole("row", { name: /Off-block/ })).getAllByRole("cell");
+    expect(outCells).toHaveLength(2);
+    expect(outCells[0]).toHaveTextContent("14:35Z · 15 Oct 2026");
+    expect([...outCells[0]!.querySelectorAll(".utc-stamp__part")].map((e) => e.textContent)).toEqual(["14:35Z", "15 Oct 2026"]);
     const fuel = screen.getByRole("region", { name: "Planned fuel" });
     expect(within(fuel).getByText("7,420 kg")).toBeInTheDocument();
     expect(within(screen.getByRole("region", { name: "Weights" })).getByText("60,410 kg")).toBeInTheDocument();
@@ -205,6 +213,15 @@ async function recordingFlight() {
   return { rec, flightStore, flightId: "00000000-0000-4000-8000-000000000042" };
 }
 
+describe("schedule table layout (issue #12)", () => {
+  it("lets the time cells wrap between time and date, never inside either", () => {
+    const css = readFileSync(join(__dirname, "../src/styles/app.css"), "utf8");
+    expect(css).toMatch(/\.schedule-table td\.num\s*\{\s*white-space:\s*normal;/);
+    expect(css).toMatch(/\.utc-stamp__part[^{]*\{\s*white-space:\s*nowrap;/);
+    expect(css).toMatch(/\.table-wrap\s*\{\s*overflow-x:\s*auto;/);
+  });
+});
+
 describe("associating a plan with a flight", () => {
   it("attaches the plan to the recording flight from Dispatch; Live Flight shows the attached route", async () => {
     const { rec, flightId } = await recordingFlight();
@@ -220,7 +237,8 @@ describe("associating a plan with a flight", () => {
     fireEvent.click(within(screen.getByRole("navigation", { name: "Primary" })).getByRole("button", { name: /Live Flight/ }));
     await act(flush);
     const panel = screen.getByRole("region", { name: "Flight plan" });
-    expect(within(panel).getByText("Attached to this flight")).toBeInTheDocument();
+    expect(within(panel).getByText("Legacy attachment · no release")).toBeInTheDocument();
+    expect(panel).toHaveTextContent("Legacy attached plan — imported and attached without a dispatch release.");
     expect(screen.getByText("KBOS → KORD (attached plan)")).toBeInTheDocument();
   });
 

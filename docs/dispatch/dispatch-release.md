@@ -40,7 +40,7 @@ Recording never depends on any of this. A flight can be started, recorded and de
 |---|---|---|
 | Draft | no (derived) | Imported plan under review; required data missing or acknowledgments not given |
 | Ready for release | no (derived) | Every required check passes and every acknowledgment is given |
-| Released | yes | Released by the pilot; *awaiting flight* until attached, then *attached to a flight* |
+| Released | yes | Released by the pilot; *not yet attached to flight* until attached, then *attached* (see Plan labels) |
 | Release cancelled | yes | Cancelled with a reason before being attached; final |
 
 Allowed transitions:
@@ -181,6 +181,33 @@ IN.
 
 Manual OUT is offered only before a takeoff is detected, and manual IN only after a landing is detected. Both need a
 confirmation, use the current UTC time, and cannot be changed afterwards.
+
+## Plan labels (S2-04)
+
+Every screen that shows a plan or a release (Dispatch, the release log, Live Flight, Debrief) uses one shared
+function, `src/dispatch/planBasis.ts`. It reads only stored records:
+- the flight's snapshot, and whether it has a `releaseId`;
+- the release state and its `flightId` link;
+- whether the flight is still open.
+
+An imported SimBrief plan on its own is never described as attached, released or flown.
+
+| Stored state | Full label (S2-03 decision 4) | Short tag |
+|---|---|---|
+| Imported plan, no release, no snapshot | Imported plan preview — not attached to flight | Imported · preview |
+| Release `released`, `flightId` null | Released plan — not yet attached to flight | Released · available to attach |
+| Snapshot with `releaseId`, flight open | Attached released plan — immutable operational baseline | Released · attached to this flight |
+| Snapshot with `releaseId`, flight closed (or, in the release log, another flight) | Attached released plan — immutable operational baseline | Released · attached to this recorded flight |
+| Release `cancelled` | Cancelled release — never attached to a flight | Release cancelled |
+| Snapshot without `releaseId` | Legacy attached plan — imported and attached without a dispatch release | Legacy attachment · no release |
+
+Precedence for a flight:
+1. Its snapshot always wins over an open release or a newer import.
+2. A closed flight without a snapshot has no plan; a later release or import is not its plan.
+3. With no snapshot and the flight open (or no flight), an open release wins over the imported plan.
+
+Scheduled times on the Live Flight milestone timeline come from an attached plan or an open release, never from an
+unreleased import (unchanged from S2-02).
 
 ## Operational status
 

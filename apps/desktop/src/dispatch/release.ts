@@ -83,9 +83,10 @@ export function isOpen(r: DispatchRelease): boolean {
   return r.state === "released" && r.flightId === null;
 }
 
+/** Same wording as planBasis.ts (PLAN_BASIS_LABEL), without its flight-context detail. */
 export function releaseStateLabel(r: DispatchRelease): string {
-  if (r.state === "cancelled") return "Release cancelled";
-  return r.flightId ? "Released · attached to a flight" : "Released · awaiting flight";
+  if (r.state === "cancelled") return "Cancelled release — never attached to a flight";
+  return r.flightId ? "Attached released plan — immutable operational baseline" : "Released plan — not yet attached to flight";
 }
 
 /** Cancellation is only possible before the release is attached to a flight. */
