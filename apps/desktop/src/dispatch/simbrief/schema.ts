@@ -20,12 +20,44 @@ export interface SimbriefAirportRaw {
   iata_code?: Leaf;
   name?: Leaf;
   plan_rwy?: Leaf;
+  pos_lat?: Leaf;
+  pos_long?: Leaf;
+}
+
+/**
+ * One navlog record (S2-03). Field names and units confirmed against a real `json=v2` OFP:
+ * distance = leg distance (nm), altitude_feet (ft), ind_airspeed/true_airspeed/groundspeed (kt),
+ * time_leg/time_total (s or HH:MM:SS), fuel_* (OFP weight unit), pos_lat/pos_long (decimal deg).
+ */
+export interface SimbriefNavlogFixRaw {
+  ident?: Leaf;
+  name?: Leaf;
+  type?: Leaf;
+  pos_lat?: Leaf;
+  pos_long?: Leaf;
+  stage?: Leaf;
+  via_airway?: Leaf;
+  is_sid_star?: Leaf;
+  distance?: Leaf;
+  altitude_feet?: Leaf;
+  ind_airspeed?: Leaf;
+  true_airspeed?: Leaf;
+  mach?: Leaf;
+  groundspeed?: Leaf;
+  time_leg?: Leaf;
+  time_total?: Leaf;
+  fuel_leg?: Leaf;
+  fuel_totalused?: Leaf;
+  fuel_plan_onboard?: Leaf;
+  fuel_min_onboard?: Leaf;
 }
 
 export interface SimbriefOfpV2 {
   fetch?: { status?: Leaf; userid?: Leaf };
   params?: { request_id?: Leaf; user_id?: Leaf; time_generated?: Leaf; airac?: Leaf; units?: Leaf };
-  general?: { icao_airline?: Leaf; flight_number?: Leaf; initial_altitude?: Leaf; costindex?: Leaf; route?: Leaf; air_distance?: Leaf };
+  general?: { icao_airline?: Leaf; flight_number?: Leaf; initial_altitude?: Leaf; costindex?: Leaf; route?: Leaf; air_distance?: Leaf; route_distance?: Leaf };
+  /** Seen as an array of fixes in real OFPs; `{ fix: [...] }` in other integrations. */
+  navlog?: SimbriefNavlogFixRaw[] | { fix?: SimbriefNavlogFixRaw[] | SimbriefNavlogFixRaw };
   atc?: { callsign?: Leaf };
   origin?: SimbriefAirportRaw;
   destination?: SimbriefAirportRaw;

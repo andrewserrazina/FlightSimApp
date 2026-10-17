@@ -20,6 +20,7 @@ pub fn run() {
             store::commands::flight_commit,
             store::commands::flights_list,
             store::commands::flight_detail,
+            store::commands::flight_track,
             store::commands::flights_prune,
             store::commands::sync_settings_get,
             store::commands::sync_enable,

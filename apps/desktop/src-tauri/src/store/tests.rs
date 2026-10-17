@@ -426,7 +426,7 @@ fn dispatch_plan_rejects_wrong_schema_bad_timestamps_and_oversize() {
     assert!(s.save_dispatch_plan(&serde_json::json!({ "schema": "other" }), "2026-10-15T12:00:00Z").is_err());
     assert!(s.save_dispatch_plan(&serde_json::json!([1, 2]), "2026-10-15T12:00:00Z").is_err());
     assert!(s.save_dispatch_plan(&plan_json("1"), "yesterday").is_err());
-    let big = serde_json::json!({ "schema": "turnline.flight_plan", "route": { "text": "X".repeat(70_000) } });
+    let big = serde_json::json!({ "schema": "turnline.flight_plan", "route": { "text": "X".repeat(super::dispatch::MAX_PLAN_BYTES + 1) } });
     assert!(s.save_dispatch_plan(&big, "2026-10-15T12:00:00Z").is_err());
 }
 
@@ -502,4 +502,42 @@ fn upgrading_a_v2_database_keeps_flights_and_adds_dispatch_tables() {
     assert_eq!(s.list_flights(10, 0).unwrap().len(), 1);
     assert_eq!(s.dispatch_plan().unwrap(), None);
     assert_eq!(s.associate_plan("old", &snapshot_json("old", "9")).unwrap(), AssociateOutcome::Created);
+}
+
+// ---------- S2-03: track read path and navlog-sized plans ----------
+
+#[test]
+fn flight_track_returns_recorded_samples_in_order_and_nothing_after_retention() {
+    let mut s = Store::open_in_memory().unwrap();
+    let mut b = batch(flight("trk", "active", "2026-10-16T12:00:00.000Z"));
+    b.samples = vec![sample(2), sample(1), sample(3)];
+    s.commit(&b).unwrap();
+    let track = s.flight_track("trk").unwrap();
+    assert_eq!(track.iter().map(|t| t.seq).collect::<Vec<_>>(), vec![1, 2, 3]);
+    assert_eq!((track[0].lat_deg, track[0].lon_deg, track[0].on_ground), (Some(47.0), Some(-122.0), Some(false)));
+    assert!(s.flight_track("unknown").unwrap().is_empty());
+    // Reading never changes the flight.
+    let before = serde_json::to_value(s.flight_detail("trk").unwrap().unwrap()).unwrap();
+    s.flight_track("trk").unwrap();
+    assert_eq!(serde_json::to_value(s.flight_detail("trk").unwrap().unwrap()).unwrap(), before);
+    // Close it and prune: the track is gone, the summary stays and says so.
+    s.commit(&batch(flight("trk", "completed", "2026-10-16T12:00:00.000Z"))).unwrap();
+    s.commit(&batch(flight("newer", "completed", "2026-10-16T13:00:00.000Z"))).unwrap();
+    s.prune_samples(1).unwrap();
+    assert!(s.flight_track("trk").unwrap().is_empty());
+    assert!(s.flight_detail("trk").unwrap().unwrap().samples_pruned);
+}
+
+#[test]
+fn plans_with_a_long_navlog_fit_and_oversized_plans_are_still_refused() {
+    let mut s = Store::open_in_memory().unwrap();
+    let fixes: Vec<serde_json::Value> = (0..1500).map(|i| serde_json::json!({ "seq": i, "ident": format!("FIX{i}"), "padding": "x".repeat(300) })).collect();
+    let mut plan = plan_json("long");
+    plan["navlog"] = serde_json::json!({ "fixes": fixes });
+    assert!(serde_json::to_string(&plan).unwrap().len() > 400 * 1024);
+    s.save_dispatch_plan(&plan, "2026-10-16T12:00:00Z").unwrap();
+    assert_eq!(s.dispatch_plan().unwrap().unwrap().plan["navlog"]["fixes"].as_array().unwrap().len(), 1500);
+    let mut huge = plan_json("huge");
+    huge["padding"] = serde_json::json!("x".repeat(1024 * 1024));
+    assert!(s.save_dispatch_plan(&huge, "2026-10-16T12:00:00Z").is_err());
 }

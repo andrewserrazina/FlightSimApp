@@ -8,6 +8,8 @@
  * - Timestamps are UTC ISO-8601 strings ("2026-10-15T14:35:00Z").
  */
 
+import { isNavlog, type PlanNavlog } from "./navlog";
+
 export const PLAN_SCHEMA = "turnline.flight_plan";
 export const PLAN_VERSION = 1;
 export const SNAPSHOT_SCHEMA = "turnline.flight_plan_snapshot";
@@ -94,6 +96,11 @@ export interface ImportedFlightPlan {
     plannedTakeoff: PlanWeight | null;
     plannedLanding: PlanWeight | null;
   };
+  /**
+   * Waypoint-level navigation log (S2-03). Optional: plans imported before S2-03, and every
+   * snapshot or release made from them, have no navlog and are never rewritten to add one.
+   */
+  navlog?: PlanNavlog;
   weights: {
     zeroFuel: PlanWeight | null;
     takeoff: PlanWeight | null;
@@ -165,6 +172,7 @@ export function parseImportedFlightPlan(raw: unknown): ImportedFlightPlan | null
   if (est !== undefined && (!isObj(est) || ![est.outUtc, est.offUtc, est.onUtc, est.inUtc].every(optTs))) return null;
   if (!isObj(fuel) || !FUEL_KEYS.every((k) => isWeight(fuel[k]))) return null;
   if (!isObj(w) || !WEIGHT_KEYS.every((k) => isWeight(w[k])) || !optNum(w.passengers)) return null;
+  if (raw.navlog !== undefined && !isNavlog(raw.navlog)) return null;
   return raw as unknown as ImportedFlightPlan;
 }
 

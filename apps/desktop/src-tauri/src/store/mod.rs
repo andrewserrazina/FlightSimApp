@@ -618,6 +618,36 @@ impl Store {
         }))
     }
 
+    /// Recorded track points of one flight, in order (S2-03 debrief). Read-only; empty when the
+    /// samples were pruned by retention (the caller checks `samples_pruned` in the detail).
+    pub fn flight_track(&self, id: &str) -> Result<Vec<SampleRow>, StoreError> {
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT seq, observed_at_utc, phase, reason, on_ground, lat_deg, lon_deg, indicated_alt_ft, radio_alt_ft, ground_speed_kt, indicated_kt, vertical_fpm, heading_deg, fuel_kg \
+             FROM flight_samples WHERE flight_id = ?1 ORDER BY seq",
+        )?;
+        let rows = stmt
+            .query_map([id], |r| {
+                Ok(SampleRow {
+                    seq: r.get(0)?,
+                    observed_at_utc: r.get(1)?,
+                    phase: r.get(2)?,
+                    reason: r.get(3)?,
+                    on_ground: r.get::<_, Option<i64>>(4)?.map(|v| v == 1),
+                    lat_deg: r.get(5)?,
+                    lon_deg: r.get(6)?,
+                    indicated_alt_ft: r.get(7)?,
+                    radio_alt_ft: r.get(8)?,
+                    ground_speed_kt: r.get(9)?,
+                    indicated_kt: r.get(10)?,
+                    vertical_fpm: r.get(11)?,
+                    heading_deg: r.get(12)?,
+                    fuel_kg: r.get(13)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
     /// Retention: drop detailed samples of closed flights beyond the newest `keep`. Summaries,
     /// events and interruptions are kept. Returns the number of samples deleted.
     pub fn prune_samples(&mut self, keep: i64) -> Result<usize, StoreError> {

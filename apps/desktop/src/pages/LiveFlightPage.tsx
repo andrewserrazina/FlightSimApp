@@ -14,6 +14,7 @@ import { Tag } from "../ui/Tag";
 import { useRecorderView } from "../recording/RecorderContext";
 import { FlightControls } from "./FlightControls";
 import { FlightPlanBaseline } from "../dispatch/PlanWidgets";
+import { RouteMonitor } from "../route/RouteWidgets";
 import { useDispatchView } from "../dispatch/DispatchContext";
 import { routeTitle } from "../dispatch/presentation";
 import { PHASE_LABEL, SIMULATOR_SHORT } from "./labels";
@@ -64,6 +65,7 @@ export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
         {flightStrip}
         <FlightControls navigate={navigate} />
         <FlightPlanBaseline flightId={flightOpen ? rec.flightId : null} navigate={navigate} />
+      <RouteMonitor navigate={navigate} />
         <EmptyState title="No live telemetry" action={<Button onClick={() => navigate("welcome")}>Go to connection</Button>}>
           <p>{p.summary}</p>
           <p>Telemetry appears here once the simulator connection reports data. Nothing is shown until then.</p>
@@ -78,6 +80,7 @@ export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
       {flightStrip}
       <FlightControls navigate={navigate} />
       <FlightPlanBaseline flightId={flightOpen ? rec.flightId : null} navigate={navigate} />
+      <RouteMonitor navigate={navigate} />
       {stale && (
         <div className="banner banner--warn" role="alert">
           <strong>Telemetry is stale.</strong> The values below were last received at <time dateTime={frame.observed_at}>{utcDateTime(frame.observed_at)}</time> and may not reflect the aircraft now.

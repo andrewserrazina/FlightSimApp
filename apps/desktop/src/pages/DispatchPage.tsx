@@ -15,6 +15,7 @@ import { SelectField, TextField } from "../ui/Fields";
 import { KeyValueList } from "../ui/KeyValueList";
 import { Panel } from "../ui/Panel";
 import { Tag } from "../ui/Tag";
+import { NavlogPanel } from "../route/RouteWidgets";
 
 const unavailableClass = (v: string) => (v === UNAVAILABLE || v.startsWith(UNAVAILABLE) ? <span className="unavailable">{v}</span> : v);
 
@@ -369,6 +370,8 @@ function PlanOverview({ plan, onClear, onAssociated, navigate }: { plan: Importe
           />
         </Panel>
       </div>
+
+      <NavlogPanel plan={plan} />
 
       <Panel title="Use this plan">
         {flightId ? (
