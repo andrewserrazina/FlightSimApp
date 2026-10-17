@@ -4,6 +4,52 @@ Static prelaunch site for turnlineops.com, served by Cloudflare Pages from this 
 (branch `claude/new-session-2b3s69`). It is NOT part of the desktop app. Launch posture: `noindex,nofollow`
 stays on every page until the owner approves discoverability and brand clearance.
 
+## V3 (real product progress and early access)
+- **What changed:**
+  - Hero copy separates what works today from the long-term vision.
+  - CTAs: "Join the Early Access List" (primary, the only conversion goal) and "See What’s Working".
+  - The concept dashboard in the hero is replaced by a real Live Flight screen.
+  - Two new sections after the hero:
+    - **Built and tested** (`#working`): the seven capabilities the owner validated on real MSFS 2020 hardware, with their limits;
+    - **Inside the app** (`#product`): four real screens.
+  - Statuses are updated everywhere: stages, feature explorer, integrations, roadmap, FAQ, metadata and footer.
+  - The navigation is unchanged.
+- **Status vocabulary** (replaces the V2 list; keep it consistent and change a label only when the work changes):
+  - *Implemented internally · MSFS 2020 tested*: in internal Windows builds and tested by the owner with MSFS 2020 on real
+    hardware, in supported scenarios. Not public; broad aircraft/add-on/hardware compatibility not established.
+  - *Implemented internally*: built and tested in internal builds; not separately validated with MSFS.
+  - *In active development*: being built or validated now. S2-02 (dispatch release, OUT/OFF/ON/IN timeline) and S2-03
+    (navlog, route monitoring, navigation debrief) stay here until each passes acceptance testing **and** is merged.
+    CI passing is not enough.
+  - *Planned*, *Research*: as before. Passenger, ground handling, GSX, SayIntentions, ACARS, airline scheduling,
+    delay causes and cause-and-effect simulation are Planned or Research.
+  - MSFS 2024 stays *In active development* (unverified) until there is separate documented acceptance evidence.
+- **Evidence behind the "MSFS 2020 tested" label:** the owner's real-PC acceptance testing of the merged S2-01 work
+  (PRs #6 and #8) and the Sprint 1 foundation. Note that `docs/compatibility/msfs2020-matrix.md` and
+  `fixtures/recordings/real/` do not yet record that run. Add the acceptance report and a sanitised recording there,
+  so the website claim has a documented source.
+- **Screenshots** (`assets/screens/*.webp`, 1600 and 800 px wide):
+  - Captured from the desktop app as merged on `main`. S2-02 and S2-03 screens are excluded.
+  - Rendered in Chromium with in-memory stores. Live Flight, History and Debrief come from the bridge's recorded
+    mock-adapter demo flight (`fixtures/recordings/simulated/mock-nominal-markers.jsonl.gz`) replayed through the real
+    `FlightRecorder`. Dispatch is the synthetic `fixtures/simbrief/ofp-v2-iso-times.json` (times moved to the capture
+    day; a KSEA→KPAE copy is attached to the demo flight).
+  - Every screen shows **sample data**, and the page says so: captions, the section intro, a note under the gallery,
+    the footer and the in-app "DEMO DATA" badges. The app's title bar still shows the working name "FlightSimApp".
+  - Replace them with captures from a real MSFS 2020 session when available, keeping the alt text accurate.
+- **Concept visuals:** only the scenario section and its debrief card remain; both are labelled.
+- **Images:** the only `<img>` elements are Turnline screenshots, and the tests enforce that. Each has alt text and
+  dimensions. The hero image loads eagerly; the gallery images load lazily. No third-party logos.
+- **Metadata:** title, description and Open Graph/Twitter text describe the working product without promising MSFS
+  2024, passengers or ground handling. `og-image.png` was regenerated from `docs/marketing/og-card.html`.
+  `noindex,nofollow` and the `X-Robots-Tag` header are unchanged.
+- **Waitlist:**
+  - The contract, endpoint, Turnstile, consent text, UTM handling, messages and privacy links are unchanged.
+  - Only the copy around the form changed. The submit button now reads "Join the Early Access List", and the form
+    heading matches it.
+- **Before/after captures:** `docs/screenshots/marketing-v3/{before,after}`, produced by
+  `scripts/marketing-compare-screenshots.mjs <dir>`.
+
 ## V2 (redesign)
 - `index.html`: the full landing page. Sections: hero with a labelled concept dashboard, What is Turnline,
   How it works (6 stages), Feature Explorer (6 categories), Why different, an illustrative scenario,
