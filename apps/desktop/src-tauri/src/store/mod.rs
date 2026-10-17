@@ -10,6 +10,7 @@
 pub mod actor;
 pub mod commands;
 pub mod dispatch;
+pub mod release;
 pub mod sync;
 
 use std::path::{Path, PathBuf};
@@ -24,6 +25,8 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../../migrations/0001_local_flight_store.sql")),
     (2, include_str!("../../migrations/0002_cloud_sync.sql")),
     (3, include_str!("../../migrations/0003_dispatch.sql")),
+    (4, include_str!("../../migrations/0004_dispatch_release.sql")),
+    (5, include_str!("../../migrations/0005_manual_milestone_clock.sql")),
 ];
 
 pub fn latest_schema_version() -> i64 {

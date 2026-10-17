@@ -4,6 +4,10 @@ import { useBridgeState } from "../bridge/BridgeContext";
 import { useNow } from "../app/useNow";
 import { assessStaleness, checkAircraft } from "../dispatch/assessment";
 import { useDispatch, useDispatchView } from "../dispatch/DispatchContext";
+import { ReleaseLog, StatusPill } from "../dispatch/OperationsWidgets";
+import { ofpKey, releaseLabel, type DispatchRelease } from "../dispatch/release";
+import { DispatchStateBadge, ReleaseCard, ReleaseReview, type DispatchState } from "../dispatch/ReleasePanels";
+import { operationalStatus } from "../dispatch/status";
 import type { ImportedFlightPlan } from "../dispatch/model";
 import { flightTitle, fmtAirport, fmtAltitude, fmtDuration, fmtUtcTime, fmtWeight, routeTitle, valueOr, UNAVAILABLE } from "../dispatch/presentation";
 import { usePreferences } from "../preferences/PreferencesContext";
@@ -129,6 +133,9 @@ export function DispatchPage({ navigate }: { navigate: NavigateFn }) {
           navigate={navigate}
         />
       )}
+      {view.plan.kind !== "ready" && dispatch.openRelease && <ReleaseCard release={dispatch.openRelease} currentPlan={null} onDone={(text, ok) => setNotice({ tone: ok ? "ok" : "alert", text })} />}
+
+      <ReleaseLog navigate={navigate} />
 
       {confirmClear && (
         <ConfirmDialog
@@ -216,6 +223,13 @@ function PlanOverview({ plan, onClear, onAssociated, navigate }: { plan: Importe
   const flightId = flightOpen ? rec.flightId : null;
   const snapshot = flightId ? view.snapshots[flightId] : undefined;
   const [busy, setBusy] = useState(false);
+  const [reviewState, setReviewState] = useState<"draft" | "ready">("draft");
+  const open = dispatch.openRelease;
+  const key = ofpKey(plan);
+  const openForPlan = open && open.record.ofp.key === key ? open : null;
+  const lastForPlan = latestReleaseFor(view.releases, key);
+  const boardState: DispatchState = openForPlan ? "released" : lastForPlan?.state === "cancelled" && !open ? "cancelled" : reviewState;
+  const opStatus = operationalStatus({ planImported: true, openRelease: open !== null, lifecycle: rec });
 
   useEffect(() => {
     if (flightId) void dispatch.loadSnapshot(flightId);
@@ -237,8 +251,31 @@ function PlanOverview({ plan, onClear, onAssociated, navigate }: { plan: Importe
     else onAssociated(r.outcome === "created" ? "Flight plan attached to the current flight as a fixed snapshot." : "This flight already has a flight plan attached; it was left unchanged.", r.outcome === "created");
   };
 
+  const attachRelease = async () => {
+    if (!flightId || !open) return;
+    setBusy(true);
+    const r = await dispatch.attachRelease(flightId);
+    setBusy(false);
+    onAssociated(r.ok ? `Release ${releaseLabel(open.record.releaseId)} attached to the current flight.` : `Could not attach the release: ${r.message}`, r.ok);
+  };
+
   return (
     <>
+      <section className="ops-board" aria-label="Dispatch board">
+        <div className="ops-board__main">
+          <span className="ops-board__eyebrow">Dispatch</span>
+          <span className="ops-board__flight">
+            {flightTitle(plan) === UNAVAILABLE ? "OFP" : flightTitle(plan)} <span className="ops-board__route">{routeTitle(plan)}</span>
+          </span>
+          <span className="ops-board__meta">
+            {plan.aircraft.icaoType ?? "Aircraft unavailable"} · OFP {plan.source.requestId ?? "id unavailable"}
+            {openForPlan ? ` · ${releaseLabel(openForPlan.record.releaseId)}` : ""}
+          </span>
+        </div>
+        <DispatchStateBadge state={boardState} />
+        <StatusPill status={opStatus} />
+      </section>
+
       {stale.kind === "stale" && (
         <div className="banner banner--warn" role="note">
           <strong>Possibly stale plan.</strong> {stale.reason}
@@ -372,6 +409,13 @@ function PlanOverview({ plan, onClear, onAssociated, navigate }: { plan: Importe
       </div>
 
       <NavlogPanel plan={plan} />
+      {open && <ReleaseCard release={open} currentPlan={plan} onDone={onAssociated} />}
+      {!openForPlan && <ReleaseReview key={key} plan={plan} nowMs={now} simulatorIcao={liveIcao} blockedBy={open} onDone={onAssociated} onStateChange={setReviewState} />}
+      {!open && lastForPlan?.state === "cancelled" && (
+        <p className="muted">
+          The last release of this OFP ({releaseLabel(lastForPlan.record.releaseId)}) was cancelled: {lastForPlan.cancelReason}. You can review and release it again.
+        </p>
+      )}
 
       <Panel title="Use this plan">
         {flightId ? (
@@ -380,14 +424,25 @@ function PlanOverview({ plan, onClear, onAssociated, navigate }: { plan: Importe
               The current flight already has a plan attached ({snapshot.snapshot.plan.origin?.icao ?? "????"} → {snapshot.snapshot.plan.destination?.icao ?? "????"}, attached {fmtUtcTime(snapshot.snapshot.associatedAtUtc)}). It is a fixed snapshot and is not changed by later imports.
             </p>
           ) : (
-            <>
-              <p>Attach this plan to the flight being recorded. A fixed copy is stored with the flight; later imports do not change it.</p>
-              <div className="button-row">
-                <Button variant="primary" onClick={() => void associate()} disabled={busy || snapshot?.kind === "loading"}>
-                  Attach plan to current flight
-                </Button>
-              </div>
-            </>
+            open ? (
+              <>
+                <p>Attach release {releaseLabel(open.record.releaseId)} ({routeTitle(open.record.plan)}) to the flight being recorded. The released plan is stored with the flight; later imports do not change it.</p>
+                <div className="button-row">
+                  <Button variant="primary" onClick={() => void attachRelease()} disabled={busy || snapshot?.kind === "loading"}>
+                    Attach release to current flight
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p>Attach this plan to the flight being recorded. A fixed copy is stored with the flight; later imports do not change it. The plan is not released, so no dispatch release is recorded.</p>
+                <div className="button-row">
+                  <Button variant="primary" onClick={() => void associate()} disabled={busy || snapshot?.kind === "loading"}>
+                    Attach plan to current flight
+                  </Button>
+                </div>
+              </>
+            )
           )
         ) : (
           <p className="muted">
@@ -403,4 +458,10 @@ function PlanOverview({ plan, onClear, onAssociated, navigate }: { plan: Importe
       </Panel>
     </>
   );
+}
+
+function latestReleaseFor(releases: ReturnType<typeof useDispatchView>["releases"], key: string): DispatchRelease | null {
+  if (releases.kind !== "ready") return null;
+  for (const e of releases.entries) if (e.kind === "ok" && e.release.record.ofp.key === key) return e.release;
+  return null;
 }

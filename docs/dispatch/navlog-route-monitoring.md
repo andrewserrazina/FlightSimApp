@@ -219,9 +219,10 @@ The map is a lightweight SVG:
   adds the aircraft position from telemetry.
 - **Dependencies:** no tiles, no external services, no new dependencies.
 
-## Relation to S2-02 (PR #9, not yet merged)
+## Relation to S2-02 (PR #9, merged)
 
-S2-03 is built on `main` and does not depend on S2-02 APIs.
+S2-03 was built on `main` independently of S2-02 and does not depend on S2-02 APIs. PR #9 merged first; this branch
+then merged `main`, keeping both feature sets.
 
 - **Merge conflicts:** a trial merge with PR #9 conflicts only in additive places:
   - imports and adjacent panel insertions in `DispatchPage`, `LiveFlightPage` and `DebriefPage`;

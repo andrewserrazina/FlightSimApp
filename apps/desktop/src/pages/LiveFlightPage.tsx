@@ -15,6 +15,7 @@ import { useRecorderView } from "../recording/RecorderContext";
 import { FlightControls } from "./FlightControls";
 import { FlightPlanBaseline } from "../dispatch/PlanWidgets";
 import { RouteMonitor } from "../route/RouteWidgets";
+import { LiveOperations } from "../dispatch/OperationsWidgets";
 import { useDispatchView } from "../dispatch/DispatchContext";
 import { routeTitle } from "../dispatch/presentation";
 import { PHASE_LABEL, SIMULATOR_SHORT } from "./labels";
@@ -64,6 +65,7 @@ export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
       <div className="page">
         {flightStrip}
         <FlightControls navigate={navigate} />
+        <LiveOperations navigate={navigate} />
         <FlightPlanBaseline flightId={flightOpen ? rec.flightId : null} navigate={navigate} />
       <RouteMonitor navigate={navigate} />
         <EmptyState title="No live telemetry" action={<Button onClick={() => navigate("welcome")}>Go to connection</Button>}>
@@ -79,6 +81,7 @@ export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
     <div className="page">
       {flightStrip}
       <FlightControls navigate={navigate} />
+      <LiveOperations navigate={navigate} />
       <FlightPlanBaseline flightId={flightOpen ? rec.flightId : null} navigate={navigate} />
       <RouteMonitor navigate={navigate} />
       {stale && (

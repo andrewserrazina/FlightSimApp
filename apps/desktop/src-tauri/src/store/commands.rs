@@ -180,3 +180,42 @@ pub async fn flight_plan_associate(store: State<'_, StoreHandle>, flight_id: Str
 pub async fn flight_plan_snapshot(store: State<'_, StoreHandle>, flight_id: String) -> Result<Option<SnapshotOut>, StoreError> {
     store.call(move |slot| slot.get()?.plan_snapshot(&flight_id)).await
 }
+
+// ---------- dispatch releases and recorded OUT/IN (schema v4; local only) ----------
+
+use super::release::{MilestoneOut, MilestoneOutcome, ReleaseOut};
+
+#[tauri::command]
+pub async fn dispatch_release_create(store: State<'_, StoreHandle>, release: serde_json::Value) -> Result<ReleaseOut, StoreError> {
+    store.call(move |slot| slot.get()?.create_release(&release)).await
+}
+
+#[tauri::command]
+pub async fn dispatch_release_cancel(store: State<'_, StoreHandle>, release_id: String, cancelled_at_utc: String, reason: String) -> Result<ReleaseOut, StoreError> {
+    store.call(move |slot| slot.get()?.cancel_release(&release_id, &cancelled_at_utc, &reason)).await
+}
+
+#[tauri::command]
+pub async fn dispatch_release_attach(store: State<'_, StoreHandle>, release_id: String, flight_id: String, linked_at_utc: String) -> Result<ReleaseOut, StoreError> {
+    store.call(move |slot| slot.get()?.attach_release(&release_id, &flight_id, &linked_at_utc)).await
+}
+
+#[tauri::command]
+pub async fn dispatch_releases_list(store: State<'_, StoreHandle>, limit: Option<i64>) -> Result<Vec<ReleaseOut>, StoreError> {
+    store.call(move |slot| slot.get()?.list_releases(limit.unwrap_or(100))).await
+}
+
+#[tauri::command]
+pub async fn dispatch_release_for_flight(store: State<'_, StoreHandle>, flight_id: String) -> Result<Option<ReleaseOut>, StoreError> {
+    store.call(move |slot| slot.get()?.release_for_flight(&flight_id)).await
+}
+
+#[tauri::command]
+pub async fn flight_milestone_record(store: State<'_, StoreHandle>, flight_id: String, milestone: String, occurred_at_utc: String, clock_source: String) -> Result<MilestoneOutcome, StoreError> {
+    store.call(move |slot| slot.get()?.record_milestone(&flight_id, &milestone, &occurred_at_utc, &clock_source)).await
+}
+
+#[tauri::command]
+pub async fn flight_milestones(store: State<'_, StoreHandle>, flight_id: String) -> Result<Vec<MilestoneOut>, StoreError> {
+    store.call(move |slot| slot.get()?.milestones(&flight_id)).await
+}

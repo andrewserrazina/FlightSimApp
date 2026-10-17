@@ -123,6 +123,8 @@ export interface FlightPlanSnapshot {
   version: 1;
   flightId: string;
   associatedAtUtc: string;
+  /** Present when the snapshot was created by attaching a dispatch release (S2-02). */
+  releaseId?: string;
   plan: ImportedFlightPlan;
 }
 
@@ -178,6 +180,7 @@ export function parseImportedFlightPlan(raw: unknown): ImportedFlightPlan | null
 
 export function parseSnapshot(raw: unknown): FlightPlanSnapshot | null {
   if (!isObj(raw) || raw.schema !== SNAPSHOT_SCHEMA || raw.version !== 1 || typeof raw.flightId !== "string" || typeof raw.associatedAtUtc !== "string" || !UTC_RE.test(raw.associatedAtUtc)) return null;
+  if (raw.releaseId !== undefined && (typeof raw.releaseId !== "string" || raw.releaseId.length === 0)) return null;
   const plan = parseImportedFlightPlan(raw.plan);
   return plan ? (raw as unknown as FlightPlanSnapshot) : null;
 }

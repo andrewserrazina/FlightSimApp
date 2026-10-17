@@ -416,7 +416,7 @@ describe("planned versus actual", () => {
     expect(row(rows, "Landing").difference).toBe("+12 min");
     expect(row(rows, "Flight time").difference).toBe("+4 min");
     expect(row(rows, "Off-block").difference).toBeNull(); // never inferred
-    expect(row(rows, "On-block").actual).toBe("Not detected");
+    expect(row(rows, "On-block").actual).toBe("Not recorded"); // OUT/IN are never detected
     expect(row(rows, "Fuel").difference).toBeNull();
   });
   it("does not compute clock deviations for a flight flown at another time, or flight time after interruptions", () => {
