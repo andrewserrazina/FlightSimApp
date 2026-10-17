@@ -13,6 +13,8 @@ import { flightTitle, routeTitle, UNAVAILABLE } from "./presentation";
 import { canCancel, MAX_CANCEL_REASON, ofpKey, releaseLabel, type DispatchRelease } from "./release";
 import { ReleaseSummary } from "./OperationsWidgets";
 import { preReleaseState, reviewPlan, unavailableInformational, type PlanReview } from "./review";
+import { planBasisForRelease } from "./planBasis";
+import { PlanBasisNote } from "./PlanBasisWidgets";
 
 export type DispatchState = "draft" | "ready" | "released" | "cancelled";
 
@@ -146,7 +148,7 @@ export function ReleaseReview({
 }
 
 /** The open (or most recent) release for the imported plan, with cancellation. */
-export function ReleaseCard({ release, currentPlan, onDone }: { release: DispatchRelease; currentPlan: ImportedFlightPlan | null; onDone(text: string, ok: boolean): void }) {
+export function ReleaseCard({ release, currentPlan, currentFlightId = null, onDone }: { release: DispatchRelease; currentPlan: ImportedFlightPlan | null; currentFlightId?: string | null; onDone(text: string, ok: boolean): void }) {
   const dispatch = useDispatch();
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState("");
@@ -154,6 +156,7 @@ export function ReleaseCard({ release, currentPlan, onDone }: { release: Dispatc
   const differs = currentPlan !== null && ofpKey(currentPlan) !== release.record.ofp.key;
   return (
     <Panel title={`Dispatch release ${releaseLabel(release.record.releaseId)}`} className="span-all ops-release" actions={<DispatchStateBadge state={release.state === "cancelled" ? "cancelled" : "released"} />}>
+      <PlanBasisNote basis={planBasisForRelease(release, currentFlightId)} />
       <ReleaseSummary release={release} />
       {differs && release.state === "released" && !release.flightId && (
         <div className="banner banner--warn" role="note">

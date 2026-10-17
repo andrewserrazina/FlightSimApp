@@ -190,6 +190,11 @@ body {
 .empty__action { margin-top: var(--space-3); }
 
 .table-wrap { overflow-x: auto; }
+/* Dispatch schedule (issue #12): time and date may wrap onto two lines instead of clipping the Estimated column. */
+.schedule-table td.num { white-space: normal; }
+.utc-stamp__part, .schedule-table th[scope="row"] { white-space: nowrap; }
+.plan-basis { margin: var(--space-2) 0; font-size: var(--text-sm); color: var(--text-muted); }
+.plan-basis strong { color: var(--text-primary); font-weight: 600; }
 .table-wrap--scroll { max-height: 320px; overflow-y: auto; }
 .table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 .table th { text-align: left; color: var(--text-muted); font-weight: 600; font-size: var(--text-xs); letter-spacing: var(--tracking-label); text-transform: uppercase; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border-strong); position: sticky; top: 0; background: var(--surface-1); }

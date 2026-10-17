@@ -173,7 +173,11 @@ aircraft FMS active leg, and the UI says so.
 The plan used depends on whether one is attached:
 
 - **Attached:** the recording flight's attached snapshot is used, never a newer import.
-- **Imported only:** an imported plan with no attachment is shown as **"Preview · not attached to a flight"**.
+- **Open release, not attached:** the released plan is used as a preview (S2-04; before this the panel showed the
+  imported plan even when a release was open).
+- **Imported only:** shown as **"Imported plan preview — not attached to flight"**.
+
+The panel uses the shared plan labels described in [dispatch-release.md](dispatch-release.md#plan-labels-s2-04).
 
 The panel shows:
 
@@ -242,6 +246,7 @@ then merged `main`, keeping both feature sets.
     - "Legacy attached plan — imported and attached without a dispatch release"
 
     An imported plan is never labelled as released just because some release exists.
+  - Implemented in S2-04; see [dispatch-release.md](dispatch-release.md#plan-labels-s2-04).
 
 ## Tests
 

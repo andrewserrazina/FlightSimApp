@@ -20,8 +20,25 @@ import { KeyValueList } from "../ui/KeyValueList";
 import { Panel } from "../ui/Panel";
 import { Tag } from "../ui/Tag";
 import { NavlogPanel } from "../route/RouteWidgets";
+import { planBasisForFlight, type PlanBasis } from "../dispatch/planBasis";
+import { PlanBasisNote, PlanBasisTag } from "../dispatch/PlanBasisWidgets";
 
 const unavailableClass = (v: string) => (v === UNAVAILABLE || v.startsWith(UNAVAILABLE) ? <span className="unavailable">{v}</span> : v);
+
+/**
+ * A UTC time cell that may wrap between the time and the date (issue #12) but never inside either, so
+ * narrow schedule columns stay readable. The text is exactly fmtUtcTime's.
+ */
+function UtcStamp({ iso }: { iso: string | null }) {
+  const text = fmtUtcTime(iso);
+  const at = text.indexOf(" · ");
+  if (at < 0) return <>{unavailableClass(text)}</>;
+  return (
+    <span className="utc-stamp">
+      <span className="utc-stamp__part">{text.slice(0, at)}</span> · <span className="utc-stamp__part">{text.slice(at + 3)}</span>
+    </span>
+  );
+}
 
 export function DispatchPage({ navigate }: { navigate: NavigateFn }) {
   const dispatch = useDispatch();
@@ -229,6 +246,9 @@ function PlanOverview({ plan, onClear, onAssociated, navigate }: { plan: Importe
   const openForPlan = open && open.record.ofp.key === key ? open : null;
   const lastForPlan = latestReleaseFor(view.releases, key);
   const boardState: DispatchState = openForPlan ? "released" : lastForPlan?.state === "cancelled" && !open ? "cancelled" : reviewState;
+  // The OFP on screen is a preview unless an open release was issued from it; an import alone is never "attached".
+  const ofpBasis: PlanBasis = openForPlan ? { kind: "release_open", plan, release: releaseLabel(openForPlan.record.releaseId) } : { kind: "imported_preview", plan, release: null };
+  const attachedBasis = snapshot?.kind === "ready" ? planBasisForFlight({ snapshot: snapshot.snapshot, flightOpen: true, openRelease: null, importedPlan: null }) : null;
   const opStatus = operationalStatus({ planImported: true, openRelease: open !== null, lifecycle: rec });
 
   useEffect(() => {
@@ -293,6 +313,7 @@ function PlanOverview({ plan, onClear, onAssociated, navigate }: { plan: Importe
         actions={
           <>
             <Tag tone="info">SimBrief OFP</Tag>
+            <PlanBasisTag basis={ofpBasis} />
             {stale.kind === "stale" && <Tag tone="warn">Possibly stale</Tag>}
           </>
         }
@@ -311,6 +332,7 @@ function PlanOverview({ plan, onClear, onAssociated, navigate }: { plan: Importe
             ["OFP generated", unavailableClass(fmtUtcTime(plan.source.generatedAtUtc))],
           ]}
         />
+        <PlanBasisNote basis={ofpBasis} />
         {aircraft.kind === "unverifiable" && <p className="muted">{aircraft.reason}</p>}
       </Panel>
 
@@ -332,7 +354,8 @@ function PlanOverview({ plan, onClear, onAssociated, navigate }: { plan: Importe
         </Panel>
 
         <Panel title="Schedule (UTC)">
-          <table className="table table--compact">
+          <div className="table-wrap">
+          <table className="table table--compact schedule-table">
             <thead>
               <tr>
                 <th scope="col">
@@ -353,12 +376,17 @@ function PlanOverview({ plan, onClear, onAssociated, navigate }: { plan: Importe
               ).map(([label, sched, est]) => (
                 <tr key={label}>
                   <th scope="row">{label}</th>
-                  <td className="num">{unavailableClass(fmtUtcTime(sched))}</td>
-                  <td className="num">{unavailableClass(fmtUtcTime(est))}</td>
+                  <td className="num">
+                    <UtcStamp iso={sched} />
+                  </td>
+                  <td className="num">
+                    <UtcStamp iso={est} />
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
           <KeyValueList
             columns={1}
             items={[
@@ -409,7 +437,7 @@ function PlanOverview({ plan, onClear, onAssociated, navigate }: { plan: Importe
       </div>
 
       <NavlogPanel plan={plan} />
-      {open && <ReleaseCard release={open} currentPlan={plan} onDone={onAssociated} />}
+      {open && <ReleaseCard release={open} currentPlan={plan} currentFlightId={flightId} onDone={onAssociated} />}
       {!openForPlan && <ReleaseReview key={key} plan={plan} nowMs={now} simulatorIcao={liveIcao} blockedBy={open} onDone={onAssociated} onStateChange={setReviewState} />}
       {!open && lastForPlan?.state === "cancelled" && (
         <p className="muted">
@@ -419,10 +447,16 @@ function PlanOverview({ plan, onClear, onAssociated, navigate }: { plan: Importe
 
       <Panel title="Use this plan">
         {flightId ? (
-          snapshot?.kind === "ready" ? (
-            <p>
-              The current flight already has a plan attached ({snapshot.snapshot.plan.origin?.icao ?? "????"} → {snapshot.snapshot.plan.destination?.icao ?? "????"}, attached {fmtUtcTime(snapshot.snapshot.associatedAtUtc)}). It is a fixed snapshot and is not changed by later imports.
-            </p>
+          snapshot?.kind === "ready" && attachedBasis ? (
+            <>
+              <div className="button-row">
+                <PlanBasisTag basis={attachedBasis} />
+              </div>
+              <p>
+                The current flight already has a plan attached ({snapshot.snapshot.plan.origin?.icao ?? "????"} → {snapshot.snapshot.plan.destination?.icao ?? "????"}, attached {fmtUtcTime(snapshot.snapshot.associatedAtUtc)}). It is a fixed snapshot and is not changed by later imports.
+              </p>
+              <PlanBasisNote basis={attachedBasis} />
+            </>
           ) : (
             open ? (
               <>
