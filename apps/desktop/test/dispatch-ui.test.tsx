@@ -246,7 +246,7 @@ describe("associating a plan with a flight", () => {
     const rows = within(panel).getAllByRole("row");
     const text = rows.map((r) => r.textContent);
     expect(text.find((t) => t?.startsWith("Takeoff"))).toContain("+8 min");
-    expect(text.find((t) => t?.startsWith("Off-block"))).toContain("Not detected");
+    expect(text.find((t) => t?.startsWith("Off-block"))).toContain("Not recorded");
     expect(text.find((t) => t?.startsWith("Flight time"))).toContain("+4 min");
     expect(f.calls).toHaveLength(0);
   });

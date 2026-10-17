@@ -7,12 +7,17 @@
  *   different time of day, and a "9 hours late" figure would be meaningless.
  * - Flight time (takeoff → landing) compares durations, so it is valid regardless of the clock,
  *   but not when the flight was interrupted (gaps make the observed time incomplete).
- * - Gate (off/on-block) times, boarding and fuel burn are NOT derived from telemetry and are not
- *   compared. No delay is inferred.
+ * - Gate (off/on-block) times are NOT derived from telemetry. They are compared only when the pilot
+ *   recorded OUT/IN explicitly ("Manual · Real-world UTC"), with the same 6-hour guard.
+ * - Block time (OUT → IN) is an elapsed duration, so it is compared regardless of the calendar time
+ *   flown, but only when both entries exist, come from the same real-world UTC clock, are in order,
+ *   and the recording was not interrupted.
+ * - Boarding and fuel burn are not compared. No delay is inferred.
  */
 import type { FlightSummary } from "@flightsim/flight-core";
 import type { ImportedFlightPlan } from "./model";
 import { fmtDuration, fmtUtcTime, UNAVAILABLE } from "./presentation";
+import { NO_MANUAL, type ManualMilestones } from "./timeline";
 
 export const MAX_SCHEDULE_GAP_MS = 6 * 3600_000;
 
@@ -30,22 +35,47 @@ function signedMinutes(ms: number): string {
   return m === 0 ? "On plan" : `${m > 0 ? "+" : "−"}${Math.abs(m)} min`;
 }
 
-function compareTime(label: string, plannedIso: string | null, actualIso: string | null, undetected: string): ComparisonRow {
+function compareTime(label: string, plannedIso: string | null, actualIso: string | null, undetected: string, basis = "Detected from telemetry."): ComparisonRow {
   const planned = fmtUtcTime(plannedIso);
   if (!actualIso) return { label, planned, actual: undetected, difference: null, note: null };
   const actual = fmtUtcTime(actualIso);
   if (!plannedIso) return { label, planned, actual, difference: null, note: "Not in the flight plan." };
   const delta = Date.parse(actualIso) - Date.parse(plannedIso);
   if (Math.abs(delta) > MAX_SCHEDULE_GAP_MS) return { label, planned, actual, difference: null, note: "Flown at a different time than scheduled; no deviation is calculated." };
-  return { label, planned, actual, difference: signedMinutes(delta), note: "Detected from telemetry." };
+  return { label, planned, actual, difference: signedMinutes(delta), note: `${basis} Actual minus scheduled.` };
 }
 
-export function comparePlanToFlight(plan: ImportedFlightPlan, summary: FlightSummary, interruptions: number): ComparisonRow[] {
+const MANUAL = "Manual · real-world UTC, recorded by the pilot (not detected).";
+const MAX_BLOCK_S = 48 * 3600;
+
+/** Block time from manual OUT/IN, or the reason it is not compared. */
+function blockRow(plannedBlock: number | null, manual: ManualMilestones, interruptions: number): ComparisonRow {
+  const planned = fmtDuration(plannedBlock);
+  const { out, in: inn } = manual;
+  if (!out || !inn) return { label: "Block time", planned, actual: "Not recorded", difference: null, note: "Needs pilot-recorded OUT and IN." };
+  if (out.clock !== inn.clock) return { label: "Block time", planned, actual: "Not compared", difference: null, note: "OUT and IN were recorded with different clocks." };
+  const block = (Date.parse(inn.atUtc) - Date.parse(out.atUtc)) / 1000;
+  if (!Number.isFinite(block) || block <= 0 || block > MAX_BLOCK_S) return { label: "Block time", planned, actual: "Not compared", difference: null, note: "The recorded OUT and IN do not form a valid duration." };
+  const actual = fmtDuration(block);
+  if (interruptions > 0) return { label: "Block time", planned, actual, difference: null, note: "The recording was interrupted, so block time is not compared." };
+  if (plannedBlock === null) return { label: "Block time", planned, actual, difference: null, note: "Not in the flight plan." };
+  return { label: "Block time", planned, actual, difference: signedMinutes((block - plannedBlock) * 1000), note: "Elapsed real-world UTC time from manual OUT to manual IN, compared with the planned block time as a duration." };
+}
+
+export function comparePlanToFlight(plan: ImportedFlightPlan, summary: FlightSummary, interruptions: number, manual: ManualMilestones = NO_MANUAL): ComparisonRow[] {
   const rows: ComparisonRow[] = [];
-  rows.push({ label: "Off-block", planned: fmtUtcTime(plan.schedule.outUtc), actual: "Not detected", difference: null, note: "Gate departure is not detected from telemetry." });
+  rows.push(
+    manual.out
+      ? compareTime("Off-block", plan.schedule.outUtc, manual.out.atUtc, "Not recorded", MANUAL)
+      : { label: "Off-block", planned: fmtUtcTime(plan.schedule.outUtc), actual: "Not recorded", difference: null, note: "Gate departure is not detected from telemetry." },
+  );
   rows.push(compareTime("Takeoff", plan.schedule.offUtc, summary.takeoffAtUtc, summary.startedAirborne ? "Not observed (started airborne)" : "Not detected"));
   rows.push(compareTime("Landing", plan.schedule.onUtc, summary.landingAtUtc, "Not detected"));
-  rows.push({ label: "On-block", planned: fmtUtcTime(plan.schedule.inUtc), actual: "Not detected", difference: null, note: "Gate arrival is not detected from telemetry." });
+  rows.push(
+    manual.in
+      ? compareTime("On-block", plan.schedule.inUtc, manual.in.atUtc, "Not recorded", MANUAL)
+      : { label: "On-block", planned: fmtUtcTime(plan.schedule.inUtc), actual: "Not recorded", difference: null, note: "Gate arrival is not detected from telemetry." },
+  );
 
   const flown = summary.takeoffAtUtc && summary.landingAtUtc ? (Date.parse(summary.landingAtUtc) - Date.parse(summary.takeoffAtUtc)) / 1000 : null;
   const plannedTime = plan.schedule.enrouteSeconds;
@@ -56,6 +86,7 @@ export function comparePlanToFlight(plan: ImportedFlightPlan, summary: FlightSum
   } else {
     rows.push({ label: "Flight time", planned: fmtDuration(plannedTime), actual: fmtDuration(flown), difference: plannedTime === null ? null : signedMinutes((flown - plannedTime) * 1000), note: plannedTime === null ? "Not in the flight plan." : "Takeoff to landing, detected." });
   }
+  rows.push(blockRow(plan.schedule.blockSeconds, manual, interruptions));
   rows.push({
     label: "Fuel",
     planned: plan.fuel.block ? `${Math.round(plan.fuel.block.kg).toLocaleString("en-US")} kg block` : UNAVAILABLE,

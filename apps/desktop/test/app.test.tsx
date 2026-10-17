@@ -106,8 +106,13 @@ describe("live flight", () => {
   it("shows an honest empty state without telemetry", async () => {
     await renderApp({ page: "live" });
     expect(screen.getByText("No live telemetry")).toBeInTheDocument();
-    expect(screen.getByText("No flight in progress")).toBeInTheDocument();
-    expect(screen.getByText("Not detected")).toBeInTheDocument();
+    const strip = screen.getByRole("region", { name: "Flight summary" });
+    expect(within(strip).getByText("No flight in progress")).toBeInTheDocument();
+    expect(within(strip).getByText("Not detected")).toBeInTheDocument();
+    // The operations timeline does not claim detections without a flight.
+    const milestones = screen.getByRole("list", { name: "Operational milestones" });
+    expect(within(milestones).queryByText("Not detected")).toBeNull();
+    expect(within(milestones).getAllByText("No flight in progress")).toHaveLength(4);
   });
 
   it("shows values with units and Unavailable for missing readings", async () => {

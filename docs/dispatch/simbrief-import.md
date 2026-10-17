@@ -1,5 +1,8 @@
 # SimBrief flight-plan import (S2-01)
 
+> Follow-up: reviewing, releasing and attaching an imported plan, and the OUT/OFF/ON/IN timeline, are described in
+> [dispatch-release.md](dispatch-release.md) (S2-02).
+
 Turnline imports a pilot's **latest generated** SimBrief operational flight plan (OFP) on request. It shows the
 plan on a new **Dispatch** page, keeps it on the PC for offline use, and lets the pilot attach a fixed copy of it to a
 recorded flight.
