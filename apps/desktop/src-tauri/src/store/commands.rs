@@ -205,8 +205,8 @@ pub async fn dispatch_release_for_flight(store: State<'_, StoreHandle>, flight_i
 }
 
 #[tauri::command]
-pub async fn flight_milestone_record(store: State<'_, StoreHandle>, flight_id: String, milestone: String, occurred_at_utc: String) -> Result<MilestoneOutcome, StoreError> {
-    store.call(move |slot| slot.get()?.record_milestone(&flight_id, &milestone, &occurred_at_utc)).await
+pub async fn flight_milestone_record(store: State<'_, StoreHandle>, flight_id: String, milestone: String, occurred_at_utc: String, clock_source: String) -> Result<MilestoneOutcome, StoreError> {
+    store.call(move |slot| slot.get()?.record_milestone(&flight_id, &milestone, &occurred_at_utc, &clock_source)).await
 }
 
 #[tauri::command]

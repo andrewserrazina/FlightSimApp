@@ -11,6 +11,8 @@ export interface MilestoneDto {
   milestone: "out" | "in";
   occurredAtUtc: string;
   recordedAtUtc: string;
+  /** V1: always "real_world_utc" (the computer's UTC clock). */
+  clockSource: string;
 }
 
 export interface StoredPlanDto {
@@ -35,7 +37,7 @@ export interface DispatchStore {
   attachRelease(releaseId: string, flightId: string, linkedAtUtc: string): Promise<ReleaseDto>;
   listReleases(limit?: number): Promise<ReleaseDto[]>;
   releaseForFlight(flightId: string): Promise<ReleaseDto | null>;
-  recordMilestone(flightId: string, milestone: "out" | "in", occurredAtUtc: string): Promise<"recorded" | "already_recorded">;
+  recordMilestone(flightId: string, milestone: "out" | "in", occurredAtUtc: string, clockSource: "real_world_utc"): Promise<"recorded" | "already_recorded">;
   milestones(flightId: string): Promise<MilestoneDto[]>;
 }
 
@@ -59,7 +61,7 @@ export async function createTauriDispatchStore(): Promise<DispatchStore> {
     attachRelease: (releaseId, flightId, linkedAtUtc) => call<ReleaseDto>("dispatch_release_attach", { releaseId, flightId, linkedAtUtc }),
     listReleases: (limit) => call<ReleaseDto[]>("dispatch_releases_list", { limit: limit ?? 100 }),
     releaseForFlight: (flightId) => call<ReleaseDto | null>("dispatch_release_for_flight", { flightId }),
-    recordMilestone: (flightId, milestone, occurredAtUtc) => call<"recorded" | "already_recorded">("flight_milestone_record", { flightId, milestone, occurredAtUtc }),
+    recordMilestone: (flightId, milestone, occurredAtUtc, clockSource) => call<"recorded" | "already_recorded">("flight_milestone_record", { flightId, milestone, occurredAtUtc, clockSource }),
     milestones: (flightId) => call<MilestoneDto[]>("flight_milestones", { flightId }),
   };
 }
@@ -164,15 +166,16 @@ export class MemoryDispatchStore implements DispatchStore {
     const r = this.releases.find((x) => x.flightId === flightId);
     return r ? structuredClone(r) : null;
   }
-  async recordMilestone(flightId: string, milestone: "out" | "in", occurredAtUtc: string) {
+  async recordMilestone(flightId: string, milestone: "out" | "in", occurredAtUtc: string, clockSource: "real_world_utc") {
     this.maybeFail();
+    if (clockSource !== "real_world_utc") throw new Error("Manual milestones can only be recorded with the real-world UTC clock.");
     this.checkFlight(flightId);
     if (this.closedFlights.has(flightId)) throw new Error("OUT and IN can only be recorded while the flight is open.");
     const list = this.manual.get(flightId) ?? [];
     if (list.some((m) => m.milestone === milestone)) return "already_recorded" as const;
     const out = list.find((m) => m.milestone === "out");
     if (milestone === "in" && out && out.occurredAtUtc > occurredAtUtc) throw new Error("IN cannot be earlier than the recorded OUT.");
-    this.manual.set(flightId, [...list, { milestone, occurredAtUtc, recordedAtUtc: occurredAtUtc }]);
+    this.manual.set(flightId, [...list, { milestone, occurredAtUtc, recordedAtUtc: occurredAtUtc, clockSource }]);
     return "recorded" as const;
   }
   async milestones(flightId: string) {

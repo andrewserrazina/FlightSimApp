@@ -34,7 +34,12 @@ pub struct MilestoneOut {
     pub milestone: String,
     pub occurred_at_utc: String,
     pub recorded_at_utc: String,
+    /// Clock the time was read from. V1: always "real_world_utc" (the computer's UTC clock).
+    pub clock_source: String,
 }
+
+/// Clock sources accepted for manual milestones. Simulator time is deliberately not one of them.
+pub const MILESTONE_CLOCKS: &[&str] = &["real_world_utc"];
 
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -233,10 +238,13 @@ impl Store {
 
     /// Record OUT or IN for a flight that is still open. The time is the pilot's explicit action;
     /// Turnline never derives these from telemetry. Recorded once; never replaced.
-    pub fn record_milestone(&mut self, flight_id: &str, milestone: &str, occurred_at_utc: &str) -> Result<MilestoneOutcome, StoreError> {
+    pub fn record_milestone(&mut self, flight_id: &str, milestone: &str, occurred_at_utc: &str, clock_source: &str) -> Result<MilestoneOutcome, StoreError> {
         check_id("flightId", flight_id)?;
         if milestone != "out" && milestone != "in" {
             return Err(StoreError::invalid("milestone must be OUT or IN"));
+        }
+        if !MILESTONE_CLOCKS.contains(&clock_source) {
+            return Err(StoreError::invalid("Manual milestones can only be recorded with the real-world UTC clock."));
         }
         check_ts("occurredAtUtc", occurred_at_utc)?;
         let tx = self.conn.transaction()?;
@@ -253,16 +261,18 @@ impl Store {
             }
         }
         let inserted = tx.execute(
-            "INSERT INTO flight_manual_milestones (flight_id, milestone, occurred_at_utc, recorded_at_utc) VALUES (?1, ?2, ?3, ?4) ON CONFLICT (flight_id, milestone) DO NOTHING",
-            params![flight_id, milestone, occurred_at_utc, now_utc()],
+            "INSERT INTO flight_manual_milestones (flight_id, milestone, occurred_at_utc, recorded_at_utc, clock_source) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT (flight_id, milestone) DO NOTHING",
+            params![flight_id, milestone, occurred_at_utc, now_utc(), clock_source],
         )?;
         tx.commit()?;
         Ok(if inserted == 1 { MilestoneOutcome::Recorded } else { MilestoneOutcome::AlreadyRecorded })
     }
 
     pub fn milestones(&self, flight_id: &str) -> Result<Vec<MilestoneOut>, StoreError> {
-        let mut stmt = self.conn.prepare("SELECT milestone, occurred_at_utc, recorded_at_utc FROM flight_manual_milestones WHERE flight_id = ?1 ORDER BY milestone DESC")?;
-        let rows = stmt.query_map([flight_id], |r| Ok(MilestoneOut { milestone: r.get(0)?, occurred_at_utc: r.get(1)?, recorded_at_utc: r.get(2)? }))?.collect::<Result<Vec<_>, _>>()?;
+        let mut stmt = self.conn.prepare("SELECT milestone, occurred_at_utc, recorded_at_utc, clock_source FROM flight_manual_milestones WHERE flight_id = ?1 ORDER BY milestone DESC")?;
+        let rows = stmt
+            .query_map([flight_id], |r| Ok(MilestoneOut { milestone: r.get(0)?, occurred_at_utc: r.get(1)?, recorded_at_utc: r.get(2)?, clock_source: r.get(3)? }))?
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
     }
 }

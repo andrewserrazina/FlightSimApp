@@ -15,5 +15,5 @@ The stale-plan warning appears because the fixture's OFP date is in the past rel
 | release-log-cancelled.png | Release log after cancellation |
 | live-operations.png | Live Flight Operations panel: status, release attached, OUT recorded manually, OFF/ON not yet detected |
 | debrief-full.png | Debrief: dispatch release summary, milestones and planned versus actual |
-| debrief-milestones.png | Milestones with scheduled, estimated and actual values (MANUAL vs DETECTED) |
+| debrief-milestones.png | Milestones with scheduled, estimated and actual values (MANUAL · REAL-WORLD UTC vs DETECTED · TELEMETRY) |
 | debrief-milestones-narrow.png | The same at a narrow window width |

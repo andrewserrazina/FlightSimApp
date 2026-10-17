@@ -13,7 +13,8 @@ import { dispatchError, fetchLatestOfp, normalizeIdentity, type DispatchError, t
 import { buildReleaseRecord, canAttach, isOpen, MAX_CANCEL_REASON, parseRelease, type DispatchRelease, type ReleaseDto, type ReleaseWarningAck } from "./release";
 import { normalizeOfp } from "./simbrief/normalize";
 import type { DispatchStore } from "./store";
-import type { ManualMilestones } from "./timeline";
+import type { MilestoneDto } from "./store";
+import { NO_MANUAL, type ManualMilestones, type ManualTime } from "./timeline";
 
 export type PlanState =
   | { kind: "loading" }
@@ -63,6 +64,15 @@ export interface DispatchDeps {
 
 const iso = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+const UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$/;
+
+/** A stored manual milestone, or null when missing. Throws on a damaged row (shown as an error, never guessed). */
+function manualTime(rows: MilestoneDto[], which: "out" | "in"): ManualTime | null {
+  const m = rows.find((r) => r.milestone === which);
+  if (!m) return null;
+  if (m.clockSource !== "real_world_utc" || !UTC_RE.test(m.occurredAtUtc)) throw new Error(`The recorded ${which.toUpperCase()} has an unrecognised time or clock source.`);
+  return { atUtc: m.occurredAtUtc, clock: "real_world_utc" };
+}
 
 function toEntry(dto: ReleaseDto): ReleaseEntry {
   const release = parseRelease(dto);
@@ -276,7 +286,7 @@ export class DispatchService {
     if (cached && !force && cached.kind !== "error") return cached;
     const store = this.deps.store;
     if (!store) {
-      const none: FlightOpsState = { kind: "ready", release: null, manual: { outUtc: null, inUtc: null } };
+      const none: FlightOpsState = { kind: "ready", release: null, manual: NO_MANUAL };
       this.set({ flightOps: { ...this.view.flightOps, [flightId]: none } });
       return none;
     }
@@ -287,7 +297,7 @@ export class DispatchService {
       state = {
         kind: "ready",
         release: rel ? toEntry(rel) : null,
-        manual: { outUtc: ms.find((m) => m.milestone === "out")?.occurredAtUtc ?? null, inUtc: ms.find((m) => m.milestone === "in")?.occurredAtUtc ?? null },
+        manual: { out: manualTime(ms, "out"), in: manualTime(ms, "in") },
       };
     } catch (e) {
       state = { kind: "error", message: errText(e) };
@@ -296,11 +306,11 @@ export class DispatchService {
     return state;
   }
 
-  /** Pilot-recorded OUT or IN at the current time. Never called automatically. */
+  /** Pilot-recorded OUT or IN at the current real-world UTC time. Never called automatically; never simulator time. */
   async recordMilestone(flightId: string, milestone: "out" | "in"): Promise<ActionResult> {
     if (!this.deps.store) return { ok: false, message: "No local store." };
     try {
-      const outcome = await this.deps.store.recordMilestone(flightId, milestone, iso(this.now()));
+      const outcome = await this.deps.store.recordMilestone(flightId, milestone, iso(this.now()), "real_world_utc");
       return outcome === "recorded" ? { ok: true } : { ok: true, message: `${milestone.toUpperCase()} was already recorded for this flight; the first value was kept.` };
     } catch (e) {
       return { ok: false, message: errText(e) };

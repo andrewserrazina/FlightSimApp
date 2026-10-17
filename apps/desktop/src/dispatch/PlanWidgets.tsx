@@ -193,7 +193,7 @@ export function PlanComparisonPanel({ detail }: { detail: FlightDetail }) {
   return (
     <Panel title="Planned versus actual" className="span-all" actions={<Tag tone="ok">Flight plan attached</Tag>}>
       <p className="muted">
-        {flightTitle(plan) === UNAVAILABLE ? "SimBrief OFP" : flightTitle(plan)} {routeTitle(plan)} · attached {fmtUtcTime(snap.snapshot.associatedAtUtc)}. Takeoff and landing are detected from telemetry; off-block and on-block only if you recorded them. Deviations are actual minus scheduled and are not calculated when the flight was flown more than 6 hours away from its schedule. No delays are inferred.
+        {flightTitle(plan) === UNAVAILABLE ? "SimBrief OFP" : flightTitle(plan)} {routeTitle(plan)} · attached {fmtUtcTime(snap.snapshot.associatedAtUtc)}. Takeoff and landing are detected from telemetry; off-block and on-block appear only if you recorded them (Manual · Real-world UTC). Actual times use this computer&apos;s UTC clock, not simulator time. Deviations are actual minus scheduled and are not calculated when the flight was flown more than 6 hours away from its schedule; block time is compared as a duration. No delays are inferred.
       </p>
       <div className="table-wrap">
         <table className="table table--compact plan-compare">

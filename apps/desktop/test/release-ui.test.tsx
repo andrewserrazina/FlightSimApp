@@ -213,15 +213,17 @@ describe("release on Live Flight", () => {
     fireEvent.click(screen.getByRole("button", { name: "Record OUT (off-block) now" }));
     const dialog = screen.getByRole("dialog", { name: "Record OUT (off-block) now?" });
     expect(dialog).toHaveTextContent(/never as detected/);
+    expect(dialog).toHaveTextContent(/real-world UTC time from this computer's clock/);
+    expect(dialog).toHaveTextContent(/Simulator time is not used/);
     fireEvent.click(within(dialog).getByRole("button", { name: "Record OUT" }));
     await act(flush);
     await act(flush);
     const outAfter = within(screen.getByRole("list", { name: "Operational milestones" })).getByRole("listitem", { name: "OUT Off-block" });
     expect(outAfter).toHaveTextContent(/Actual14:36Z · 15 Oct 2026/);
-    expect(within(outAfter).getByText("MANUAL")).toBeInTheDocument();
-    expect(within(outAfter).queryByText("DETECTED")).toBeNull();
+    expect(within(outAfter).getByText("MANUAL · REAL-WORLD UTC")).toBeInTheDocument();
+    expect(within(outAfter).queryByText(/DETECTED/)).toBeNull();
     expect(screen.getByRole("button", { name: "Record OUT (off-block) now" })).toBeDisabled();
-    expect(store.manual.get(flightId)).toEqual([{ milestone: "out", occurredAtUtc: "2026-10-15T14:36:00Z", recordedAtUtc: "2026-10-15T14:36:00Z" }]);
+    expect(store.manual.get(flightId)).toEqual([{ milestone: "out", occurredAtUtc: "2026-10-15T14:36:00Z", recordedAtUtc: "2026-10-15T14:36:00Z", clockSource: "real_world_utc" }]);
   });
 
   it("recording works normally with no plan and no release", async () => {
@@ -268,7 +270,7 @@ describe("Debrief with a dispatch release", () => {
     expect(rel).toHaveTextContent("Released · attached to a flight");
     expect(rel).toHaveTextContent(/not real-world dispatch releases/);
     const ms = screen.getByRole("region", { name: "Milestones (OUT · OFF · ON · IN)" });
-    expect(within(ms).getByRole("listitem", { name: "OFF Takeoff" })).toHaveTextContent(/Actual15:00Z · 15 Oct 2026DETECTED/);
+    expect(within(ms).getByRole("listitem", { name: "OFF Takeoff" })).toHaveTextContent(/Actual15:00Z · 15 Oct 2026DETECTED · TELEMETRY/);
     expect(within(ms).getByRole("listitem", { name: "IN On-block" })).toHaveTextContent(/ActualNot recorded/);
     expect(ms).toHaveTextContent(/interrupted once/);
     const cmp = screen.getByRole("region", { name: "Planned versus actual" });
@@ -282,7 +284,7 @@ describe("Debrief with a dispatch release", () => {
     await openDebrief();
     expect(screen.getByRole("region", { name: "Dispatch release" })).toHaveTextContent("No dispatch release is attached to this flight.");
     const ms = screen.getByRole("region", { name: "Milestones (OUT · OFF · ON · IN)" });
-    expect(within(ms).getByRole("listitem", { name: "ON Landing" })).toHaveTextContent(/Actual17:20Z · 15 Oct 2026DETECTED/);
+    expect(within(ms).getByRole("listitem", { name: "ON Landing" })).toHaveTextContent(/Actual17:20Z · 15 Oct 2026DETECTED · TELEMETRY/);
     expect(within(ms).getAllByText("No plan")).toHaveLength(8);
     expect(screen.getByRole("region", { name: "Planned versus actual" })).toHaveTextContent("No flight plan is attached");
   });

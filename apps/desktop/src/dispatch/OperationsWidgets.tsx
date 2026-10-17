@@ -17,9 +17,7 @@ import type { ImportedFlightPlan } from "./model";
 import { flightTitle, fmtUtcTime, routeTitle, UNAVAILABLE } from "./presentation";
 import { releaseLabel, releaseStateLabel, type DispatchRelease } from "./release";
 import { operationalStatus, type OperationalStatus } from "./status";
-import { buildMilestones, manualEligibility, PROVENANCE_TEXT, type ManualMilestones, type MilestoneRow } from "./timeline";
-
-const NO_MANUAL: ManualMilestones = { outUtc: null, inUtc: null };
+import { buildMilestones, manualEligibility, NO_MANUAL, PROVENANCE_TEXT, type ManualMilestones, type MilestoneRow } from "./timeline";
 
 export function StatusPill({ status }: { status: OperationalStatus }) {
   return (
@@ -78,7 +76,7 @@ export function MilestoneTimeline({ rows, planNote }: { rows: MilestoneRow[]; pl
             </dl>
             {r.actual.at && (
               <Tag tone={ACTUAL_TONE[r.actual.provenance]} title={PROVENANCE_TEXT[r.actual.provenance]}>
-                {r.actual.provenance === "manual" ? "MANUAL" : "DETECTED"}
+                {r.actual.provenance === "manual" ? "MANUAL · REAL-WORLD UTC" : "DETECTED · TELEMETRY"}
               </Tag>
             )}
           </li>
@@ -86,7 +84,7 @@ export function MilestoneTimeline({ rows, planNote }: { rows: MilestoneRow[]; pl
       </ol>
       <p className="muted ops-timeline__legend">
         Scheduled and estimated times come from the SimBrief OFP{planNote ? ` (${planNote})` : ""}. Takeoff and landing are detected from telemetry. Off-block and on-block are never detected
-        automatically; they appear only if you record them.
+        automatically; they appear only if you record them. Actual times use this computer&apos;s real-world UTC clock, not simulator time.
       </p>
     </div>
   );
@@ -206,7 +204,7 @@ export function LiveOperations({ navigate }: { navigate: NavigateFn }) {
           )}
         </p>
       )}
-      {flightOpen && <p className="muted">OUT can be recorded before takeoff is detected; IN after a landing is detected. Both are stored as manual entries and cannot be changed later.</p>}
+      {flightOpen && <p className="muted">OUT can be recorded before takeoff is detected; IN after a landing is detected. Both are stored as manual entries with this computer&apos;s real-world UTC time and cannot be changed later.</p>}
       {message && (
         <p className={message.ok ? "muted" : "unavailable-text"} role="status">
           {message.text}
@@ -235,7 +233,10 @@ export function LiveOperations({ navigate }: { navigate: NavigateFn }) {
             </>
           }
         >
-          <p>The current time is stored as a manually recorded {confirm === "out" ? "off-block" : "on-block"} time. It is shown as manual, never as detected, and cannot be changed afterwards.</p>
+          <p>
+            The current real-world UTC time from this computer&apos;s clock is stored as a manually recorded {confirm === "out" ? "off-block" : "on-block"} time. Simulator time is not used. It is shown as
+            &quot;Manual · Real-world UTC&quot;, never as detected, and cannot be changed afterwards.
+          </p>
         </ConfirmDialog>
       )}
     </Panel>

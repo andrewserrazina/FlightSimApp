@@ -207,7 +207,7 @@ describe("DispatchService releases", () => {
 
   it("legacy flights load without any release or milestones", async () => {
     const { svc } = await service();
-    expect(await svc.loadFlightOps("old-flight")).toEqual({ kind: "ready", release: null, manual: { outUtc: null, inUtc: null } });
+    expect(await svc.loadFlightOps("old-flight")).toEqual({ kind: "ready", release: null, manual: { out: null, in: null } });
   });
 
   it("reports store failures without throwing", async () => {
@@ -238,29 +238,50 @@ describe("DispatchService releases", () => {
     expect(await svc.recordMilestone("f-1", "out")).toMatchObject({ ok: true, message: expect.stringMatching(/already recorded/) });
     now = Date.parse("2026-10-15T17:20:00Z");
     expect(await svc.recordMilestone("f-1", "in")).toEqual({ ok: true });
-    expect(svc.getView().flightOps["f-1"]).toEqual({ kind: "ready", release: null, manual: { outUtc: "2026-10-15T14:35:00Z", inUtc: "2026-10-15T17:20:00Z" } });
+    expect(svc.getView().flightOps["f-1"]).toEqual({ kind: "ready", release: null, manual: { out: { atUtc: "2026-10-15T14:35:00Z", clock: "real_world_utc" as const }, in: { atUtc: "2026-10-15T17:20:00Z", clock: "real_world_utc" as const } } });
     store.closedFlights.add("f-2");
     expect(await svc.recordMilestone("f-2", "out")).toMatchObject({ ok: false });
   });
 });
 
+describe("manual milestone clock source", () => {
+  it("records with the real-world UTC clock and keeps the clock with the time", async () => {
+    const { svc, store } = await service(new MemoryDispatchStore(), "ofp-v2-kgs.json", () => Date.parse("2026-10-15T14:35:00Z"));
+    const spy = vi.spyOn(store, "recordMilestone");
+    await svc.recordMilestone("f-1", "out");
+    expect(spy).toHaveBeenCalledWith("f-1", "out", "2026-10-15T14:35:00Z", "real_world_utc");
+    expect(store.manual.get("f-1")![0]!.clockSource).toBe("real_world_utc");
+    expect(svc.getView().flightOps["f-1"]).toMatchObject({ kind: "ready", manual: { out: { atUtc: "2026-10-15T14:35:00Z", clock: "real_world_utc" }, in: null } });
+    const row = buildMilestones({ plan: null, takeoffAtUtc: null, landingAtUtc: null, startedAirborne: false, manual: (svc.getView().flightOps["f-1"] as any).manual, flightOpen: true })[0]!;
+    expect(row.actual).toEqual({ at: "2026-10-15T14:35:00Z", provenance: "manual", clock: "real_world_utc" });
+  });
+
+  it("rejects other clocks and reports a stored entry with an unknown clock instead of trusting it", async () => {
+    const store = new MemoryDispatchStore();
+    await expect(store.recordMilestone("f-1", "out", "2026-10-15T14:35:00Z", "simulator" as any)).rejects.toThrow(/real-world UTC/);
+    store.manual.set("f-2", [{ milestone: "out", occurredAtUtc: "2026-10-15T14:35:00Z", recordedAtUtc: "2026-10-15T14:35:00Z", clockSource: "simulator" }]);
+    const { svc } = await service(store);
+    expect(await svc.loadFlightOps("f-2")).toMatchObject({ kind: "error", message: expect.stringMatching(/unrecognised time or clock source/) });
+  });
+});
+
 describe("operational timeline provenance", () => {
-  const base = { takeoffAtUtc: null, landingAtUtc: null, startedAirborne: false, manual: { outUtc: null, inUtc: null }, flightOpen: true };
+  const base = { takeoffAtUtc: null, landingAtUtc: null, startedAirborne: false, manual: { out: null, in: null }, flightOpen: true };
 
   it("scheduled and estimated come from the plan; actual OFF/ON only from detection", () => {
     const rows = buildMilestones({ ...base, plan: plan("ofp-v2-iso-times.json"), takeoffAtUtc: "2026-10-15T15:00:00Z", landingAtUtc: "2026-10-15T17:12:00Z", flightOpen: false });
     const [out, off, on, inn] = rows;
     expect(out).toMatchObject({ code: "OUT", scheduled: { at: "2026-10-15T14:35:00Z", source: "simbrief_scheduled" }, estimated: { at: "2026-10-15T14:35:00Z", source: "simbrief_estimated" }, actual: { at: null, provenance: "not_recorded" } });
-    expect(off!.actual).toEqual({ at: "2026-10-15T15:00:00Z", provenance: "detected" });
+    expect(off!.actual).toEqual({ at: "2026-10-15T15:00:00Z", provenance: "detected", clock: "real_world_utc" });
     expect(on!.estimated.at).toBe("2026-10-15T17:11:30Z");
-    expect(on!.actual).toEqual({ at: "2026-10-15T17:12:00Z", provenance: "detected" });
-    expect(inn!.actual).toEqual({ at: null, provenance: "not_recorded" });
+    expect(on!.actual).toEqual({ at: "2026-10-15T17:12:00Z", provenance: "detected", clock: "real_world_utc" });
+    expect(inn!.actual).toEqual({ at: null, provenance: "not_recorded", clock: null });
   });
 
   it("never invents OUT/IN: only explicit pilot entries, labelled manual", () => {
-    const rows = buildMilestones({ ...base, plan: null, manual: { outUtc: "2026-10-15T14:36:00Z", inUtc: null } });
-    expect(rows[0]!.actual).toEqual({ at: "2026-10-15T14:36:00Z", provenance: "manual" });
-    expect(rows[3]!.actual).toEqual({ at: null, provenance: "not_recorded" });
+    const rows = buildMilestones({ ...base, plan: null, manual: { out: { atUtc: "2026-10-15T14:36:00Z", clock: "real_world_utc" as const }, in: null } });
+    expect(rows[0]!.actual).toEqual({ at: "2026-10-15T14:36:00Z", provenance: "manual", clock: "real_world_utc" });
+    expect(rows[3]!.actual).toEqual({ at: null, provenance: "not_recorded", clock: null });
     expect(rows[0]!.scheduled).toEqual({ at: null, source: null });
   });
 
@@ -274,12 +295,12 @@ describe("operational timeline provenance", () => {
   });
 
   it("offers manual OUT only before takeoff and IN only after a detected landing", () => {
-    const m = { outUtc: null, inUtc: null };
+    const m = { out: null, in: null };
     expect(manualEligibility({ flightOpen: true, takeoffAtUtc: null, landingAtUtc: null, airborne: false, manual: m })).toEqual({ out: true, in: false });
     expect(manualEligibility({ flightOpen: true, takeoffAtUtc: "t", landingAtUtc: null, airborne: true, manual: m })).toEqual({ out: false, in: false });
     expect(manualEligibility({ flightOpen: true, takeoffAtUtc: "t", landingAtUtc: "l", airborne: false, manual: m })).toEqual({ out: false, in: true });
     expect(manualEligibility({ flightOpen: false, takeoffAtUtc: "t", landingAtUtc: "l", airborne: false, manual: m })).toEqual({ out: false, in: false });
-    expect(manualEligibility({ flightOpen: true, takeoffAtUtc: "t", landingAtUtc: "l", airborne: false, manual: { outUtc: null, inUtc: "x" } }).in).toBe(false);
+    expect(manualEligibility({ flightOpen: true, takeoffAtUtc: "t", landingAtUtc: "l", airborne: false, manual: { out: null, in: { atUtc: "x", clock: "real_world_utc" } } }).in).toBe(false);
   });
 });
 
@@ -306,9 +327,9 @@ describe("planned versus actual with recorded milestones", () => {
   const row = (rows: ReturnType<typeof comparePlanToFlight>, label: string) => rows.find((r) => r.label === label)!;
 
   it("compares pilot-recorded OUT/IN and block time, and labels them manual", () => {
-    const rows = comparePlanToFlight(plan(), summary(), 0, { outUtc: "2026-10-15T14:40:00Z", inUtc: "2026-10-15T17:30:00Z" });
-    expect(row(rows, "Off-block")).toMatchObject({ actual: "14:40Z · 15 Oct 2026", difference: "+5 min", note: expect.stringMatching(/manually/) });
-    expect(row(rows, "On-block")).toMatchObject({ difference: "+12 min", note: expect.stringMatching(/manually/) });
+    const rows = comparePlanToFlight(plan(), summary(), 0, { out: { atUtc: "2026-10-15T14:40:00Z", clock: "real_world_utc" as const }, in: { atUtc: "2026-10-15T17:30:00Z", clock: "real_world_utc" as const } });
+    expect(row(rows, "Off-block")).toMatchObject({ actual: "14:40Z · 15 Oct 2026", difference: "+5 min", note: expect.stringMatching(/^Manual · real-world UTC/) });
+    expect(row(rows, "On-block")).toMatchObject({ difference: "+12 min", note: expect.stringMatching(/^Manual · real-world UTC/) });
     expect(row(rows, "Block time")).toMatchObject({ planned: "2 h 43 min", actual: "2 h 50 min", difference: "+7 min" });
     // Existing detected comparisons are unchanged.
     expect(row(rows, "Takeoff").difference).toBe("+8 min");
@@ -321,8 +342,30 @@ describe("planned versus actual with recorded milestones", () => {
     expect(row(rows, "Block time")).toMatchObject({ actual: "Not recorded", difference: null });
   });
 
+  const rw = (atUtc: string) => ({ atUtc, clock: "real_world_utc" as const });
+
+  it("compares block time as an elapsed duration even when flown at a different calendar time", () => {
+    // Flown the next day: clock deviations are suppressed, the duration is still comparable.
+    const rows = comparePlanToFlight(plan(), summary({ takeoffAtUtc: "2026-10-16T21:05:00Z", landingAtUtc: "2026-10-16T23:25:00Z" }), 0, { out: rw("2026-10-16T20:45:00Z"), in: rw("2026-10-16T23:35:00Z") });
+    expect(row(rows, "Off-block")).toMatchObject({ difference: null, note: expect.stringMatching(/different time than scheduled/) });
+    expect(row(rows, "On-block").difference).toBeNull();
+    expect(row(rows, "Takeoff").difference).toBeNull();
+    expect(row(rows, "Block time")).toMatchObject({ planned: "2 h 43 min", actual: "2 h 50 min", difference: "+7 min", note: expect.stringMatching(/real-world UTC/) });
+  });
+
+  it("does not compare block time when the recording was interrupted or the entries are invalid", () => {
+    const interrupted = comparePlanToFlight(plan(), summary(), 2, { out: rw("2026-10-15T14:40:00Z"), in: rw("2026-10-15T17:30:00Z") });
+    expect(row(interrupted, "Block time")).toMatchObject({ actual: "2 h 50 min", difference: null, note: expect.stringMatching(/interrupted/) });
+    const reversed = comparePlanToFlight(plan(), summary(), 0, { out: rw("2026-10-15T17:30:00Z"), in: rw("2026-10-15T14:40:00Z") });
+    expect(row(reversed, "Block time")).toMatchObject({ actual: "Not compared", difference: null });
+    const tooLong = comparePlanToFlight(plan(), summary(), 0, { out: rw("2026-10-10T14:40:00Z"), in: rw("2026-10-15T17:30:00Z") });
+    expect(row(tooLong, "Block time")).toMatchObject({ actual: "Not compared", difference: null });
+    const onlyOut = comparePlanToFlight(plan(), summary(), 0, { out: rw("2026-10-15T14:40:00Z"), in: null });
+    expect(row(onlyOut, "Block time")).toMatchObject({ actual: "Not recorded", difference: null });
+  });
+
   it("keeps the six-hour guard for manually recorded times", () => {
-    const rows = comparePlanToFlight(plan(), summary({ takeoffAtUtc: "2026-10-16T03:00:00Z", landingAtUtc: "2026-10-16T05:20:00Z" }), 0, { outUtc: "2026-10-16T02:40:00Z", inUtc: null });
+    const rows = comparePlanToFlight(plan(), summary({ takeoffAtUtc: "2026-10-16T03:00:00Z", landingAtUtc: "2026-10-16T05:20:00Z" }), 0, { out: { atUtc: "2026-10-16T02:40:00Z", clock: "real_world_utc" as const }, in: null });
     expect(row(rows, "Off-block").difference).toBeNull();
     expect(row(rows, "Takeoff").difference).toBeNull();
   });

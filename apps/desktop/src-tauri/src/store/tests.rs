@@ -510,7 +510,7 @@ fn upgrading_a_v2_database_keeps_flights_and_adds_dispatch_tables() {
 use super::release::MilestoneOutcome;
 
 /// Removes everything migration 4 added (to build genuine older databases in tests).
-const DROP_V4: &str = "DROP TRIGGER flight_manual_milestones_immutable; DROP TABLE flight_manual_milestones; \
+const DROP_V4: &str = "DELETE FROM schema_migrations WHERE version = 5; DROP TRIGGER flight_manual_milestones_immutable; DROP TABLE flight_manual_milestones; \
     DROP TRIGGER dispatch_releases_no_delete; DROP TRIGGER dispatch_releases_link_once; DROP TRIGGER dispatch_releases_state_transition; \
     DROP TRIGGER dispatch_releases_immutable_record; DROP INDEX dispatch_releases_by_time; DROP TABLE dispatch_releases; \
     DELETE FROM schema_migrations WHERE version = 4;";
@@ -636,7 +636,7 @@ fn releases_and_milestones_survive_reopen() {
         open_flight(&mut s, "f-1");
         s.create_release(&release_json("rel-1", "100")).unwrap();
         s.attach_release("rel-1", "f-1", "2026-10-16T12:40:00Z").unwrap();
-        s.record_milestone("f-1", "out", "2026-10-16T12:45:00Z").unwrap();
+        s.record_milestone("f-1", "out", "2026-10-16T12:45:00Z", "real_world_utc").unwrap();
         s.create_release(&release_json("rel-2", "200")).unwrap();
         s.cancel_release("rel-2", "2026-10-16T13:00:00Z", "Weather").unwrap();
     }
@@ -651,20 +651,20 @@ fn releases_and_milestones_survive_reopen() {
 #[test]
 fn manual_milestones_are_explicit_once_ordered_and_only_for_open_flights() {
     let mut s = Store::open_in_memory().unwrap();
-    assert!(s.record_milestone("f-1", "out", "2026-10-16T12:45:00Z").is_err());
+    assert!(s.record_milestone("f-1", "out", "2026-10-16T12:45:00Z", "real_world_utc").is_err());
     open_flight(&mut s, "f-1");
-    assert!(s.record_milestone("f-1", "off", "2026-10-16T12:45:00Z").is_err());
-    assert!(s.record_milestone("f-1", "out", "12:45").is_err());
-    assert_eq!(s.record_milestone("f-1", "out", "2026-10-16T12:45:00Z").unwrap(), MilestoneOutcome::Recorded);
-    assert_eq!(s.record_milestone("f-1", "out", "2026-10-16T12:50:00Z").unwrap(), MilestoneOutcome::AlreadyRecorded);
-    assert!(s.record_milestone("f-1", "in", "2026-10-16T12:00:00Z").is_err());
-    assert_eq!(s.record_milestone("f-1", "in", "2026-10-16T15:00:00Z").unwrap(), MilestoneOutcome::Recorded);
+    assert!(s.record_milestone("f-1", "off", "2026-10-16T12:45:00Z", "real_world_utc").is_err());
+    assert!(s.record_milestone("f-1", "out", "12:45", "real_world_utc").is_err());
+    assert_eq!(s.record_milestone("f-1", "out", "2026-10-16T12:45:00Z", "real_world_utc").unwrap(), MilestoneOutcome::Recorded);
+    assert_eq!(s.record_milestone("f-1", "out", "2026-10-16T12:50:00Z", "real_world_utc").unwrap(), MilestoneOutcome::AlreadyRecorded);
+    assert!(s.record_milestone("f-1", "in", "2026-10-16T12:00:00Z", "real_world_utc").is_err());
+    assert_eq!(s.record_milestone("f-1", "in", "2026-10-16T15:00:00Z", "real_world_utc").unwrap(), MilestoneOutcome::Recorded);
     let m = s.milestones("f-1").unwrap();
     assert_eq!(m.iter().map(|x| (x.milestone.as_str(), x.occurred_at_utc.as_str())).collect::<Vec<_>>(), vec![("out", "2026-10-16T12:45:00Z"), ("in", "2026-10-16T15:00:00Z")]);
     assert!(s.conn.execute("UPDATE flight_manual_milestones SET occurred_at_utc = '2026-10-16T11:00:00Z'", []).is_err());
     // Closed flights cannot get new manual milestones.
     s.commit(&batch(flight("f-2", "completed", "2026-10-16T09:00:00.000Z"))).unwrap();
-    assert!(s.record_milestone("f-2", "out", "2026-10-16T09:10:00Z").unwrap_err().message.contains("while the flight is open"));
+    assert!(s.record_milestone("f-2", "out", "2026-10-16T09:10:00Z", "real_world_utc").unwrap_err().message.contains("while the flight is open"));
 }
 
 #[test]
@@ -675,7 +675,7 @@ fn milestones_and_releases_never_change_recorded_flight_rows() {
     b.samples = vec![sample(1)];
     s.commit(&b).unwrap();
     let before = detail_json(&s, "f-1");
-    s.record_milestone("f-1", "out", "2026-10-16T12:45:00Z").unwrap();
+    s.record_milestone("f-1", "out", "2026-10-16T12:45:00Z", "real_world_utc").unwrap();
     s.create_release(&release_json("rel-1", "1")).unwrap();
     s.attach_release("rel-1", "f-1", "2026-10-16T12:46:00Z").unwrap();
     assert_eq!(detail_json(&s, "f-1"), before);
@@ -699,7 +699,7 @@ fn upgrading_a_populated_v3_database_keeps_flights_plans_and_snapshots() {
         s.conn.pragma_update(None, "user_version", 3).unwrap();
     }
     let mut s = Store::open(&path).unwrap();
-    assert_eq!(s.schema_version().unwrap(), 4);
+    assert_eq!(s.schema_version().unwrap(), latest_schema_version());
     assert_eq!(s.list_flights(10, 0).unwrap().len(), 2);
     assert_eq!(s.dispatch_plan().unwrap().unwrap().plan["source"]["requestId"], "77");
     assert_eq!(s.plan_snapshot("old").unwrap().unwrap().snapshot["plan"]["source"]["requestId"], "55");
@@ -707,4 +707,54 @@ fn upgrading_a_populated_v3_database_keeps_flights_plans_and_snapshots() {
     assert!(s.list_releases(10).unwrap().is_empty());
     s.create_release(&release_json("rel-1", "77")).unwrap();
     s.attach_release("rel-1", "open-1", "2026-10-16T12:40:00Z").unwrap();
+}
+
+// ---------- manual milestone clock source (schema v5, S2-02 decision 4) ----------
+
+#[test]
+fn manual_milestones_persist_their_real_world_utc_clock_source() {
+    let path = temp_db("milestone-clock");
+    {
+        let mut s = Store::open(&path).unwrap();
+        open_flight(&mut s, "f-1");
+        // Simulator time (or anything else) is not an accepted clock for manual entries.
+        assert!(s.record_milestone("f-1", "out", "2026-10-16T12:45:00Z", "simulator").unwrap_err().message.contains("real-world UTC"));
+        assert!(s.record_milestone("f-1", "out", "2026-10-16T12:45:00Z", "").is_err());
+        assert!(s.milestones("f-1").unwrap().is_empty());
+        s.record_milestone("f-1", "out", "2026-10-16T12:45:00Z", "real_world_utc").unwrap();
+        // The clock source is as immutable as the time, and the CHECK refuses other values.
+        assert!(s.conn.execute("UPDATE flight_manual_milestones SET clock_source = 'real_world_utc'", []).is_err());
+        assert!(s.conn.execute("INSERT INTO flight_manual_milestones (flight_id, milestone, occurred_at_utc, recorded_at_utc, clock_source) VALUES ('f-1', 'in', '2026-10-16T15:00:00Z', '2026-10-16T15:00:00Z', 'simulator')", []).is_err());
+    }
+    let s = Store::open(&path).unwrap();
+    let m = s.milestones("f-1").unwrap();
+    assert_eq!((m[0].occurred_at_utc.as_str(), m[0].clock_source.as_str()), ("2026-10-16T12:45:00Z", "real_world_utc"));
+}
+
+#[test]
+fn upgrading_a_populated_v4_database_labels_existing_manual_milestones_real_world_utc() {
+    let path = temp_db("v4-upgrade");
+    {
+        let mut s = Store::open(&path).unwrap();
+        open_flight(&mut s, "f-1");
+        s.create_release(&release_json("rel-1", "100")).unwrap();
+        s.attach_release("rel-1", "f-1", "2026-10-16T12:40:00Z").unwrap();
+        s.record_milestone("f-1", "out", "2026-10-16T12:45:00Z", "real_world_utc").unwrap();
+        // Turn it into a genuine v4 database (no clock_source column).
+        s.conn.execute_batch("DROP TRIGGER flight_manual_milestones_immutable; ALTER TABLE flight_manual_milestones DROP COLUMN clock_source; \
+            CREATE TRIGGER flight_manual_milestones_immutable BEFORE UPDATE ON flight_manual_milestones BEGIN SELECT RAISE(ABORT, 'recorded milestones are immutable'); END; \
+            DELETE FROM schema_migrations WHERE version = 5;").unwrap();
+        s.conn.pragma_update(None, "user_version", 4).unwrap();
+        let cols: i64 = s.conn.query_row("SELECT COUNT(*) FROM pragma_table_info('flight_manual_milestones') WHERE name = 'clock_source'", [], |r| r.get(0)).unwrap();
+        assert_eq!(cols, 0);
+    }
+    let mut s = Store::open(&path).unwrap();
+    assert_eq!(s.schema_version().unwrap(), latest_schema_version());
+    let m = s.milestones("f-1").unwrap();
+    assert_eq!((m.len(), m[0].clock_source.as_str()), (1, "real_world_utc"));
+    assert_eq!(s.release_for_flight("f-1").unwrap().unwrap().record["releaseId"], "rel-1");
+    assert_eq!(s.plan_snapshot("f-1").unwrap().unwrap().snapshot["releaseId"], "rel-1");
+    // Still immutable after the upgrade; new entries work.
+    assert!(s.conn.execute("UPDATE flight_manual_milestones SET occurred_at_utc = '2026-10-16T11:00:00Z'", []).is_err());
+    s.record_milestone("f-1", "in", "2026-10-16T15:00:00Z", "real_world_utc").unwrap();
 }

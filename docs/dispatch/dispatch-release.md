@@ -62,7 +62,52 @@ Rules:
 - **Imports don't touch releases:** importing a new OFP never changes a release or an attached plan. If the
   imported OFP differs from the open release, Dispatch says so and offers cancellation.
 
-## Persistence (SQLite schema v4, local only)
+## Approved architecture decisions
+
+These were reviewed and approved for PR #9.
+
+| # | Decision | Status | Where it is enforced |
+|---|---|---|---|
+| 1 | A release can be cancelled only **before** it is attached to a flight. After that it is permanent operational history: never cancelled, edited or deleted. | Approved as implemented | `canCancel` (TS); `cancel_release` (Rust); triggers `dispatch_releases_immutable_record`, `dispatch_releases_state_transition`, `dispatch_releases_link_once`, `dispatch_releases_no_delete` and the CHECK on cancelled + linked |
+| 2 | A usable **block fuel** value is required. A missing value or weight unit blocks the release with an explanation. Nothing is guessed. | Approved as implemented | `reviewPlan` `block_fuel` critical check; `normalize.ts` keeps weights null without a unit |
+| 3 | **One open release at a time** (V1). An existing open release blocks another, with an explanation naming it. Completed and cancelled releases stay in the log. | Approved for V1 | `UNIQUE (open_slot)` plus a pre-check in `create_release`; Release review shows the blocking release |
+| 4 | Manual OUT/IN use the computer's **real-world UTC clock** and carry that clock source explicitly. | Approved with refinement (implemented, see below) | Migration 0005 `clock_source`; `record_milestone`; timeline and comparison |
+| 5 | **One plan per flight.** A release never overwrites an S2-01 attachment and is never silently replaced. Legacy attach stays available when no release is open. | Approved as implemented | `attach_release` refuses when a snapshot or release exists; `flight_plan_snapshots` immutability trigger; `UNIQUE (flight_id)` |
+
+Decision 3 is a policy, not a structural limit. Releases are separate rows keyed by `release_id`, each with its own
+`flight_id`. Only the `open_slot` column, its UNIQUE constraint and the service's `openRelease` getter limit the open
+count to one. Supporting several scheduled releases later means:
+
+- relaxing that constraint, for example to one open release per scheduled leg;
+- letting the attach action choose a release.
+
+The record format, transitions and tables stay the same.
+
+## Manual OUT/IN clock behaviour (decision 4)
+
+- **Capture.** *Record OUT* and *Record IN* store the current time from **this computer's UTC clock**, together with
+  `clock_source = 'real_world_utc'`. That is the only clock source accepted, and the database CHECK, the Rust
+  command and the TypeScript store all refuse anything else. Simulator time is never substituted.
+- **Labelling.** Manual times are tagged **MANUAL · REAL-WORLD UTC** and described as "Manual · Real-world UTC
+  (recorded by the pilot)". They are never shown as detected.
+- **Detected times.** Takeoff and landing are tagged **DETECTED · TELEMETRY**. Their timestamps come from the sim
+  bridge, which stamps each frame with the same computer UTC clock (`observed_at`, not the simulator clock).
+- **Planned and estimated times** are labelled as coming from SimBrief.
+- **Immutability.** Neither the time nor its clock source can be edited or deleted in V1 (immutability trigger).
+- **Damaged entries.** A stored entry with an unrecognised clock source is reported as damaged, not trusted.
+- **Deviations from the schedule** (off-block, takeoff, landing, on-block) compare a real-world UTC time with the
+  SimBrief schedule. They are suppressed when the two are more than 6 hours apart, because the flight was then
+  evidently not flown on the scheduled clock. No delay is inferred.
+- **Block time** is the elapsed real-world UTC time from manual OUT to manual IN, compared with the planned block
+  time as a **duration**. This is valid even when the flight is flown at a different calendar time than scheduled.
+  It is compared only when:
+  - both entries exist and use the same real-world UTC clock;
+  - IN is after OUT and the duration is at most 48 h;
+  - the recording was not interrupted.
+
+  Otherwise the row says why it is not compared.
+
+## Persistence (SQLite schema v4 and v5, local only)
 
 Migration `0004_dispatch_release.sql` is additive. It changes no existing table or row.
 
@@ -82,6 +127,10 @@ Migration `0004_dispatch_release.sql` is additive. It changes no existing table 
   release.
 
 **`flight_manual_milestones` table:** pilot-recorded OUT/IN, one per milestone per flight.
+
+- Migration `0005_manual_milestone_clock.sql` adds `clock_source`, which is `NOT NULL`, defaults to
+  `'real_world_utc'` and has a CHECK allowing only that value. Rows written by v4 builds were captured with the same
+  clock, so the default describes them accurately.
 
 - Immutable after insertion.
 - Only accepted while the flight is open.
@@ -111,8 +160,8 @@ New Tauri commands:
 - `dispatch_release_attach`
 - `dispatch_releases_list`
 - `dispatch_release_for_flight`
-- `flight_milestone_record`
-- `flight_milestones`
+- `flight_milestone_record` (with `clockSource`)
+- `flight_milestones` (returns `clockSource`)
 
 ## Operational timeline and provenance
 
@@ -123,8 +172,8 @@ Each has three values:
 |---|---|
 | Scheduled | SimBrief `times.sched_*` from the plan attached to the flight. On Live Flight, the open release's plan is used before attaching, and labelled as such. |
 | Estimated | SimBrief `times.est_*`, if present. Otherwise "Unavailable". |
-| Actual OFF / ON | The recorder's detected liftoff / touchdown (`takeoffAt` / `landingAt`), tagged **DETECTED**. Otherwise "Not yet detected" (flight open), "Not detected" (flight closed) or "Not observed (recording started airborne)". |
-| Actual OUT / IN | Only a pilot-recorded time, tagged **MANUAL**. Otherwise **"Not recorded"**. |
+| Actual OFF / ON | The recorder's detected liftoff / touchdown (`takeoffAt` / `landingAt`), tagged **DETECTED · TELEMETRY**. Otherwise "Not yet detected" (flight open), "Not detected" (flight closed) or "Not observed (recording started airborne)". |
+| Actual OUT / IN | Only a pilot-recorded time, tagged **MANUAL · REAL-WORLD UTC**. Otherwise **"Not recorded"**. |
 
 OUT/IN are **never** inferred from parking-brake changes, aircraft movement, engine start or shutdown, or a
 disconnected or stale feed. That includes the recorder's existing `arrival.detected` event, which is not used for
@@ -156,7 +205,8 @@ There is no delay, boarding, gate or ground-handling status.
 - **Milestones:** the timeline above, plus a note when the recording was interrupted.
 - **Planned versus actual:**
   - Takeoff, landing and flight time, as in S2-01.
-  - Off-block, on-block and block time, only when OUT/IN were recorded manually; the basis column says so.
+  - Off-block and on-block, only when OUT/IN were recorded manually; the basis column says "Manual · real-world UTC".
+  - Block time, as described under the manual clock behaviour above.
   - Deviations are actual minus scheduled.
   - The 6-hour guard is kept: no clock deviation is calculated when the flight was flown more than 6 h from its
     schedule.
@@ -194,18 +244,22 @@ Flights recorded before S2-02, and flights with an S2-01 plan attachment, load u
   - manual milestone rules
   - recorded rows unchanged
   - populated v3 → v4 migration
+- Decision 4 tests:
+  - TypeScript: real-world UTC clock passed to and kept by the store; unknown clock sources rejected or reported as
+    damaged; MANUAL · REAL-WORLD UTC and DETECTED · TELEMETRY labels; block time compared as a duration across
+    calendar dates; block time not compared when interrupted, reversed, too long or incomplete.
+  - Rust: clock source persisted across a restart, other clocks refused, immutability, and an upgrade from a
+    populated v4 database (existing entries read back as real-world UTC).
 - The S2-01 SimBrief import tests are unchanged, except that the gate rows now read "Not recorded" instead of "Not
   detected".
 
 All SimBrief requests in tests are answered by local doubles using the synthetic fixtures in `fixtures/simbrief/`.
 
-## Limitations and open decisions
+## Limitations
 
-- **Cancelling after attaching.** Cancellation is only allowed before attaching; an attached release is kept as
-  flown. Changing that needs a decision on how a cancelled-but-flown release is shown.
-- **Required fields.** Block fuel is required, so an OFP without a weight unit cannot be released.
-- **One open release at a time.** This matches SimBrief's "latest OFP" model. Multi-leg pre-release is a later
-  feature.
-- **Manual OUT/IN.** They use the computer's UTC clock, not the simulator clock, and cannot be edited or undone.
+- **Manual OUT/IN:** they use the computer's UTC clock. If that clock is wrong, the manual times are too, and
+  Turnline does not correct them. They cannot be edited or undone in V1.
+- **Required fields:** an OFP without a weight unit has no usable block fuel and cannot be released (decision 2).
+- **One open release at a time** (decision 3).
 - **Real-account and real-MSFS verification is still pending.** The workflow has been exercised with synthetic
   fixtures, the mock recorder and the in-memory and SQLite stores, not with a real OFP flown in MSFS.
