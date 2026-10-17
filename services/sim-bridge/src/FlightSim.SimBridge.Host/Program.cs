@@ -25,6 +25,18 @@ using var loggers = LoggerFactory.Create(b => b
     .SetMinimumLevel(LogLevel.Information));
 var log = loggers.CreateLogger("bridge");
 
+if (options.GsxReceipts)
+{
+    return GsxReceiptsCommand.Run(options, Console.Out);
+}
+
+if (options.GsxProbeSeconds > 0)
+{
+    using var gsxStop = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = !gsxStop.IsCancellationRequested; gsxStop.Cancel(); };
+    return await GsxProbe.RunAsync(options, gsxStop.Token).ConfigureAwait(false);
+}
+
 if (options.ProbeSeconds > 0)
 {
     using var probeStop = new CancellationTokenSource();

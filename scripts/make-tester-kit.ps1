@@ -19,7 +19,8 @@ Copy-Item (Join-Path $core "bin/*.mjs") "$OutDir/tools/flight-core/bin/"
 '{ "name": "turnline-recording-tools", "private": true, "type": "module" }' | Set-Content -Encoding utf8 "$OutDir/tools/flight-core/package.json"
 Copy-Item (Join-Path $root "fixtures/recordings/simulated/*.jsonl.gz") "$OutDir/recordings/"
 foreach ($doc in @("docs/release/tester-build.md", "docs/testing/physical-pc-checklist.md", "docs/testing/msfs2020-test-plan.md",
-                   "docs/testing/msfs2024-test-plan.md", "docs/testing/recording-and-replay.md")) {
+                   "docs/testing/msfs2024-test-plan.md", "docs/testing/recording-and-replay.md",
+                   "docs/testing/gsx-probe-msfs2020.md")) {
   Copy-Item (Join-Path $root $doc) $OutDir
 }
 if (Get-ChildItem -Recurse $OutDir -Filter "SimConnect*.dll") { throw "SimConnect.dll must never be bundled" }

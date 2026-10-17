@@ -162,6 +162,16 @@ node tools\flight-core\bin\sanitize.mjs "$out\msfs2024-a320neo-nominal.jsonl" "$
 
 For MSFS 2020, replace `msfs2024` with `msfs2020` everywhere.
 
+GSX (S2-05, read-only diagnostics; full steps in [gsx-probe-msfs2020.md](../testing/gsx-probe-msfs2020.md)):
+
+```powershell
+# GSX service-state probe: a separate SimConnect client; can run alongside the desktop app; Ctrl+C once to stop
+& $bridge --adapter msfs2020 --gsx-probe 7200 --gsx-probe-out "$out\gsx-probe-msfs2020.jsonl"
+
+# GSX receipts folder: groups, counts and dates only (nothing is opened or copied)
+& $bridge --gsx-receipts
+```
+
 ## 7. What to send back
 
 For every test session, send:
