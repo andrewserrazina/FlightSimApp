@@ -8,6 +8,7 @@ import { comparePlanToFlight } from "./comparison";
 import { useDispatch, useDispatchView } from "./DispatchContext";
 import type { ImportedFlightPlan } from "./model";
 import { flightTitle, fmtAltitude, fmtUtcTime, routeTitle, UNAVAILABLE } from "./presentation";
+import { releaseLabel } from "./release";
 
 function Baseline({ plan }: { plan: ImportedFlightPlan }) {
   return (
@@ -52,11 +53,50 @@ export function FlightPlanBaseline({ flightId, navigate }: { flightId: string | 
   const snap = flightId ? view.snapshots[flightId] : undefined;
   const current = view.plan.kind === "ready" ? view.plan.plan : null;
 
+  const open = dispatch.openRelease;
   if (snap?.kind === "ready") {
+    const rid = snap.snapshot.releaseId;
     return (
-      <Panel title="Flight plan" className="span-all" actions={<Tag tone="ok">Attached to this flight</Tag>}>
+      <Panel
+        title="Flight plan"
+        className="span-all"
+        actions={
+          <>
+            {rid && <Tag tone="accent">Release {releaseLabel(rid)}</Tag>} <Tag tone="ok">Attached to this flight</Tag>
+          </>
+        }
+      >
         <Baseline plan={snap.snapshot.plan} />
-        <p className="muted">Fixed snapshot attached {fmtUtcTime(snap.snapshot.associatedAtUtc)}. Later SimBrief imports do not change it.</p>
+        <p className="muted">
+          Fixed snapshot attached {fmtUtcTime(snap.snapshot.associatedAtUtc)}
+          {rid ? " from a dispatch release" : ""}. Later SimBrief imports do not change it.
+        </p>
+      </Panel>
+    );
+  }
+  if (open && flightId) {
+    return (
+      <Panel title="Flight plan" className="span-all" actions={<Tag tone="accent">Release {releaseLabel(open.record.releaseId)} open</Tag>}>
+        <Baseline plan={open.record.plan} />
+        <div className="button-row">
+          <Button
+            variant="primary"
+            disabled={busy || snap?.kind === "loading"}
+            onClick={async () => {
+              setBusy(true);
+              const r = await dispatch.attachRelease(flightId);
+              setBusy(false);
+              setMessage(r.ok ? `Release ${releaseLabel(open.record.releaseId)} attached to this flight.` : `Could not attach the release: ${r.message}`);
+            }}
+          >
+            Attach release {releaseLabel(open.record.releaseId)} to this flight
+          </Button>
+        </div>
+        {message && (
+          <p className="muted" role="status">
+            {message}
+          </p>
+        )}
       </Panel>
     );
   }
@@ -80,6 +120,7 @@ export function FlightPlanBaseline({ flightId, navigate }: { flightId: string | 
           <Button
             variant="primary"
             disabled={busy || snap?.kind === "loading"}
+            title="Attaches the imported plan without a dispatch release"
             onClick={async () => {
               setBusy(true);
               const r = await dispatch.associate(flightId);
@@ -147,11 +188,12 @@ export function PlanComparisonPanel({ detail }: { detail: FlightDetail }) {
     );
   }
   const plan = snap.snapshot.plan;
-  const rows = comparePlanToFlight(plan, detail.summary, detail.interruptions.length);
+  const ops = view.flightOps[id];
+  const rows = comparePlanToFlight(plan, detail.summary, detail.interruptions.length, ops?.kind === "ready" ? ops.manual : undefined);
   return (
     <Panel title="Planned versus actual" className="span-all" actions={<Tag tone="ok">Flight plan attached</Tag>}>
       <p className="muted">
-        {flightTitle(plan) === UNAVAILABLE ? "SimBrief OFP" : flightTitle(plan)} {routeTitle(plan)} · attached {fmtUtcTime(snap.snapshot.associatedAtUtc)}. Only values detected from telemetry are compared; no delays are inferred.
+        {flightTitle(plan) === UNAVAILABLE ? "SimBrief OFP" : flightTitle(plan)} {routeTitle(plan)} · attached {fmtUtcTime(snap.snapshot.associatedAtUtc)}. Takeoff and landing are detected from telemetry; off-block and on-block appear only if you recorded them (Manual · Real-world UTC). Actual times use this computer&apos;s UTC clock, not simulator time. Deviations are actual minus scheduled and are not calculated when the flight was flown more than 6 hours away from its schedule; block time is compared as a duration. No delays are inferred.
       </p>
       <div className="table-wrap">
         <table className="table table--compact plan-compare">
