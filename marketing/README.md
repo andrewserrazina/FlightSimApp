@@ -1,8 +1,113 @@
 # Turnline marketing site
 
-Static prelaunch site for turnlineops.com, served by Cloudflare Pages from this `marketing/` directory
-(branch `claude/new-session-2b3s69`). It is NOT part of the desktop app. Launch posture: `noindex,nofollow`
-stays on every page until the owner approves discoverability and brand clearance.
+Static prelaunch site. It is NOT part of the desktop app. Launch posture: `noindex,nofollow` (the meta tag on
+every page plus the `X-Robots-Tag` header in `_headers`) stays until the owner approves discoverability and brand
+clearance.
+
+## Deployment
+
+| | |
+|---|---|
+| Production domain | https://turnlineops.com |
+| Platform | Cloudflare Pages |
+| Production branch | `main` |
+| Site directory (build output) | `marketing/` (static files; no build step) |
+| Previews | Cloudflare Pages builds a preview URL for each pull-request branch (posted on the PR by the Cloudflare bot). Previews are not production. |
+
+**A merge to `main` deploys production automatically.** Anything merged into `marketing/` on `main` goes live
+without a separate release step, so merge marketing PRs only with explicit owner approval.
+
+**Workflow:**
+1. Work on a feature branch, open a PR against `main`, and check the Cloudflare preview URL on the PR.
+2. Run the site tests, normally and with `--live-turnstile` (see Testing), and wait for CI on the PR.
+3. The owner approves and merges. Cloudflare Pages then builds and publishes `main` (watch the deployment in the
+   Cloudflare dashboard, or the commit status on `main`).
+4. **To roll back,** re-deploy the previous production deployment from the Cloudflare Pages dashboard, or revert the
+   merge commit on `main`.
+   - Signups alone can be disabled without a redeploy of other content: set `apiUrl: ""` in `config.js` (the page then
+     shows "Signups are not open yet").
+
+**Verify production after an approved merge** (no real subscriber data):
+- `https://turnlineops.com/` returns 200 and shows the merged content. Check the hero headline, and that the "What’s
+  working today" section is present after V3.
+- `curl -sI https://turnlineops.com/` includes `x-robots-tag: noindex, nofollow`, and the page source still has
+  `<meta name="robots" content="noindex,nofollow">`.
+- These return 200 with the right content type:
+  - `/assets/site.css`, `/assets/site.js` and `/config.js`;
+  - `/assets/og-image.png` and one screenshot, for example `/assets/screens/live-1600.webp` (`image/webp`).
+- `/assets/definitely-missing.css` returns a real 404 (the root `404.html` prevents the SPA fallback).
+- `config.js` still contains only the public `apiUrl` and `turnstileSiteKey`.
+- In a desktop and a mobile browser:
+  - the Turnstile widget renders in the early-access form, and the console shows no errors;
+  - the privacy notice opens.
+- The owner runs the manual live-signup check in `docs/testing/waitlist-live-acceptance.md` (sign up → confirmation
+  email → confirm → unsubscribe) with an address they control.
+- Check the social preview (for example with each network's post inspector). Previews may show the previous image
+  until the network's cache refreshes.
+
+## V3 (real product progress and early access)
+- **What changed:**
+  - Hero copy separates what works today from the long-term vision.
+  - CTAs: "Join the Early Access List" (primary, the only conversion goal) and "See What’s Working".
+  - The concept dashboard in the hero is replaced by a real Live Flight screen.
+  - Two new sections after the hero:
+    - **Built and tested** (`#working`): the seven capabilities the owner validated on real MSFS 2020 hardware, with their limits;
+    - **Inside the app** (`#product`): four real screens.
+  - Statuses are updated everywhere: stages, feature explorer, integrations, roadmap, FAQ, metadata and footer.
+  - The navigation is unchanged.
+- **Status vocabulary** (replaces the V2 list; keep it consistent and change a label only when the work changes):
+  - *Implemented internally · MSFS 2020 tested*: in internal Windows builds and tested by the owner with MSFS 2020 on real
+    hardware, in supported scenarios. Not public; broad aircraft/add-on/hardware compatibility not established.
+  - *Implemented internally*: built and tested in internal builds; not separately validated with MSFS.
+  - *In active development*: being built or validated now. S2-02 (dispatch release, OUT/OFF/ON/IN timeline) and S2-03
+    (navlog, route monitoring, navigation debrief) stay here until each passes acceptance testing **and** is merged.
+    CI passing is not enough.
+  - *Planned*, *Research*: as before. Passenger, ground handling, GSX, SayIntentions, ACARS, airline scheduling,
+    delay causes and cause-and-effect simulation are Planned or Research.
+  - MSFS 2024 stays *In active development* (unverified) until there is separate documented acceptance evidence.
+- **Evidence behind the "MSFS 2020 tested" label:** owner-reported hands-on acceptance with a real MSFS 2020 and a
+  real SimBrief account, recorded in `docs/testing/msfs2020-owner-acceptance-s2-01.md` and as `OWNER-ACCEPTED` rows in
+  `docs/compatibility/msfs2020-matrix.md`.
+  - Use the label only for those checks: connection and recording, OFP import, scheduled OUT/OFF/ON/IN times,
+    duplicate import, plan persistence, offline behaviour, plan attachment, flight completion, planned-versus-actual
+    debrief.
+  - Build, simulator version and aircraft were not recorded, and no recording exists. Don't strengthen the wording
+    (e.g. "verified", "compatible", "supported aircraft") until instrumented evidence is committed.
+- **Screenshots** (`assets/screens/`):
+  - **Files:**
+    - `<screen>-1600.webp` / `-800.webp`: the full app window (1600×944);
+    - `<screen>-detail-1000.webp` / `-600.webp`: a 4:3 crop of the main panel. Phones get the detail crop through
+      `<picture>`; the hero uses the Live Flight detail.
+  - **Provenance:**
+    - Captured from the desktop app as merged on `main`. S2-02 and S2-03 screens are excluded.
+    - Rendered in Chromium with in-memory stores. Live Flight, History and Debrief come from the bridge's recorded
+      mock-adapter demo flight (`fixtures/recordings/simulated/mock-nominal-markers.jsonl.gz`) replayed through the
+      real `FlightRecorder`. Dispatch is the synthetic `fixtures/simbrief/ofp-v2-iso-times.json` (times moved to the
+      capture day; a KSEA→KPAE copy is attached to the demo flight).
+  - **Edits:** the app's top bar is cropped out. It carries the internal working name "FlightSimApp", the connection
+    status and the clock. Nothing on the screens is retouched, and the in-app "DEMO DATA" notices are kept.
+  - **Disclosure:** every screen shows **sample data**, and the page says so in the captions, the section intro, the
+    note under the gallery, the lightbox and the footer.
+  - **Lightbox:** selecting a screen opens the full-size image in a native `<dialog>`. It closes with Escape, the
+    Close button or the backdrop, and focus returns to the link. Without JS or `<dialog>` support, the link opens the
+    image directly.
+  - **To replace with real MSFS 2020 captures:** use a 1600×1000 window, crop the top 56 px, make the detail crops
+    with the same geometry, and keep the alt text accurate. Hide your SimBrief username, pilot ID and aircraft
+    registration.
+  - **Follow-up (desktop, not this site):** rename the app's visible title from "FlightSimApp" to "Turnline". Leave
+    the bundle identifiers, SQLite paths and bridge identity alone; changing those needs its own migration plan.
+- **Concept visuals:** only the scenario section and its debrief card remain; both are labelled.
+- **Images:** the only `<img>` elements are Turnline screenshots, and the tests enforce that. Each has alt text and
+  dimensions. The hero image loads eagerly; the gallery images load lazily. No third-party logos.
+- **Metadata:** title, description and Open Graph/Twitter text describe the working product without promising MSFS
+  2024, passengers or ground handling. `og-image.png` was regenerated from `docs/marketing/og-card.html`.
+  `noindex,nofollow` and the `X-Robots-Tag` header are unchanged.
+- **Waitlist:**
+  - The contract, endpoint, Turnstile, consent text, UTM handling, messages and privacy links are unchanged.
+  - Only the copy around the form changed. The submit button now reads "Join the Early Access List", and the form
+    heading matches it.
+- **Before/after captures:** `docs/screenshots/marketing-v3/{before,after}`, produced by
+  `scripts/marketing-compare-screenshots.mjs <dir>`.
 
 ## V2 (redesign)
 - `index.html`: the full landing page. Sections: hero with a labelled concept dashboard, What is Turnline,

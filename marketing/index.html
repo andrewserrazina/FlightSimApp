@@ -5,23 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Launch posture: keep noindex,nofollow until the owner approves discoverability and brand clearance. -->
 <meta name="robots" content="noindex,nofollow">
-<title>Turnline | Airline operations simulation for Microsoft Flight Simulator</title>
-<meta name="description" content="Turnline is an airline operations simulation platform in development for Microsoft Flight Simulator 2020 and 2024, connecting dispatch, ground handling, passengers, live flight and postflight debrief into one operation.">
+<title>Turnline | Airline operations for Microsoft Flight Simulator (in development)</title>
+<meta name="description" content="Turnline brings your SimBrief flight plan into Microsoft Flight Simulator, records your flight as it happens and compares plan with actual after landing. In development and tested internally with MSFS 2020; not publicly available yet.">
 <meta name="theme-color" content="#0b1f3a">
 <link rel="canonical" href="https://turnlineops.com/">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Turnline">
 <meta property="og:title" content="Turnline | Every flight. The whole operation.">
-<meta property="og:description" content="An airline operations simulation platform in development for Microsoft Flight Simulator 2020 and 2024. Join the early-access list for development updates.">
+<meta property="og:description" content="SimBrief flight-plan import, live flight recording and a planned-versus-actual debrief for Microsoft Flight Simulator. In development; join the early-access list for updates.">
 <meta property="og:url" content="https://turnlineops.com/">
 <meta property="og:image" content="https://turnlineops.com/assets/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Turnline: Every flight. The whole operation.">
+<meta property="og:image:alt" content="Turnline: Every flight. The whole operation. In development for Microsoft Flight Simulator.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Turnline | Every flight. The whole operation.">
-<meta name="twitter:description" content="An airline operations simulation platform in development for Microsoft Flight Simulator 2020 and 2024.">
+<meta name="twitter:description" content="SimBrief flight-plan import, live flight recording and a planned-versus-actual debrief for Microsoft Flight Simulator. In development.">
 <meta name="twitter:image" content="https://turnlineops.com/assets/og-image.png">
 <script>document.documentElement.classList.replace('no-js', 'js');</script>
 <link rel="stylesheet" href="assets/site.css">
@@ -79,56 +79,90 @@
 <section class="hero" id="top" aria-labelledby="hero-title">
   <div class="wrap hero-grid">
     <div>
-      <p class="eyebrow">Coming to Microsoft Flight Simulator</p>
+      <p class="eyebrow">In development for Microsoft Flight Simulator</p>
       <h1 id="hero-title">Your aircraft flies the route. <em>Turnline brings the airline operation to life.</em></h1>
-      <p class="hero-lead">From dispatch to departure, cabin operations to turnaround, and touchdown to debrief—Turnline is being built to connect every part of your virtual airline flight into one evolving operational experience.</p>
+      <p class="hero-lead">Bring your SimBrief flight plan into Microsoft Flight Simulator, track your flight as it happens, and review the operation after landing. Turnline is building toward a connected airline operations experience, from dispatch through debrief.</p>
       <div class="hero-actions">
         <a class="btn btn-primary" href="#early-access" data-focus-email>Join the Early Access List</a>
-        <a class="btn btn-secondary" href="#platform">Explore the Platform</a>
+        <a class="btn btn-secondary" href="#working">See What’s Working</a>
       </div>
-      <p class="hero-support"><span class="pulse" aria-hidden="true"></span>In development for MSFS 2020 &amp; MSFS 2024</p>
+      <ul class="hero-facts" aria-label="Development status">
+        <li><span class="dot ok" aria-hidden="true"></span>Core flight workflow tested internally with MSFS 2020</li>
+        <li><span class="dot dev" aria-hidden="true"></span>In development · not publicly downloadable</li>
+      </ul>
     </div>
 
-    <figure class="reveal" style="margin:0">
-      <div class="dash" role="img" aria-label="Concept illustration of a future Turnline operations dashboard for fictional flight TURNLINE 247 from Boston to Chicago. It shows dispatch released at 13:30, scheduled departure 14:35 revised to 14:43 after a boarding delay, boarding 142 of 168 passengers, and a milestone timeline. Illustrative only; not live software.">
-        <div class="dash-top" aria-hidden="true">
-          <div class="dash-dots"><i></i><i></i><i></i></div>
-          <span class="dash-title">TURNLINE · FLIGHT OPERATIONS</span>
-          <span class="concept-tag">Concept</span>
-        </div>
-        <div class="dash-body" aria-hidden="true">
-          <div class="flight-head">
-            <div>
-              <div class="flight-id">TURNLINE 247</div>
-              <div class="flight-route"><b>BOS</b><span class="leg"></span><b>ORD</b></div>
-              <div class="flight-meta">A320neo · Gate B12 · 168 seats</div>
-            </div>
-            <span class="status dev">Boarding</span>
-          </div>
-          <div class="tiles">
-            <div class="tile ok"><div class="tile-label">Dispatch</div><div class="tile-value">RELEASED</div><div class="tile-sub">13:30 · OFP rev 1</div></div>
-            <div class="tile"><div class="tile-label">Sched dep</div><div class="tile-value">14:35</div><div class="tile-sub">Block 2h 03m</div></div>
-            <div class="tile warn"><div class="tile-label">Est dep</div><div class="tile-value">14:43</div><div class="tile-sub"><span class="delta">+8 min</span> revised</div></div>
-            <div class="tile"><div class="tile-label">Boarding</div><div class="tile-value">142/168</div><div class="bar"><span style="--w:85%"></span></div></div>
-          </div>
-          <ol class="milestones">
-            <li class="done"><span class="t">13:30</span><span class="m"></span><span class="n">Dispatch release received</span><span class="s">Complete</span></li>
-            <li class="done"><span class="t">13:55</span><span class="m"></span><span class="n">Boarding started</span><span class="s">On time</span></li>
-            <li class="alert"><span class="t">14:12</span><span class="m"></span><span class="n">Boarding delay: late connections</span><span class="s">+8 min</span></li>
-            <li class="next"><span class="t">14:32</span><span class="m"></span><span class="n">Doors closed · aircraft ready</span><span class="s">Estimated</span></li>
-            <li class="next"><span class="t">14:43</span><span class="m"></span><span class="n">Pushback</span><span class="s">Estimated</span></li>
-          </ol>
-          <div class="impact">
-            <svg><use href="#i-alert"/></svg>
-            <span>Departure estimate revised +8 min · cause recorded for the debrief: boarding</span>
-          </div>
-        </div>
-      </div>
-      <figcaption class="dash-caption">
-        <span class="concept-tag">Concept illustration</span>
-        <span class="concept-note">Fictional flight and values. Not live software or an actual product screenshot.</span>
-      </figcaption>
+    <figure class="shot hero-shot reveal">
+      <a class="shot-frame" href="assets/screens/live-1600.webp" data-lightbox aria-label="Open the full Live Flight screenshot">
+        <img src="assets/screens/live-detail-1000.webp" srcset="assets/screens/live-detail-600.webp 600w, assets/screens/live-detail-1000.webp 1000w" sizes="(max-width: 960px) calc(100vw - 32px), 560px" width="1000" height="750" fetchpriority="high" decoding="async" alt="Turnline Live Flight screen from an internal build: a flight from KSEA to KPAE is being recorded in cruise with its attached SimBrief plan, live connection status and a demo-data notice. Sample data from the built-in demo simulator.">
+      </a>
+      <figcaption class="shot-caption"><span class="real-tag">Internal build</span> Live Flight screen. Sample data from Turnline’s built-in demo simulator, not a real aircraft.</figcaption>
     </figure>
+  </div>
+</section>
+
+<!-- A2. Built and tested -->
+<section class="section light working" id="working" aria-labelledby="working-title">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">Built and tested</p>
+      <h2 id="working-title">What’s working today</h2>
+      <p>These capabilities are implemented in internal Windows builds and have passed hands-on acceptance testing on a real PC running Microsoft Flight Simulator 2020, with a real SimBrief account. They aren’t publicly available yet.</p>
+    </div>
+    <ul class="built-grid" role="list">
+      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Windows desktop simulator connection</h3><p>A Windows app with a background simulator bridge that reads live aircraft data from MSFS 2020 and shows connection and data freshness honestly.</p></li>
+      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Flight recording and history</h3><p>Start a flight and Turnline records phases, events and a track until you confirm completion. Completed flights are listed in your history.</p></li>
+      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>SimBrief OFP import</h3><p>Import your latest SimBrief operational flight plan by username or pilot ID: route, fuel, weights and aircraft. Re-importing the same plan is handled cleanly, and no Navigraph password is ever requested.</p></li>
+      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Scheduled flight times</h3><p>Scheduled off-block, takeoff, landing and on-block times (OUT/OFF/ON/IN) from your OFP, in UTC, matching SimBrief. Estimated times are shown alongside.</p></li>
+      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Plan persistence and offline use</h3><p>An imported plan is saved locally and stays available after a restart or without an internet connection. An import attempted offline fails with a clear message.</p></li>
+      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Flight-plan attachment</h3><p>Attach the plan to a flight as a fixed snapshot. Later SimBrief imports never change what that flight was planned against.</p></li>
+      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Planned-versus-actual debrief</h3><p>After landing, compare planned and detected takeoff, landing and flight time. Values that weren’t detected are shown as such, never guessed.</p></li>
+    </ul>
+    <div class="limits reveal">
+      <h3>What “tested” means here</h3>
+      <ul>
+        <li>Hands-on acceptance testing by the Turnline team on one Windows PC with MSFS 2020 and a real SimBrief account, in the scenarios Turnline currently supports. It is not a formal compatibility certification.</li>
+        <li>Public availability and broad aircraft, add-on and hardware compatibility have not been established.</li>
+        <li>Microsoft Flight Simulator 2024 compatibility has not been verified.</li>
+      </ul>
+    </div>
+    <div class="next-up">
+      <h3 class="next-title">Being validated next</h3>
+      <ul class="next-list" role="list">
+        <li class="reveal"><span class="status dev">In active development</span><div><strong>Dispatch release and operational timeline</strong><p>A formal release step and an OUT/OFF/ON/IN timeline. Built; awaiting acceptance testing on Windows.</p></div></li>
+        <li class="reveal"><span class="status dev">In active development</span><div><strong>Route monitoring and navigation log</strong><p>Waypoint-by-waypoint navlog and live progress along the planned route. Awaiting acceptance on a real flight.</p></div></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- A3. Product showcase -->
+<section class="section band" id="product" aria-labelledby="product-title">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">Inside the app</p>
+      <h2 id="product-title">Real screens from the current internal build</h2>
+      <p>Captured from Turnline’s desktop app using sample data: a fictional SimBrief plan and the demo flight from the built-in mock simulator. The app’s title bar is cropped out; nothing on the screens has been edited.</p>
+    </div>
+    <div class="gallery">
+      <figure class="shot reveal">
+        <a class="shot-frame" href="assets/screens/dispatch-1600.webp" data-lightbox aria-label="Open the full-size Dispatch screenshot"><picture><source media="(max-width: 600px)" srcset="assets/screens/dispatch-detail-600.webp 600w, assets/screens/dispatch-detail-1000.webp 1000w" sizes="calc(100vw - 32px)" width="1000" height="750"><img src="assets/screens/dispatch-800.webp" srcset="assets/screens/dispatch-800.webp 800w, assets/screens/dispatch-1600.webp 1600w" sizes="(max-width: 960px) calc(100vw - 32px), 560px" width="1600" height="944" loading="lazy" decoding="async" alt="Dispatch screen: a SimBrief plan for fictional flight TLN247 from Boston to Chicago O’Hare has been imported, showing aircraft, route, scheduled and estimated times, and planned fuel."></picture></a>
+        <figcaption><h3>Dispatch and SimBrief import</h3><p>Your latest OFP, imported on request: route, schedule, fuel and weights.</p></figcaption>
+      </figure>
+      <figure class="shot reveal">
+        <a class="shot-frame" href="assets/screens/live-1600.webp" data-lightbox aria-label="Open the full-size Live Flight screenshot"><picture><source media="(max-width: 600px)" srcset="assets/screens/live-detail-600.webp 600w, assets/screens/live-detail-1000.webp 1000w" sizes="calc(100vw - 32px)" width="1000" height="750"><img src="assets/screens/live-800.webp" srcset="assets/screens/live-800.webp 800w, assets/screens/live-1600.webp 1600w" sizes="(max-width: 960px) calc(100vw - 32px), 560px" width="1600" height="944" loading="lazy" decoding="async" alt="Live Flight screen: a flight in cruise is being recorded with its attached plan, detected phase, live telemetry status, aircraft, altitude, speed and position."></picture></a>
+        <figcaption><h3>Live Flight telemetry</h3><p>Detected phase, live aircraft data and the attached plan while the flight is recorded.</p></figcaption>
+      </figure>
+      <figure class="shot reveal">
+        <a class="shot-frame" href="assets/screens/history-1600.webp" data-lightbox aria-label="Open the full-size Flight History screenshot"><picture><source media="(max-width: 600px)" srcset="assets/screens/history-detail-600.webp 600w, assets/screens/history-detail-1000.webp 1000w" sizes="calc(100vw - 32px)" width="1000" height="750"><img src="assets/screens/history-800.webp" srcset="assets/screens/history-800.webp 800w, assets/screens/history-1600.webp 1600w" sizes="(max-width: 960px) calc(100vw - 32px), 560px" width="1600" height="944" loading="lazy" decoding="async" alt="Flight History screen listing three completed demo flights with start time, aircraft, session time, airborne time and a link to each debrief."></picture></a>
+        <figcaption><h3>Flight History</h3><p>Every recorded flight, stored on your PC, with session and airborne time.</p></figcaption>
+      </figure>
+      <figure class="shot reveal">
+        <a class="shot-frame" href="assets/screens/debrief-1600.webp" data-lightbox aria-label="Open the full-size Debrief screenshot"><picture><source media="(max-width: 600px)" srcset="assets/screens/debrief-detail-600.webp 600w, assets/screens/debrief-detail-1000.webp 1000w" sizes="calc(100vw - 32px)" width="1000" height="750"><img src="assets/screens/debrief-800.webp" srcset="assets/screens/debrief-800.webp 800w, assets/screens/debrief-1600.webp 1600w" sizes="(max-width: 960px) calc(100vw - 32px), 560px" width="1600" height="944" loading="lazy" decoding="async" alt="Flight debrief screen: a planned-versus-actual table compares planned and detected takeoff, landing and flight time, with off-block and on-block marked as not detected, above the recorded flight overview."></picture></a>
+        <figcaption><h3>Operational Debrief</h3><p>Planned versus actual, from what was really detected. No invented delays or scores.</p></figcaption>
+      </figure>
+    </div>
+    <p class="gallery-note">Screens show sample data, not a real aircraft or a real SimBrief account. Select a screen to see it full size; on small screens each preview shows a detail of the full screen. Dispatch release, route monitoring and the other features still in development are not shown.</p>
   </div>
 </section>
 
@@ -163,14 +197,14 @@
       <p>Each stage hands something to the next: the plan sets expectations, preparation decides when you’re ready, what happens on departure shapes the rest of the flight, and the debrief explains why it went the way it did.</p>
     </div>
     <ol class="stages">
-      <li class="stage reveal"><span class="stage-num" aria-hidden="true">01</span><div class="stage-card"><h3>Plan</h3><span class="status plan">Planned</span><p>Import a dispatch plan, review route and fuel information, and establish the operational baseline.</p><p class="link">Sets the schedule every later stage is measured against.</p></div></li>
-      <li class="stage reveal"><span class="stage-num" aria-hidden="true">02</span><div class="stage-card"><h3>Prepare</h3><span class="status plan">Planned</span><p>Manage gate readiness, aircraft preparation, passenger boarding, and ground-service milestones.</p><p class="link">Boarding and servicing progress decide when you’re ready.</p></div></li>
-      <li class="stage reveal"><span class="stage-num" aria-hidden="true">03</span><div class="stage-card"><h3>Depart</h3><span class="status dev">In active development</span><p>Track operational milestones and respond to delays or constraints.</p><p class="link">A late milestone moves the departure estimate.</p></div></li>
-      <li class="stage reveal"><span class="stage-num" aria-hidden="true">04</span><div class="stage-card"><h3>Operate</h3><span class="status dev">In active development</span><p>Monitor the flight and operational consequences as events unfold.</p><p class="link">Phases and events are recorded as they happen.</p></div></li>
-      <li class="stage reveal"><span class="stage-num" aria-hidden="true">05</span><div class="stage-card"><h3>Arrive</h3><span class="status dev">In active development</span><p>Manage arrival, turnaround completion, and final flight status.</p><p class="link">Arrival is compared with the plan; the flight closes out.</p></div></li>
-      <li class="stage reveal"><span class="stage-num" aria-hidden="true">06</span><div class="stage-card"><h3>Debrief</h3><span class="status dev">In active development</span><p>Understand performance, disruption causes, decisions, and overall operational results.</p><p class="link">Explains what happened, why, and what it led to.</p></div></li>
+      <li class="stage reveal"><span class="stage-num" aria-hidden="true">01</span><div class="stage-card"><h3>Plan</h3><span class="status tested">Implemented internally · MSFS 2020 tested</span><p>Import your SimBrief plan, review route, fuel and schedule, and attach it to the flight as a fixed baseline.</p><p class="link">Sets the schedule every later stage is measured against.</p></div></li>
+      <li class="stage reveal"><span class="stage-num" aria-hidden="true">02</span><div class="stage-card"><h3>Prepare</h3><span class="status plan">Planned</span><p>Gate readiness, aircraft preparation, passenger boarding and ground-service milestones.</p><p class="link">Boarding and servicing progress decide when you’re ready.</p></div></li>
+      <li class="stage reveal"><span class="stage-num" aria-hidden="true">03</span><div class="stage-card"><h3>Depart</h3><span class="status dev">In active development</span><p>A dispatch release and off-block and takeoff times are being validated. Responding to delays and constraints is planned.</p><p class="link">A late milestone moves the departure estimate.</p></div></li>
+      <li class="stage reveal"><span class="stage-num" aria-hidden="true">04</span><div class="stage-card"><h3>Operate</h3><span class="status tested">Implemented internally · MSFS 2020 tested</span><p>Live aircraft data, detected flight phases and a recorded flight. Progress along the planned route is in development.</p><p class="link">Phases and events are recorded as they happen.</p></div></li>
+      <li class="stage reveal"><span class="stage-num" aria-hidden="true">05</span><div class="stage-card"><h3>Arrive</h3><span class="status dev">In active development</span><p>Landing and arrival are detected today. On-block times are in development; turnaround completion is planned.</p><p class="link">Arrival is compared with the plan; the flight closes out.</p></div></li>
+      <li class="stage reveal"><span class="stage-num" aria-hidden="true">06</span><div class="stage-card"><h3>Debrief</h3><span class="status tested">Implemented internally · MSFS 2020 tested</span><p>Planned versus actual times and the recorded timeline today. Delay causes and decision analysis are planned.</p><p class="link">Explains what happened, and later why.</p></div></li>
     </ol>
-    <p class="stages-note">Stage labels describe the experience as a whole. Today’s internal builds detect flight phases and record a flight timeline; dispatch import, turnaround workflows, delay handling and cause-based debriefs are planned. The Feature Explorer below lists each capability’s status.</p>
+    <p class="stages-note">A stage’s label reflects its main capability today; parts of each stage are still in development or planned, as described on each card. The Feature Explorer below lists every capability’s status.</p>
   </div>
 </section>
 
@@ -179,12 +213,13 @@
   <div class="wrap">
     <div class="section-head reveal">
       <p class="eyebrow">Feature explorer</p>
-      <h2 id="features-title">What Turnline is being built to do</h2>
+      <h2 id="features-title">What Turnline does today, and what comes next</h2>
       <p>Every capability carries an honest status. Nothing on this page is publicly available yet.</p>
     </div>
 
     <dl class="legend" aria-label="Status definitions">
-      <div><dt><span class="status impl">Implemented internally</span></dt><dd>Built and tested in internal development builds. Not publicly available; not yet validated with MSFS.</dd></div>
+      <div><dt><span class="status tested">Implemented internally · MSFS 2020 tested</span></dt><dd>Built in internal Windows builds and tested with MSFS 2020 on real hardware, in supported scenarios. Not publicly available; broad compatibility not established.</dd></div>
+      <div><dt><span class="status impl">Implemented internally</span></dt><dd>Built and tested in internal development builds; not yet separately validated with MSFS.</dd></div>
       <div><dt><span class="status dev">In active development</span></dt><dd>Being built or validated now.</dd></div>
       <div><dt><span class="status plan">Planned</span></dt><dd>Designed and on the roadmap; not built yet.</dd></div>
       <div><dt><span class="status research">Research</span></dt><dd>Feasibility under investigation; may change or not ship.</dd></div>
@@ -204,11 +239,13 @@
         <section class="panel" id="panel-dispatch" role="tabpanel" aria-labelledby="tab-dispatch" tabindex="0">
           <div class="panel-head"><div class="panel-icon"><svg aria-hidden="true"><use href="#i-dispatch"/></svg></div><div><h3>Flight Dispatch &amp; Planning</h3><p>The plan the whole flight is measured against.</p></div></div>
           <ul class="feature-list">
-            <li><div class="fl-top"><strong>SimBrief integration</strong><span class="status plan">Planned</span></div><p>Bring an existing SimBrief plan into Turnline instead of re-entering it, using documented interfaces.</p></li>
-            <li><div class="fl-top"><strong>Operational flight plan information</strong><span class="status plan">Planned</span></div><p>Key plan details available alongside the flight, not buried in a separate document.</p></li>
-            <li><div class="fl-top"><strong>Scheduled &amp; estimated times</strong><span class="status plan">Planned</span></div><p>Scheduled departure and arrival, with estimates that update as the operation changes.</p></li>
-            <li><div class="fl-top"><strong>Fuel &amp; route information</strong><span class="status plan">Planned</span></div><p>Planned fuel and route as the baseline for decisions and the debrief.</p></li>
-            <li><div class="fl-top"><strong>Flight-release workflow</strong><span class="status plan">Planned</span></div><p>A clear point where the flight is released and the operation begins.</p></li>
+            <li><div class="fl-top"><strong>SimBrief OFP import</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Import your latest SimBrief plan by username or pilot ID, only when you ask. Tested with a real SimBrief account.</p></li>
+            <li><div class="fl-top"><strong>Operational flight plan information</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Flight, aircraft, route, alternate, weights and planned fuel shown alongside the flight.</p></li>
+            <li><div class="fl-top"><strong>Scheduled times (OUT/OFF/ON/IN)</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Scheduled off-block, takeoff, landing and on-block times from the plan, matching SimBrief; estimates shown alongside.</p></li>
+            <li><div class="fl-top"><strong>Plan persistence &amp; offline use</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>The imported plan survives restarts and lost connectivity; an offline import fails gracefully.</p></li>
+            <li><div class="fl-top"><strong>Immutable plan attachment</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>A fixed snapshot of the plan is attached to the flight; later imports never change it.</p></li>
+            <li><div class="fl-top"><strong>Dispatch release workflow</strong><span class="status dev">In active development</span></div><p>A formal point where the flight is released. Built; awaiting acceptance testing on Windows.</p></li>
+            <li><div class="fl-top"><strong>Waypoint navigation log</strong><span class="status dev">In active development</span></div><p>The plan’s waypoints with planned altitude, distance, time and fuel. Awaiting real-flight acceptance.</p></li>
           </ul>
         </section>
 
@@ -237,33 +274,36 @@
         <section class="panel" id="panel-live" role="tabpanel" aria-labelledby="tab-live" tabindex="0">
           <div class="panel-head"><div class="panel-icon"><svg aria-hidden="true"><use href="#i-live"/></svg></div><div><h3>Live Flight Operations</h3><p>What your aircraft is doing, recorded as part of the operation.</p></div></div>
           <ul class="feature-list">
-            <li><div class="fl-top"><strong>Simulator telemetry</strong><span class="status dev">In active development</span></div><p>A simulator connection for MSFS 2020 and 2024. Built and tested against simulated data; validation with real MSFS is under way.</p></li>
-            <li><div class="fl-top"><strong>Aircraft state &amp; flight phases</strong><span class="status impl">Implemented internally</span></div><p>Taxi, takeoff, climb, cruise, descent, approach, landing and taxi-in detected from aircraft state.</p></li>
-            <li><div class="fl-top"><strong>Operational milestones</strong><span class="status impl">Implemented internally</span></div><p>Key moments such as departure, takeoff, landing and arrival captured on the flight’s timeline.</p></li>
+            <li><div class="fl-top"><strong>Simulator telemetry</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Live aircraft data from MSFS 2020 through Turnline’s simulator bridge, with honest connection and freshness status.</p></li>
+            <li><div class="fl-top"><strong>Flight recording</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Start a flight and Turnline records it, including interruptions, until you confirm completion.</p></li>
+            <li><div class="fl-top"><strong>Aircraft state &amp; flight phases</strong><span class="status impl">Implemented internally</span></div><p>Taxi, takeoff, climb, cruise, descent, approach, landing and taxi-in detected from aircraft state. Edge cases such as go-arounds still need validation in MSFS.</p></li>
+            <li><div class="fl-top"><strong>Operational timeline (OUT/OFF/ON/IN)</strong><span class="status dev">In active development</span></div><p>Off-block, takeoff, landing and on-block times on one timeline. Awaiting acceptance testing on Windows.</p></li>
+            <li><div class="fl-top"><strong>Live route monitoring</strong><span class="status dev">In active development</span></div><p>Current leg, next fix and distance remaining along the planned route. Awaiting real-flight acceptance.</p></li>
             <li><div class="fl-top"><strong>Disruption &amp; delay modeling</strong><span class="status plan">Planned</span></div><p>Events that create delays, and delays that carry consequences downstream.</p></li>
-            <li><div class="fl-top"><strong>Flight-event history</strong><span class="status impl">Implemented internally</span></div><p>Events, interruptions and phase changes stored with the flight.</p></li>
           </ul>
         </section>
 
         <section class="panel" id="panel-integrations" role="tabpanel" aria-labelledby="tab-integrations" tabindex="0">
           <div class="panel-head"><div class="panel-icon"><svg aria-hidden="true"><use href="#i-plug"/></svg></div><div><h3>Aircraft &amp; Third-Party Integrations</h3><p>Working alongside the simulator and tools you already use.</p></div></div>
           <ul class="feature-list">
-            <li><div class="fl-top"><strong>SimBrief integration</strong><span class="status plan">Planned</span></div><p>Dispatch plan import, subject to the provider’s documented interfaces and terms.</p></li>
+            <li><div class="fl-top"><strong>SimBrief</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Import of your latest OFP through SimBrief’s documented public interface, tested with a real account. Not affiliated with Navigraph.</p></li>
             <li><div class="fl-top"><strong>SayIntentions interoperability</strong><span class="status research">Research</span></div><p>Under investigation. No working integration or partnership exists.</p></li>
             <li><div class="fl-top"><strong>GSX Pro integration</strong><span class="status research">Research</span></div><p>Under investigation. No working integration or partnership exists.</p></li>
             <li><div class="fl-top"><strong>Aircraft ACARS / AOC</strong><span class="status research">Research</span></div><p>Researching what individual aircraft expose and what can be supported responsibly.</p></li>
-            <li><div class="fl-top"><strong>MSFS 2020 / 2024 compatibility</strong><span class="status dev">In active development</span></div><p>Separate validation for each simulator on real hardware. Not yet complete for either.</p></li>
+            <li><div class="fl-top"><strong>Microsoft Flight Simulator 2020</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Tested on real hardware in supported scenarios. Broad aircraft and add-on compatibility not yet established.</p></li>
+            <li><div class="fl-top"><strong>Microsoft Flight Simulator 2024</strong><span class="status dev">In active development</span></div><p>Validated separately from 2020. Compatibility has not been verified yet.</p></li>
           </ul>
         </section>
 
         <section class="panel" id="panel-debrief" role="tabpanel" aria-labelledby="tab-debrief" tabindex="0">
           <div class="panel-head"><div class="panel-icon"><svg aria-hidden="true"><use href="#i-chart"/></svg></div><div><h3>Operational Debrief</h3><p>Not just what happened: why, and what it led to.</p></div></div>
           <ul class="feature-list">
-            <li><div class="fl-top"><strong>Flight timeline</strong><span class="status impl">Implemented internally</span></div><p>A phase-by-phase timeline of each recorded flight.</p></li>
-            <li><div class="fl-top"><strong>Departure &amp; arrival performance</strong><span class="status plan">Planned</span></div><p>Actual times compared with the schedule the flight was planned against.</p></li>
+            <li><div class="fl-top"><strong>Flight timeline</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>A phase-by-phase timeline and event log of each recorded flight.</p></li>
+            <li><div class="fl-top"><strong>Planned versus actual</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Detected takeoff, landing and flight time compared with the attached plan; anything not detected is shown as such.</p></li>
+            <li><div class="fl-top"><strong>Persistent flight history</strong><span class="status impl">Implemented internally</span></div><p>Flights stored locally on your PC, so your history doesn’t depend on a cloud account. Survives restarts in internal tests; not yet separately checked with MSFS.</p></li>
+            <li><div class="fl-top"><strong>Navigation debrief</strong><span class="status dev">In active development</span></div><p>Planned versus flown route distance and time outside the planned route corridor, described as observations, not judgements.</p></li>
             <li><div class="fl-top"><strong>Delay classification</strong><span class="status plan">Planned</span></div><p>Delays attributed to causes such as boarding, servicing or air traffic.</p></li>
             <li><div class="fl-top"><strong>Decision-based analysis</strong><span class="status plan">Planned</span></div><p>The decisions you made and the consequences that followed.</p></li>
-            <li><div class="fl-top"><strong>Persistent flight records</strong><span class="status impl">Implemented internally</span></div><p>Flights stored locally on your PC, so your history doesn’t depend on a cloud account.</p></li>
           </ul>
         </section>
       </div>
@@ -387,15 +427,15 @@
       <p>Turnline is designed to complement the simulator and add-ons you already fly with. Here is where each potential connection stands today.</p>
     </div>
     <ul class="providers" role="list">
-      <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">2020</span><span class="status dev">In active development</span></div><h3>Microsoft Flight Simulator 2020</h3><p>Target platform. Simulator connection built; compatibility validation on real hardware is under way.</p></li>
-      <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">2024</span><span class="status dev">In active development</span></div><h3>Microsoft Flight Simulator 2024</h3><p>Target platform, validated separately from 2020. Compatibility validation is under way.</p></li>
-      <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">OFP</span><span class="status plan">Planned</span></div><h3>SimBrief</h3><p>Planned dispatch-plan import using documented interfaces, subject to the provider’s terms.</p></li>
+      <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">2020</span><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><h3>Microsoft Flight Simulator 2020</h3><p>Simulator connection, flight recording and debrief tested on a real Windows PC in supported scenarios. Broad aircraft and add-on compatibility is not established yet.</p></li>
+      <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">2024</span><span class="status dev">In active development</span></div><h3>Microsoft Flight Simulator 2024</h3><p>Target platform, validated separately from 2020. Compatibility has not been verified yet.</p></li>
+      <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">OFP</span><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><h3>SimBrief</h3><p>Import of your latest operational flight plan through SimBrief’s documented public interface, tested with a real account. Only on request; no Navigraph password.</p></li>
       <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">ATC</span><span class="status research">Research</span></div><h3>SayIntentions</h3><p>Interoperability under investigation. Not a working integration or a partnership.</p></li>
       <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">GND</span><span class="status research">Research</span></div><h3>GSX Pro</h3><p>Ground-service interoperability under investigation. Not a working integration or a partnership.</p></li>
       <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">AOC</span><span class="status research">Research</span></div><h3>Aircraft ACARS / AOC ecosystems</h3><p>Researching aircraft-specific messaging. Support would vary by aircraft and what it exposes.</p></li>
     </ul>
     <div class="integration-notes">
-      <p>Integration support depends on documented interfaces, each aircraft’s capabilities, and the permission of the provider involved. Some connections may prove impractical, and we’ll say so if they do. Statuses here are updated as work progresses; “Research” means we’re investigating, not that support is coming.</p>
+      <p>Integration support depends on documented interfaces, each aircraft’s capabilities, and the permission of the provider involved. A working SimBrief import is not a partnership with Navigraph. Some connections may prove impractical, and we’ll say so if they do. Statuses here are updated as work progresses; “Research” means we’re investigating, not that support is coming.</p>
       <p class="disclaimer">Product names are shown as plain text for identification only. Turnline is not affiliated with, endorsed by or sponsored by Microsoft, Navigraph (SimBrief), SayIntentions, FSDreamTeam (GSX), or any aircraft developer. No logos are used.</p>
     </div>
   </div>
@@ -407,14 +447,14 @@
     <div class="section-head reveal">
       <p class="eyebrow">Development roadmap</p>
       <h2 id="roadmap-title">Where Turnline is headed</h2>
-      <p>Phases, not dates. Each phase builds on the one before it.</p>
+      <p>Milestones, not dates. Each one builds on the one before it, and a milestone counts as done only after acceptance testing, not when the code is written.</p>
     </div>
     <ol class="roadmap">
-      <li class="phase current reveal"><span class="phase-step">PHASE 1</span><h3>Foundation</h3><span class="status dev">In validation</span><ul><li>Windows desktop shell</li><li>Simulator bridge</li><li>Local flight storage</li><li>Telemetry and lifecycle engine</li><li>Physical MSFS compatibility validation</li></ul></li>
-      <li class="phase reveal"><span class="phase-step">PHASE 2</span><h3>Connected Flight</h3><span class="status plan">Next</span><ul><li>Verified MSFS 2020/2024 telemetry</li><li>SimBrief import</li><li>Improved live flight timeline</li><li>Reliable flight history and debrief</li></ul></li>
-      <li class="phase reveal"><span class="phase-step">PHASE 3</span><h3>Airline Operations</h3><span class="status plan">Planned</span><ul><li>Turnaround workflows</li><li>Passenger and cabin operations</li><li>Operational event and consequence engine</li><li>More advanced delay modeling</li></ul></li>
-      <li class="phase reveal"><span class="phase-step">PHASE 4</span><h3>Interoperability</h3><span class="status research">Research &amp; planned</span><ul><li>SayIntentions</li><li>GSX</li><li>Aircraft ACARS/AOC integrations</li><li>Aircraft-specific capability profiles</li></ul></li>
-      <li class="phase reveal"><span class="phase-step">PHASE 5</span><h3>Expanded Operations</h3><span class="status research">Long-term vision</span><ul><li>Persistent airline operations</li><li>Deeper scheduling</li><li>Performance analytics</li><li>Expanded operational scenarios</li></ul></li>
+      <li class="phase done reveal"><span class="phase-step">MILESTONE 1</span><h3>Foundation</h3><span class="status tested">Implemented internally · MSFS 2020 tested</span><ul><li>Windows desktop app</li><li>Simulator bridge</li><li>Local flight storage</li><li>Telemetry, flight phases and recording</li><li>Tested with MSFS 2020 in supported scenarios</li></ul></li>
+      <li class="phase done reveal"><span class="phase-step">MILESTONE 2</span><h3>SimBrief integration</h3><span class="status tested">Implemented internally · MSFS 2020 tested</span><ul><li>OFP import, tested with a real SimBrief account</li><li>Scheduled and estimated times</li><li>Offline plan persistence</li><li>Immutable plan attachment</li><li>Planned-versus-actual debrief</li></ul></li>
+      <li class="phase current reveal"><span class="phase-step">MILESTONE 3</span><h3>Dispatch release</h3><span class="status dev">In active development</span><ul><li>Dispatch release workflow</li><li>OUT/OFF/ON/IN operational timeline</li><li>Block and flight times against the release</li><li>Built; awaiting Windows acceptance testing</li></ul></li>
+      <li class="phase current reveal"><span class="phase-step">MILESTONE 4</span><h3>Route monitoring &amp; navlog</h3><span class="status dev">In active development</span><ul><li>Waypoint navigation log</li><li>Live progress along the planned route</li><li>Navigation debrief</li><li>Awaiting acceptance on a real flight</li></ul></li>
+      <li class="phase reveal"><span class="phase-step">LATER</span><h3>Airline operations</h3><span class="status plan">Planned · Research</span><ul><li>Turnarounds, passengers and cabin (planned)</li><li>Operational cause-and-effect engine (planned)</li><li>Airline scheduling (planned)</li><li>SayIntentions, GSX and aircraft ACARS interoperability (research)</li></ul></li>
     </ol>
     <p class="roadmap-note">The roadmap is directional and not a commitment. Scope, order and timing may change as we learn from development and testing. We don’t publish delivery dates we can’t stand behind.</p>
   </div>
@@ -429,14 +469,15 @@
       <p>Can’t find what you’re looking for? Email <a href="mailto:support@turnlineops.com" style="color:inherit;font-weight:650">support@turnlineops.com</a>.</p>
     </div>
     <div class="faq-list">
-      <details><summary>What is Turnline?</summary><div class="answer"><p>Turnline is an airline operations simulation platform in development for Microsoft Flight Simulator. It aims to connect flight planning, ground handling, passengers, the live flight and the postflight debrief into one operation, so decisions and delays carry through the whole flight.</p></div></details>
+      <details><summary>What is Turnline?</summary><div class="answer"><p>Turnline is an airline operations simulation platform in development for Microsoft Flight Simulator. Today’s internal builds import your SimBrief plan, record your flight and compare plan with actual after landing. The long-term aim is to connect flight planning, ground handling, passengers, the live flight and the debrief into one operation, so decisions and delays carry through the whole flight.</p></div></details>
+      <details><summary>What works today?</summary><div class="answer"><p>In internal Windows builds tested with MSFS 2020: the simulator connection, flight recording and history, SimBrief OFP import with scheduled and estimated times, offline plan storage, attaching a fixed plan to a flight, and a planned-versus-actual debrief. A dispatch release, an OUT/OFF/ON/IN timeline and route monitoring are in development. See <a href="#working">what’s working</a>.</p><p>Passenger, ground-handling, ATC and airline-scheduling features have not been built.</p></div></details>
       <details><summary>Is Turnline a flight tracker or an airline management game?</summary><div class="answer"><p>Neither, exactly. A flight tracker records where you flew; an airline management game usually has you run a company from a spreadsheet. Turnline focuses on the operation around each flight you actually fly: the plan, the preparation, what happens on the day, and the debrief.</p></div></details>
-      <details><summary>Which flight simulators will Turnline support?</summary><div class="answer"><p>Turnline is being built for Microsoft Flight Simulator 2020 and Microsoft Flight Simulator 2024 on Windows PCs. Compatibility with each simulator is being validated separately and isn’t confirmed yet for either.</p></div></details>
-      <details><summary>Will Turnline work with SimBrief?</summary><div class="answer"><p>SimBrief import is planned. It isn’t available yet, and it will depend on the provider’s documented interfaces and terms. Turnline isn’t affiliated with Navigraph or SimBrief.</p></div></details>
+      <details><summary>Which flight simulators will Turnline support?</summary><div class="answer"><p>Turnline is being built for Microsoft Flight Simulator 2020 and Microsoft Flight Simulator 2024 on Windows PCs. The core workflow has been tested internally with MSFS 2020 on a real PC, in the scenarios Turnline supports. Broad aircraft and add-on compatibility isn’t established yet, and MSFS 2024 compatibility hasn’t been verified.</p></div></details>
+      <details><summary>Does Turnline work with SimBrief?</summary><div class="answer"><p>Yes, in internal builds. Turnline imports your latest SimBrief operational flight plan by username or pilot ID when you ask, and it has been tested with a real SimBrief account. It never asks for your Navigraph password. It isn’t publicly available yet, and Turnline isn’t affiliated with Navigraph or SimBrief.</p></div></details>
       <details><summary>Will it work with SayIntentions and GSX?</summary><div class="answer"><p>Both are under investigation. There’s no working integration or partnership today, and we can’t promise one. Whether it’s possible depends on what each product exposes and on its developer’s permission.</p></div></details>
       <details><summary>Will aircraft ACARS systems be supported?</summary><div class="answer"><p>We’re researching it. ACARS/AOC features differ from aircraft to aircraft, so any support would be aircraft-specific and depend on what each aircraft makes available. No aircraft is supported today.</p></div></details>
       <details><summary>Can I use Turnline with my existing add-ons?</summary><div class="answer"><p>That’s the intent. Turnline is designed to run alongside your aircraft, planning tools, ATC and ground-handling add-ons rather than replace them. Specific compatibility will be confirmed through testing before we make any claims.</p></div></details>
-      <details><summary>Is Turnline available now?</summary><div class="answer"><p>No. Turnline is in development and there’s no public download yet. Joining the early-access list is the best way to hear when that changes.</p></div></details>
+      <details><summary>Is Turnline available now?</summary><div class="answer"><p>No. Turnline runs in internal development builds only, and there’s no public download yet. Joining the early-access list is the best way to hear when that changes.</p></div></details>
       <details><summary>Will Turnline be free?</summary><div class="answer"><p>Pricing hasn’t been decided or announced. We won’t speculate until we can give you a straight answer.</p></div></details>
       <details><summary>What do I get by joining the early-access list?</summary><div class="answer"><p>Development updates, a look at new features as they’re built, and notice when opportunities to test Turnline become available. Joining doesn’t guarantee access to testing, and there’s nothing to buy.</p><p>You can unsubscribe at any time. See the <a href="privacy.html">privacy notice</a> for how your email is handled.</p></div></details>
     </div>
@@ -449,19 +490,19 @@
     <div class="join-card reveal">
       <div class="join-pitch">
         <p class="eyebrow">Early access</p>
-        <h2 id="early-title">Be part of the next generation of flight simulation.</h2>
-        <p>Get development updates, see new features as they’re built, and hear when opportunities to test Turnline become available.</p>
+        <h2 id="early-title">Follow Turnline as it’s built.</h2>
+        <p>Join the early-access list for development updates from the real build, and for news of future testing opportunities when there are some.</p>
         <ul class="benefits">
-          <li><svg aria-hidden="true"><use href="#i-mail"/></svg><div><strong>Development updates</strong><span>Progress as it happens, including what didn’t work.</span></div></li>
+          <li><svg aria-hidden="true"><use href="#i-mail"/></svg><div><strong>Development updates</strong><span>What was built and tested, including what didn’t work.</span></div></li>
           <li><svg aria-hidden="true"><use href="#i-eye"/></svg><div><strong>New features, as they’re built</strong><span>See the operation take shape stage by stage.</span></div></li>
-          <li><svg aria-hidden="true"><use href="#i-flask"/></svg><div><strong>Testing opportunities</strong><span>Hear first when there’s a chance to try Turnline.</span></div></li>
+          <li><svg aria-hidden="true"><use href="#i-flask"/></svg><div><strong>Future testing opportunities</strong><span>Information about testing when it opens. No dates or places are promised.</span></div></li>
         </ul>
-        <p class="join-honest">No purchase or subscription is available. Joining doesn’t guarantee access to testing. Your email is used only for the updates you ask for.</p>
+        <p class="join-honest">No purchase or subscription is available, and pricing hasn’t been decided. Joining doesn’t guarantee access to testing or set any date. Your email is used only for the updates you ask for.</p>
       </div>
 
       <div class="join-form">
-        <h3>Join the Turnline Waitlist</h3>
-        <p class="lede">We’ll send one email to confirm your address first.</p>
+        <h3>Join the Early Access List</h3>
+        <p class="lede">Development updates and testing news. We’ll send one email to confirm your address first.</p>
         <form id="signup" novalidate>
           <div class="field">
             <label for="email">Email address</label>
@@ -469,7 +510,7 @@
           </div>
           <label class="consent"><input type="checkbox" id="consent" required><span>I agree to receive Turnline development news and beta invitations by email. I can unsubscribe at any time.</span></label>
           <div id="turnstile" class="turnstile-slot" aria-label="Spam prevention check"></div>
-          <button class="btn btn-primary" id="submit" type="submit">Join the Turnline Waitlist</button>
+          <button class="btn btn-primary" id="submit" type="submit">Join the Early Access List</button>
           <p class="fine">We use your email only for the updates you request. See our <a href="privacy.html">privacy notice</a>.</p>
           <p class="form-status" id="status" role="status" aria-live="polite"></p>
         </form>
@@ -477,6 +518,15 @@
     </div>
   </div>
 </section>
+
+<dialog class="lightbox" id="lightbox" aria-labelledby="lightbox-title">
+  <div class="lightbox-bar">
+    <p class="lightbox-title" id="lightbox-title">Screenshot</p>
+    <button class="lightbox-close" type="button" aria-label="Close screenshot">Close</button>
+  </div>
+  <div class="lightbox-body"><img alt="" width="1600" height="944" decoding="async"></div>
+  <p class="lightbox-note">Internal build · sample data. On small screens, scroll to see the whole screen.</p>
+</dialog>
 
 </main>
 
@@ -490,7 +540,7 @@
           <span>TURNLINE</span>
         </a>
         <p class="footer-tag">Every flight. The whole operation.</p>
-        <p class="footer-tag">An airline operations simulation platform in development for Microsoft Flight Simulator 2020 and 2024.</p>
+        <p class="footer-tag">An airline operations simulation platform in development for Microsoft Flight Simulator. Tested internally with MSFS 2020; not publicly available.</p>
       </div>
       <div>
         <h2>Explore</h2>
@@ -512,7 +562,7 @@
     <div class="legal">
       <p>© <span id="year">2026</span> Turnline. Turnline is operated by Apex Aviation Training Group LLC. Turnline is a working product name.</p>
       <p>Microsoft Flight Simulator is a trademark of Microsoft Corporation. SimBrief, SayIntentions, GSX and all other product names are trademarks of their respective owners and are used for identification only. Turnline is an independent product and is not affiliated with, endorsed by or sponsored by Microsoft, Navigraph, SayIntentions, FSDreamTeam or any aircraft developer.</p>
-      <p>Product visuals on this page are concept illustrations of planned functionality, not screenshots of released software.</p>
+      <p>Screenshots on this page come from internal development builds and show sample data; they are not released software. Visuals marked “Concept” illustrate planned functionality.</p>
     </div>
   </div>
 </footer>

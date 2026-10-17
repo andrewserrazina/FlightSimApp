@@ -1,6 +1,6 @@
 # MSFS 2020 test plan (physical Windows PC)
 
-**Status:** prepared in S1-07. **Not yet executed.** Nothing in this plan has been run against a real simulator.
+**Status:** prepared in S1-07. **Not yet executed with the probe.** No instrumented result exists. The owner has separately reported hands-on acceptance of the desktop workflow; see [msfs2020-owner-acceptance-s2-01.md](msfs2020-owner-acceptance-s2-01.md). That does not count as running this plan.
 
 Separate from the MSFS 2024 plan on purpose: results must never be merged into one "MSFS supported" claim.
 

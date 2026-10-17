@@ -2,13 +2,16 @@
 
 Separate from the other simulator's matrix: a result here says nothing about the other version.
 
-**Status (S1-07): no row has been run against a real MSFS 2020.** Every real-simulator cell is `NOT RUN`.
+**Status (updated 2026-10-17):**
+- **Instrumented evidence:** no row has been verified with a real-simulator recording and cockpit check. Every telemetry-field, simulator-behaviour and lifecycle cell is still `NOT RUN`.
+- **Owner acceptance:** the project owner has reported hands-on acceptance of the desktop workflow with a real MSFS 2020 and a real SimBrief account. See [msfs2020-owner-acceptance-s2-01.md](../testing/msfs2020-owner-acceptance-s2-01.md). Only the rows that acceptance directly supports are marked, as `OWNER-ACCEPTED`, a weaker class than `PASS`.
 
 Columns, kept separate on purpose:
 - **Simulated:** unit tests, fakes, the mock adapter, synthetic or simulated recordings (Linux and Windows).
 - **CI-verified (Windows, no MSFS):** passed on the GitHub `windows-latest` runner. No simulator is involved.
 - **Real MSFS 2020:** PASS / FAIL / NOT RUN, from the acceptance report of a sanitised recording made on a physical PC ([msfs2020-test-plan.md](../testing/msfs2020-test-plan.md)).
   A field counts as PASS only when the report says *VERIFIED*, which needs a real-simulator recording **and** a matching cockpit check.
+  `OWNER-ACCEPTED` means the owner ran the check by hand on a physical PC and reported it passing, with no recording or log committed. It never verifies individual telemetry fields.
 
 ## Telemetry fields
 
@@ -59,13 +62,27 @@ Columns, kept separate on purpose:
 
 | Check | Simulated | CI-verified (Windows, no MSFS) | Real MSFS 2020 |
 |---|---|---|---|
-| SimConnect.dll found via FLIGHTSIM_SIMCONNECT_DLL / next to the bridge → 'loaded, not runtime-verified' | — | W: DLL absent → not_built / sdk_unavailable (CI probe and UI smoke) | NOT RUN |
-| Desktop app: live flight recorded, completion confirmed, listed in history, survives restart | L: mock (unit); W: mock flight in WebView2 (CI smoke) | W (mock data only) | NOT RUN |
+| SimConnect.dll found via FLIGHTSIM_SIMCONNECT_DLL / next to the bridge → 'loaded, not runtime-verified' | — | W: DLL absent → not_built / sdk_unavailable (CI probe and UI smoke) | OWNER-ACCEPTED: the app connected to MSFS 2020, so the DLL loaded. The probe check (test plan §1.2) was not run, and the SDK version was not recorded. |
+| Desktop app: live flight recorded, completion confirmed, listed in history, survives restart | L: mock (unit); W: mock flight in WebView2 (CI smoke) | W (mock data only) | OWNER-ACCEPTED (partial): recorded and completed, with a planned-versus-actual debrief. Survival of the flight after a restart was not reported. |
 | Bridge exits with the app (window close, forced kill) while SimConnect is open | L: shutdown deadline (code) | W: without SimConnect (CI smoke) | NOT RUN |
 | Bridge log written to %APPDATA%\dev.flightsimapp.desktop\logs\bridge.log | L: Rust unit tests | W: CI smoke (pending first run of this check) | NOT RUN |
+
+## Desktop workflow with real MSFS 2020 and SimBrief (owner acceptance)
+
+| Check | Real MSFS 2020 | Source |
+|---|---|---|
+| Desktop connection and flight recording | OWNER-ACCEPTED | [owner acceptance](../testing/msfs2020-owner-acceptance-s2-01.md) #1 |
+| SimBrief OFP import (real account) | OWNER-ACCEPTED | #2 |
+| Scheduled OUT/OFF/ON/IN times from the OFP (not the detected S2-02 timeline) | OWNER-ACCEPTED | #3 |
+| Duplicate import handling | OWNER-ACCEPTED | #4 |
+| Imported plan persists after restart | OWNER-ACCEPTED | #5 |
+| Offline plan availability and graceful import failure | OWNER-ACCEPTED | #6 |
+| Flight-plan attachment | OWNER-ACCEPTED | #7 |
+| Recorded flight completion | OWNER-ACCEPTED | #8 |
+| Planned-versus-actual debrief | OWNER-ACCEPTED | #9 |
 
 ## Environment of each real result
 
 | Date | Tester | Windows build | Edition / version | SDK version | Aircraft | App commit | Recordings |
 |---|---|---|---|---|---|---|---|
-| — | — | — | — | — | — | — | — |
+| Not recorded (reported 2026-10-17) | Project owner | Not recorded | Not recorded | Not recorded | Not recorded | Not recorded (includes the PR #8 fix) | None |
