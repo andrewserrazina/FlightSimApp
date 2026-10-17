@@ -33,7 +33,7 @@ What this record is not:
 |---|---|---|---|
 | 1 | Desktop connection to MSFS 2020 and flight recording | PASS (owner-reported) | One flight session or more; aircraft not recorded. |
 | 2 | SimBrief OFP import from a real account | PASS (owner-reported) | Latest OFP fetched on request. |
-| 3 | Scheduled OUT/OFF/ON/IN times from the OFP | PASS (owner-reported) | The **scheduled** off-block, takeoff, landing and on-block times imported from SimBrief match the OFP. This is not the detected OUT/OFF/ON/IN timeline, which is S2-02 (PR #9, not merged). |
+| 3 | Scheduled OUT/OFF/ON/IN times from the OFP | PASS (owner-reported) | The **scheduled** off-block, takeoff, landing and on-block times imported from SimBrief match the OFP. This is not the detected OUT/OFF/ON/IN timeline, which is S2-02 (PR #9) and not covered by this acceptance. |
 | 4 | Duplicate import handling | PASS (owner-reported) | Re-importing the same OFP. |
 | 5 | Imported plan persists after an app restart | PASS (owner-reported) | |
 | 6 | Offline: the imported plan stays available, and an import attempt fails gracefully | PASS (owner-reported) | |
@@ -47,8 +47,8 @@ What this record is not:
 - Simulator behaviours such as pause, main-menu return, aircraft change, quitting MSFS mid-flight and go-arounds.
 - Flight history surviving a forced kill and restart with a real simulator. This has only been CI-verified on
   Windows without MSFS.
-- S2-02, dispatch release and the detected OUT/OFF/ON/IN timeline (PR #9, open).
-- S2-03, navlog and route monitoring (PR #10, open).
+- S2-02, dispatch release and the detected OUT/OFF/ON/IN timeline (PR #9, merged into `main` on 2026-10-17; not yet owner-accepted).
+- S2-03, navlog and route monitoring (PR #10; not yet owner-accepted).
 - MSFS 2024.
 
 ## How this is used
