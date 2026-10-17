@@ -79,6 +79,8 @@ export interface FlightStore {
   listFlights(limit?: number, offset?: number): Promise<FlightSummary[]>;
   flightDetail(id: string): Promise<FlightDetail | null>;
   prune(keepDetailedFlights: number): Promise<number>;
+  /** Recorded track points of one flight (read-only; used by the navigation debrief, never by recording). */
+  flightTrack?(id: string): Promise<SampleRowDto[]>;
 }
 
 /** Limits enforced by the Rust store; the recorder chunks batches to stay within them. */

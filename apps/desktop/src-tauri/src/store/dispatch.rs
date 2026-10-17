@@ -7,8 +7,9 @@ use serde::Serialize;
 
 use super::{check_ts, now_utc, Store, StoreError};
 
-/// Normalized plans are a few KB; the raw SimBrief response (with navlog) is never stored.
-pub const MAX_PLAN_BYTES: usize = 64 * 1024;
+/// Normalized plans are a few KB, or up to several hundred KB with a long-haul navlog (S2-03,
+/// at most 1500 fixes). The raw SimBrief response is never stored.
+pub const MAX_PLAN_BYTES: usize = 1024 * 1024;
 const MAX_ID: usize = 64;
 
 #[derive(Debug, Serialize, PartialEq)]

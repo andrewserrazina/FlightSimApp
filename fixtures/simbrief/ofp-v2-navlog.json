@@ -1,0 +1,436 @@
+{
+  "fetch": {
+    "userid": "000001",
+    "static_id": {},
+    "status": "Success",
+    "time": "0.0412"
+  },
+  "params": {
+    "request_id": "900000003",
+    "user_id": "000001",
+    "time_generated": "2026-10-15T13:50:00Z",
+    "static_id": {},
+    "ofp_layout": "LIDO",
+    "airac": "2610",
+    "units": "kgs"
+  },
+  "general": {
+    "icao_airline": "TLN",
+    "flight_number": "247",
+    "is_etops": "0",
+    "initial_altitude": "36000",
+    "costindex": "35",
+    "route": "SSOXS5 SSOXS DCT BUZRD Q448 MIDDLE BAE4 ORD",
+    "air_distance": "781",
+    "cruise_profile": "CI 35",
+    "route_distance": "778"
+  },
+  "atc": {
+    "callsign": "TLN247"
+  },
+  "origin": {
+    "icao_code": "KBOS",
+    "iata_code": "BOS",
+    "name": "Boston Logan Intl",
+    "plan_rwy": "22R",
+    "pos_lat": "42.364347",
+    "pos_long": "-71.005181"
+  },
+  "destination": {
+    "icao_code": "KORD",
+    "iata_code": "ORD",
+    "name": "Chicago O'Hare Intl",
+    "plan_rwy": "27L",
+    "pos_lat": "41.978603",
+    "pos_long": "-87.904842"
+  },
+  "alternate": {
+    "icao_code": "KMDW",
+    "iata_code": "MDW",
+    "name": "Chicago Midway Intl",
+    "plan_rwy": "31C"
+  },
+  "aircraft": {
+    "icaocode": "A20N",
+    "icao_code": "A20N",
+    "name": "A320-251N",
+    "reg": "N247TL",
+    "base_type": "A20N"
+  },
+  "times": {
+    "est_time_enroute": "02:19:30",
+    "sched_time_enroute": "02:16:00",
+    "sched_out": "2026-10-15T14:35:00Z",
+    "sched_off": "2026-10-15T14:52:00Z",
+    "sched_on": "2026-10-15T17:08:00Z",
+    "sched_in": "2026-10-15T17:18:00Z",
+    "sched_block": "02:43:00",
+    "est_out": "2026-10-15T14:35:00Z",
+    "est_off": "2026-10-15T14:52:00Z",
+    "est_on": "2026-10-15T17:11:30Z",
+    "est_in": "2026-10-15T17:21:30Z",
+    "est_block": "02:46:30",
+    "orig_timezone": "-04:00:00",
+    "dest_timezone": "-05:00:00",
+    "taxi_out": "00:17:00",
+    "taxi_in": "00:10:00"
+  },
+  "fuel": {
+    "plan_ramp": "7420",
+    "taxi": "200",
+    "enroute_burn": "5310",
+    "contingency": "266",
+    "alternate_burn": "880",
+    "reserve": "1100",
+    "extra": "0",
+    "min_takeoff": "7556",
+    "plan_takeoff": "7220",
+    "plan_landing": "1910"
+  },
+  "weights": {
+    "est_zfw": "60410",
+    "est_tow": "67630",
+    "est_ldw": "62320",
+    "payload": "15600",
+    "pax_count": "156",
+    "cargo": "1170"
+  },
+  "navlog": [
+    {
+      "ident": "TLNA1",
+      "name": "TLNA1",
+      "type": "wpt",
+      "icao_region": "",
+      "stage": "CLB",
+      "via_airway": "TLNA1D",
+      "is_sid_star": "1",
+      "altitude_feet": "9000",
+      "ind_airspeed": "250",
+      "true_airspeed": "450",
+      "mach": "",
+      "groundspeed": "300",
+      "pos_lat": "42.396783",
+      "pos_long": "-71.681196",
+      "distance": "30",
+      "time_leg": "00:06:00",
+      "time_total": "00:06:00",
+      "fuel_leg": "123",
+      "fuel_totalused": "123",
+      "fuel_plan_onboard": "7127",
+      "fuel_min_onboard": "5627",
+      "wind_data": [
+        {
+          "altitude": "0",
+          "wind_dir": "270",
+          "wind_spd": "10",
+          "oat": "15"
+        }
+      ]
+    },
+    {
+      "ident": "TOC",
+      "name": "TOP OF CLIMB",
+      "type": "ltlg",
+      "icao_region": "",
+      "stage": "CLB",
+      "via_airway": "TLNJ1",
+      "is_sid_star": "0",
+      "altitude_feet": "36000",
+      "ind_airspeed": "280",
+      "true_airspeed": "450",
+      "mach": "0.78",
+      "groundspeed": "420",
+      "pos_lat": "42.437981",
+      "pos_long": "-72.696423",
+      "distance": "45",
+      "time_leg": "00:06:26",
+      "time_total": "00:12:26",
+      "fuel_leg": "184",
+      "fuel_totalused": "307",
+      "fuel_plan_onboard": "6943",
+      "fuel_min_onboard": "5443",
+      "wind_data": [
+        {
+          "altitude": "0",
+          "wind_dir": "270",
+          "wind_spd": "10",
+          "oat": "15"
+        }
+      ]
+    },
+    {
+      "ident": "TLNB2",
+      "name": "TLNB2",
+      "type": "wpt",
+      "icao_region": "",
+      "stage": "CRZ",
+      "via_airway": "TLNJ1",
+      "is_sid_star": "0",
+      "altitude_feet": "36000",
+      "ind_airspeed": "280",
+      "true_airspeed": "450",
+      "mach": "0.78",
+      "groundspeed": "455",
+      "pos_lat": "42.501695",
+      "pos_long": "-75.239063",
+      "distance": "113",
+      "time_leg": "00:14:54",
+      "time_total": "00:27:20",
+      "fuel_leg": "463",
+      "fuel_totalused": "770",
+      "fuel_plan_onboard": "6480",
+      "fuel_min_onboard": "4980",
+      "wind_data": [
+        {
+          "altitude": "0",
+          "wind_dir": "270",
+          "wind_spd": "10",
+          "oat": "15"
+        }
+      ]
+    },
+    {
+      "ident": "TLNC3",
+      "name": "TLNC3",
+      "type": "wpt",
+      "icao_region": "",
+      "stage": "CRZ",
+      "via_airway": "TLNJ1",
+      "is_sid_star": "0",
+      "altitude_feet": "36000",
+      "ind_airspeed": "280",
+      "true_airspeed": "450",
+      "mach": "0.78",
+      "groundspeed": "455",
+      "pos_lat": "42.499082",
+      "pos_long": "-78.632960",
+      "distance": "150",
+      "time_leg": "00:19:47",
+      "time_total": "00:47:07",
+      "fuel_leg": "615",
+      "fuel_totalused": "1385",
+      "fuel_plan_onboard": "5865",
+      "fuel_min_onboard": "4365",
+      "wind_data": [
+        {
+          "altitude": "0",
+          "wind_dir": "270",
+          "wind_spd": "10",
+          "oat": "15"
+        }
+      ]
+    },
+    {
+      "ident": "TLNZZ",
+      "name": "TLNZZ",
+      "type": "wpt",
+      "icao_region": "",
+      "stage": "CRZ",
+      "via_airway": "TLNJ1",
+      "is_sid_star": "0",
+      "altitude_feet": "36000",
+      "ind_airspeed": "280",
+      "true_airspeed": "450",
+      "mach": "0.78",
+      "groundspeed": "455",
+      "pos_lat": "",
+      "pos_long": "",
+      "distance": "",
+      "time_leg": "",
+      "time_total": "",
+      "fuel_leg": "",
+      "fuel_totalused": "",
+      "fuel_plan_onboard": "",
+      "fuel_min_onboard": ""
+    },
+    {
+      "ident": "TLND4",
+      "name": "TLND4",
+      "type": "wpt",
+      "icao_region": "",
+      "stage": "CRZ",
+      "via_airway": "TLNJ1",
+      "is_sid_star": "0",
+      "altitude_feet": "36000",
+      "ind_airspeed": "280",
+      "true_airspeed": "450",
+      "mach": "0.78",
+      "groundspeed": "455",
+      "pos_lat": "42.396452",
+      "pos_long": "-82.021154",
+      "distance": "150",
+      "time_leg": "00:19:47",
+      "time_total": "01:06:54",
+      "fuel_leg": "615",
+      "fuel_totalused": "2000",
+      "fuel_plan_onboard": "5250",
+      "fuel_min_onboard": "3750",
+      "wind_data": [
+        {
+          "altitude": "0",
+          "wind_dir": "270",
+          "wind_spd": "10",
+          "oat": "15"
+        }
+      ]
+    },
+    {
+      "ident": "TOD",
+      "name": "TOP OF DESCENT",
+      "type": "ltlg",
+      "icao_region": "",
+      "stage": "CRZ",
+      "via_airway": "DCT",
+      "is_sid_star": "0",
+      "altitude_feet": "36000",
+      "ind_airspeed": "280",
+      "true_airspeed": "450",
+      "mach": "0.78",
+      "groundspeed": "440",
+      "pos_lat": "42.254230",
+      "pos_long": "-84.552109",
+      "distance": "113",
+      "time_leg": "00:15:25",
+      "time_total": "01:22:19",
+      "fuel_leg": "463",
+      "fuel_totalused": "2463",
+      "fuel_plan_onboard": "4787",
+      "fuel_min_onboard": "3287",
+      "wind_data": [
+        {
+          "altitude": "0",
+          "wind_dir": "270",
+          "wind_spd": "10",
+          "oat": "15"
+        }
+      ]
+    },
+    {
+      "ident": "TLNE5",
+      "name": "TLNE5",
+      "type": "vor",
+      "icao_region": "",
+      "stage": "DSC",
+      "via_airway": "TLNE5A",
+      "is_sid_star": "1",
+      "altitude_feet": "11000",
+      "ind_airspeed": "250",
+      "true_airspeed": "450",
+      "mach": "",
+      "groundspeed": "300",
+      "pos_lat": "42.056647",
+      "pos_long": "-87.069470",
+      "distance": "113",
+      "time_leg": "00:22:36",
+      "time_total": "01:44:55",
+      "fuel_leg": "463",
+      "fuel_totalused": "2926",
+      "fuel_plan_onboard": "4324",
+      "fuel_min_onboard": "2824",
+      "wind_data": [
+        {
+          "altitude": "0",
+          "wind_dir": "270",
+          "wind_spd": "10",
+          "oat": "15"
+        }
+      ]
+    },
+    {
+      "ident": "TLNF6",
+      "name": "TLNF6",
+      "type": "wpt",
+      "icao_region": "",
+      "stage": "DSC",
+      "via_airway": "TLNE5A",
+      "is_sid_star": "1",
+      "altitude_feet": "7000",
+      "ind_airspeed": "250",
+      "true_airspeed": "450",
+      "mach": "",
+      "groundspeed": "250",
+      "pos_lat": "42.256647",
+      "pos_long": "-87.169470",
+      "distance": "13",
+      "time_leg": "00:03:07",
+      "time_total": "01:48:02",
+      "fuel_leg": "53",
+      "fuel_totalused": "2979",
+      "fuel_plan_onboard": "4271",
+      "fuel_min_onboard": "2771",
+      "wind_data": [
+        {
+          "altitude": "0",
+          "wind_dir": "270",
+          "wind_spd": "10",
+          "oat": "15"
+        }
+      ]
+    },
+    {
+      "ident": "TLNE5",
+      "name": "TLNE5",
+      "type": "vor",
+      "icao_region": "",
+      "stage": "DSC",
+      "via_airway": "TLNE5A",
+      "is_sid_star": "1",
+      "altitude_feet": "5000",
+      "ind_airspeed": "250",
+      "true_airspeed": "450",
+      "mach": "",
+      "groundspeed": "220",
+      "pos_lat": "42.056647",
+      "pos_long": "-87.069470",
+      "distance": "13",
+      "time_leg": "00:03:33",
+      "time_total": "01:51:35",
+      "fuel_leg": "53",
+      "fuel_totalused": "3032",
+      "fuel_plan_onboard": "4218",
+      "fuel_min_onboard": "2718",
+      "wind_data": [
+        {
+          "altitude": "0",
+          "wind_dir": "270",
+          "wind_spd": "10",
+          "oat": "15"
+        }
+      ]
+    },
+    {
+      "ident": "KORD",
+      "name": "KORD",
+      "type": "apt",
+      "icao_region": "",
+      "stage": "DSC",
+      "via_airway": "TLNE5A",
+      "is_sid_star": "1",
+      "altitude_feet": "672",
+      "ind_airspeed": "250",
+      "true_airspeed": "450",
+      "mach": "",
+      "groundspeed": "160",
+      "pos_lat": "41.978603",
+      "pos_long": "-87.904842",
+      "distance": "38",
+      "time_leg": "00:14:15",
+      "time_total": "02:05:50",
+      "fuel_leg": "156",
+      "fuel_totalused": "3188",
+      "fuel_plan_onboard": "4062",
+      "fuel_min_onboard": "2562",
+      "wind_data": [
+        {
+          "altitude": "0",
+          "wind_dir": "270",
+          "wind_spd": "10",
+          "oat": "15"
+        }
+      ]
+    }
+  ],
+  "fms_downloads": {
+    "directory": "https://example.invalid/"
+  }
+}

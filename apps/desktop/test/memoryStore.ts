@@ -93,6 +93,9 @@ export class MemoryFlightStore implements FlightStore {
       samplesPruned: false,
     };
   }
+  async flightTrack(id: string) {
+    return [...(this.samples.get(id) ?? [])].sort((a, b) => a.seq - b.seq).map((x) => ({ ...x }));
+  }
   async prune(keep: number) {
     this.pruned.push(keep);
     return 0;

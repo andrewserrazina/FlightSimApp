@@ -1,5 +1,5 @@
 import type { FlightDetail, FlightSummary } from "@flightsim/flight-core";
-import type { CommitBatch, FlightRowDto, FlightStore, StoreStatus } from "./types";
+import type { CommitBatch, FlightRowDto, FlightStore, SampleRowDto, StoreStatus } from "./types";
 
 /** Error text from a rejected Tauri command (StoreError { kind, message } or a plain string). */
 export function storeErrorMessage(e: unknown): string {
@@ -26,5 +26,6 @@ export async function createTauriFlightStore(): Promise<FlightStore> {
     listFlights: (limit = 200, offset = 0) => call<FlightSummary[]>("flights_list", { limit, offset }),
     flightDetail: (id) => call<FlightDetail | null>("flight_detail", { id }),
     prune: (keepDetailedFlights) => call<number>("flights_prune", { keepDetailedFlights }),
+    flightTrack: (id) => call<SampleRowDto[]>("flight_track", { id }),
   };
 }

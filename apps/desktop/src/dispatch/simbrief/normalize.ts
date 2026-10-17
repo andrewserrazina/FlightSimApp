@@ -7,6 +7,7 @@
  */
 import { PLAN_SCHEMA, PLAN_VERSION, weight, type ImportedFlightPlan, type PlanAirport, type PlanWeight, type WeightUnit } from "../model";
 import { dispatchError, type DispatchError, type SimbriefIdentity } from "./client";
+import { normalizeNavlog } from "./navlog";
 import type { SimbriefAirportRaw, SimbriefOfpV2 } from "./schema";
 
 export type NormalizeResult = { ok: true; plan: ImportedFlightPlan; warnings: string[] } | { ok: false; error: DispatchError };
@@ -91,7 +92,7 @@ export function weightUnit(v: unknown): WeightUnit | null {
   return null;
 }
 
-function weightOf(v: unknown, unit: WeightUnit | null): PlanWeight | null {
+export function weightOf(v: unknown, unit: WeightUnit | null): PlanWeight | null {
   if (unit === null) return null;
   const n = numeric(v);
   // 0 is a legitimate planned value (e.g. no extra fuel); negative or absurd values are not.
@@ -216,6 +217,11 @@ export function normalizeOfp(raw: SimbriefOfpV2 | unknown, opts: NormalizeOption
       })(),
     },
   };
+
+  // S2-03: the waypoint-level navigation log. Absent → the field is omitted (plans stay valid).
+  const nav = normalizeNavlog(o as Record<string, unknown>, units, origin);
+  if (nav.navlog) plan.navlog = nav.navlog;
+  warnings.push(...nav.warnings);
 
   const s = plan.schedule;
   if (s.outUtc && s.inUtc && Date.parse(s.inUtc) <= Date.parse(s.outUtc)) {

@@ -1,6 +1,6 @@
 import type { FlightDetail, FlightSummary } from "@flightsim/flight-core";
 import { createContext, useContext } from "react";
-import type { FlightStore } from "../recording/types";
+import type { FlightStore, SampleRowDto } from "../recording/types";
 
 export type RepositoryAvailability = { available: true } | { available: false; reason: string };
 
@@ -9,6 +9,8 @@ export interface FlightHistoryRepository {
   readonly availability: RepositoryAvailability;
   listFlights(signal?: AbortSignal): Promise<FlightSummary[]>;
   getFlight(id: string, signal?: AbortSignal): Promise<FlightDetail | null>;
+  /** Recorded track points (S2-03). Absent when the source cannot provide them. */
+  getTrack?(id: string, signal?: AbortSignal): Promise<SampleRowDto[]>;
 }
 
 /** SQLite-backed history (through the native shell's flight store). */
@@ -17,6 +19,7 @@ export function createStoreHistoryRepository(store: FlightStore): FlightHistoryR
     availability: { available: true },
     listFlights: () => store.listFlights(200, 0),
     getFlight: (id) => store.flightDetail(id),
+    ...(store.flightTrack ? { getTrack: (id: string) => store.flightTrack!(id) } : {}),
   };
 }
 

@@ -1,5 +1,8 @@
 # SimBrief flight-plan import (S2-01)
 
+> Follow-up: the waypoint-level navigation log, live route monitoring and the navigation debrief are described in
+> [navlog-route-monitoring.md](navlog-route-monitoring.md) (S2-03).
+>
 > Follow-up: reviewing, releasing and attaching an imported plan, and the OUT/OFF/ON/IN timeline, are described in
 > [dispatch-release.md](dispatch-release.md) (S2-02).
 

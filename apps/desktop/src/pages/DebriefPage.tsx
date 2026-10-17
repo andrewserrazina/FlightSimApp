@@ -10,6 +10,7 @@ import { StaticMetric } from "../ui/Metric";
 import { Panel } from "../ui/Panel";
 import { Tag } from "../ui/Tag";
 import { PlanComparisonPanel } from "../dispatch/PlanWidgets";
+import { NavigationDebrief } from "../route/RouteWidgets";
 import { DebriefOperations } from "../dispatch/OperationsWidgets";
 
 const AVAILABILITY: Record<SectionAvailability, { label: string; tone: "ok" | "neutral" | "info" }> = {
@@ -72,6 +73,7 @@ export function DebriefPage({ flightId, navigate }: { flightId: string | null; n
       <div className="grid grid--debrief">
         {detail && <DebriefOperations detail={detail} />}
         {detail && <PlanComparisonPanel detail={detail} />}
+        {detail && <NavigationDebrief detail={detail} />}
         {sections.map((s) => (
           <Panel key={s.id} title={s.title} className={s.id === "overview" || s.id === "timeline" ? "span-all" : ""} actions={<Tag tone={AVAILABILITY[s.availability].tone}>{AVAILABILITY[s.availability].label}</Tag>}>
             {s.availability !== "available" && <p className="unavailable-text">{s.detail}</p>}

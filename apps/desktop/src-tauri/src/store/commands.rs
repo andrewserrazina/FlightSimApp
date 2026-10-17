@@ -71,6 +71,12 @@ pub async fn flight_detail(store: State<'_, StoreHandle>, id: String) -> Result<
     store.call(move |slot| slot.get()?.flight_detail(&id)).await
 }
 
+/// Recorded track points of a flight (read-only, S2-03 navigation debrief).
+#[tauri::command]
+pub async fn flight_track(store: State<'_, StoreHandle>, id: String) -> Result<Vec<super::SampleRow>, StoreError> {
+    store.call(move |slot| slot.get()?.flight_track(&id)).await
+}
+
 #[tauri::command]
 pub async fn flights_prune(store: State<'_, StoreHandle>, keep_detailed_flights: i64) -> Result<usize, StoreError> {
     store.call(move |slot| slot.get()?.prune_samples(keep_detailed_flights.clamp(1, 10_000))).await
