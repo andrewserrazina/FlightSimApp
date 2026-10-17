@@ -407,7 +407,7 @@ fn dispatch_plan_is_saved_replaced_cleared_and_survives_reopen() {
     let path = temp_db("dispatch-plan");
     {
         let mut s = Store::open(&path).unwrap();
-        assert_eq!(s.schema_version().unwrap(), 3);
+        assert!(s.schema_version().unwrap() >= 3);
         assert_eq!(s.dispatch_plan().unwrap(), None);
         s.save_dispatch_plan(&plan_json("111"), "2026-10-15T12:00:00Z").unwrap();
         s.save_dispatch_plan(&plan_json("222"), "2026-10-15T13:00:00Z").unwrap();
@@ -494,12 +494,217 @@ fn upgrading_a_v2_database_keeps_flights_and_adds_dispatch_tables() {
         // everything migration 3 added and mark the file as schema 2.
         let mut s = Store::open(&path).unwrap();
         s.commit(&batch(flight("old", "completed", "2026-10-01T10:00:00.000Z"))).unwrap();
+        s.conn.execute_batch(DROP_V4).unwrap();
         s.conn.execute_batch("DROP TRIGGER flight_plan_snapshots_immutable; DROP TABLE flight_plan_snapshots; DROP TABLE dispatch_plan; DELETE FROM schema_migrations WHERE version = 3;").unwrap();
         s.conn.pragma_update(None, "user_version", 2).unwrap();
     }
     let mut s = Store::open(&path).unwrap();
-    assert_eq!(s.schema_version().unwrap(), 3);
+    assert_eq!(s.schema_version().unwrap(), latest_schema_version());
     assert_eq!(s.list_flights(10, 0).unwrap().len(), 1);
     assert_eq!(s.dispatch_plan().unwrap(), None);
     assert_eq!(s.associate_plan("old", &snapshot_json("old", "9")).unwrap(), AssociateOutcome::Created);
+}
+
+// ---------- dispatch releases and recorded OUT/IN (schema v4) ----------
+
+use super::release::MilestoneOutcome;
+
+/// Removes everything migration 4 added (to build genuine older databases in tests).
+const DROP_V4: &str = "DROP TRIGGER flight_manual_milestones_immutable; DROP TABLE flight_manual_milestones; \
+    DROP TRIGGER dispatch_releases_no_delete; DROP TRIGGER dispatch_releases_link_once; DROP TRIGGER dispatch_releases_state_transition; \
+    DROP TRIGGER dispatch_releases_immutable_record; DROP INDEX dispatch_releases_by_time; DROP TABLE dispatch_releases; \
+    DELETE FROM schema_migrations WHERE version = 4;";
+
+fn release_json(id: &str, request_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "schema": "turnline.dispatch_release", "version": 1, "releaseId": id, "releasedAtUtc": "2026-10-16T12:00:00Z",
+        "ofp": { "key": format!("simbrief:{request_id}:2026-10-16T11:00:00Z"), "requestId": request_id, "generatedAtUtc": "2026-10-16T11:00:00Z" },
+        "plan": plan_json(request_id),
+        "acknowledgments": { "reviewed": true, "reviewedAtUtc": "2026-10-16T11:59:00Z", "warnings": [] }
+    })
+}
+
+fn detail_json(s: &Store, id: &str) -> serde_json::Value {
+    serde_json::to_value(s.flight_detail(id).unwrap().unwrap()).unwrap()
+}
+
+fn open_flight(s: &mut Store, id: &str) {
+    s.commit(&batch(flight(id, "active", "2026-10-16T12:30:00.000Z"))).unwrap();
+}
+
+#[test]
+fn release_is_created_once_and_its_record_is_immutable() {
+    let mut s = Store::open_in_memory().unwrap();
+    let r = s.create_release(&release_json("rel-1", "100")).unwrap();
+    assert_eq!(r.state, "released");
+    assert_eq!(r.flight_id, None);
+    assert_eq!(r.record["plan"]["source"]["requestId"], "100");
+    // Same OFP again: refused, not duplicated.
+    let dup = s.create_release(&release_json("rel-2", "100")).unwrap_err();
+    assert!(dup.message.contains("already released"), "{}", dup.message);
+    // Different OFP while one is open: refused.
+    let other = s.create_release(&release_json("rel-3", "200")).unwrap_err();
+    assert!(other.message.contains("still open"), "{}", other.message);
+    assert_eq!(s.list_releases(10).unwrap().len(), 1);
+    // The reviewed record cannot be rewritten, and records cannot be deleted, even with raw SQL.
+    assert!(s.conn.execute("UPDATE dispatch_releases SET release_json = '{}' WHERE release_id = 'rel-1'", []).is_err());
+    assert!(s.conn.execute("UPDATE dispatch_releases SET released_at_utc = '2020-01-01T00:00:00Z'", []).is_err());
+    assert!(s.conn.execute("DELETE FROM dispatch_releases", []).is_err());
+}
+
+#[test]
+fn release_requires_acknowledgment_and_a_valid_record() {
+    let mut s = Store::open_in_memory().unwrap();
+    let mut no_ack = release_json("rel-1", "1");
+    no_ack["acknowledgments"]["reviewed"] = serde_json::json!(false);
+    assert!(s.create_release(&no_ack).is_err());
+    let mut bad_ts = release_json("rel-1", "1");
+    bad_ts["releasedAtUtc"] = serde_json::json!("now");
+    assert!(s.create_release(&bad_ts).is_err());
+    let mut bad_id = release_json("rel 1; DROP", "1");
+    bad_id["releaseId"] = serde_json::json!("rel 1; DROP");
+    assert!(s.create_release(&bad_id).is_err());
+    let mut wrong_plan = release_json("rel-1", "1");
+    wrong_plan["plan"]["schema"] = serde_json::json!("other");
+    assert!(s.create_release(&wrong_plan).is_err());
+    assert!(s.create_release(&serde_json::json!({ "schema": "turnline.dispatch_release" })).is_err());
+    assert!(s.list_releases(10).unwrap().is_empty());
+}
+
+#[test]
+fn cancellation_needs_a_reason_and_is_final() {
+    let mut s = Store::open_in_memory().unwrap();
+    s.create_release(&release_json("rel-1", "1")).unwrap();
+    assert!(s.cancel_release("rel-1", "2026-10-16T12:10:00Z", "   ").is_err());
+    let c = s.cancel_release("rel-1", "2026-10-16T12:10:00Z", "Aircraft change").unwrap();
+    assert_eq!((c.state.as_str(), c.cancel_reason.as_deref(), c.cancelled_at_utc.as_deref()), ("cancelled", Some("Aircraft change"), Some("2026-10-16T12:10:00Z")));
+    assert!(s.cancel_release("rel-1", "2026-10-16T12:11:00Z", "again").unwrap_err().message.contains("already cancelled"));
+    // cancelled -> released is impossible, also with raw SQL.
+    assert!(s.conn.execute("UPDATE dispatch_releases SET state = 'released', cancelled_at_utc = NULL, cancel_reason = NULL, open_slot = 1", []).is_err());
+    // A cancelled release can never be attached to a flight.
+    open_flight(&mut s, "f-1");
+    assert!(s.attach_release("rel-1", "f-1", "2026-10-16T12:40:00Z").unwrap_err().message.contains("cancelled"));
+    assert!(s.conn.execute("UPDATE dispatch_releases SET flight_id = 'f-1', linked_at_utc = '2026-10-16T12:40:00Z'", []).is_err());
+    // After cancelling, the same OFP can be released again as a new record.
+    s.create_release(&release_json("rel-2", "1")).unwrap();
+    assert_eq!(s.list_releases(10).unwrap().len(), 2);
+    assert!(s.cancel_release("missing", "2026-10-16T12:10:00Z", "x").is_err());
+}
+
+#[test]
+fn attaching_links_once_and_stores_the_released_plan_as_the_flight_snapshot() {
+    let mut s = Store::open_in_memory().unwrap();
+    s.create_release(&release_json("rel-1", "100")).unwrap();
+    assert!(s.attach_release("rel-1", "not-saved", "2026-10-16T12:40:00Z").unwrap_err().message.contains("not been saved"));
+    open_flight(&mut s, "f-1");
+    let before = detail_json(&s, "f-1");
+    let r = s.attach_release("rel-1", "f-1", "2026-10-16T12:40:00Z").unwrap();
+    assert_eq!((r.flight_id.as_deref(), r.linked_at_utc.as_deref()), (Some("f-1"), Some("2026-10-16T12:40:00Z")));
+    let snap = s.plan_snapshot("f-1").unwrap().unwrap().snapshot;
+    assert_eq!(snap["releaseId"], "rel-1");
+    assert_eq!(snap["plan"], plan_json("100"));
+    assert_eq!(s.release_for_flight("f-1").unwrap().unwrap().record["releaseId"], "rel-1");
+    // Recorded flight data is untouched.
+    assert_eq!(detail_json(&s, "f-1"), before);
+    // Linked releases cannot be cancelled, re-linked or moved.
+    assert!(s.cancel_release("rel-1", "2026-10-16T13:00:00Z", "late").unwrap_err().message.contains("cannot be cancelled"));
+    assert!(s.attach_release("rel-1", "f-1", "2026-10-16T12:41:00Z").unwrap_err().message.contains("already attached"));
+    assert!(s.conn.execute("UPDATE dispatch_releases SET flight_id = NULL, linked_at_utc = NULL", []).is_err());
+    // A new release can now be issued, but not attached to a flight that already has one.
+    s.create_release(&release_json("rel-2", "200")).unwrap();
+    assert!(s.attach_release("rel-2", "f-1", "2026-10-16T12:42:00Z").unwrap_err().message.contains("already has a flight plan"));
+}
+
+#[test]
+fn a_release_is_not_attached_over_a_legacy_plan_snapshot() {
+    let mut s = Store::open_in_memory().unwrap();
+    open_flight(&mut s, "f-1");
+    assert_eq!(s.associate_plan("f-1", &snapshot_json("f-1", "9")).unwrap(), AssociateOutcome::Created);
+    s.create_release(&release_json("rel-1", "100")).unwrap();
+    assert!(s.attach_release("rel-1", "f-1", "2026-10-16T12:40:00Z").is_err());
+    assert_eq!(s.plan_snapshot("f-1").unwrap().unwrap().snapshot["plan"]["source"]["requestId"], "9");
+    assert_eq!(s.release_for_flight("f-1").unwrap(), None);
+    // The release stays open and usable for another flight.
+    assert_eq!(s.list_releases(10).unwrap()[0].flight_id, None);
+}
+
+#[test]
+fn releases_and_milestones_survive_reopen() {
+    let path = temp_db("release-reopen");
+    {
+        let mut s = Store::open(&path).unwrap();
+        open_flight(&mut s, "f-1");
+        s.create_release(&release_json("rel-1", "100")).unwrap();
+        s.attach_release("rel-1", "f-1", "2026-10-16T12:40:00Z").unwrap();
+        s.record_milestone("f-1", "out", "2026-10-16T12:45:00Z").unwrap();
+        s.create_release(&release_json("rel-2", "200")).unwrap();
+        s.cancel_release("rel-2", "2026-10-16T13:00:00Z", "Weather").unwrap();
+    }
+    let s = Store::open(&path).unwrap();
+    let all = s.list_releases(10).unwrap();
+    assert_eq!(all.len(), 2);
+    assert_eq!(s.release_for_flight("f-1").unwrap().unwrap().state, "released");
+    assert_eq!(all.iter().find(|r| r.record["releaseId"] == "rel-2").unwrap().cancel_reason.as_deref(), Some("Weather"));
+    assert_eq!(s.milestones("f-1").unwrap()[0].occurred_at_utc, "2026-10-16T12:45:00Z");
+}
+
+#[test]
+fn manual_milestones_are_explicit_once_ordered_and_only_for_open_flights() {
+    let mut s = Store::open_in_memory().unwrap();
+    assert!(s.record_milestone("f-1", "out", "2026-10-16T12:45:00Z").is_err());
+    open_flight(&mut s, "f-1");
+    assert!(s.record_milestone("f-1", "off", "2026-10-16T12:45:00Z").is_err());
+    assert!(s.record_milestone("f-1", "out", "12:45").is_err());
+    assert_eq!(s.record_milestone("f-1", "out", "2026-10-16T12:45:00Z").unwrap(), MilestoneOutcome::Recorded);
+    assert_eq!(s.record_milestone("f-1", "out", "2026-10-16T12:50:00Z").unwrap(), MilestoneOutcome::AlreadyRecorded);
+    assert!(s.record_milestone("f-1", "in", "2026-10-16T12:00:00Z").is_err());
+    assert_eq!(s.record_milestone("f-1", "in", "2026-10-16T15:00:00Z").unwrap(), MilestoneOutcome::Recorded);
+    let m = s.milestones("f-1").unwrap();
+    assert_eq!(m.iter().map(|x| (x.milestone.as_str(), x.occurred_at_utc.as_str())).collect::<Vec<_>>(), vec![("out", "2026-10-16T12:45:00Z"), ("in", "2026-10-16T15:00:00Z")]);
+    assert!(s.conn.execute("UPDATE flight_manual_milestones SET occurred_at_utc = '2026-10-16T11:00:00Z'", []).is_err());
+    // Closed flights cannot get new manual milestones.
+    s.commit(&batch(flight("f-2", "completed", "2026-10-16T09:00:00.000Z"))).unwrap();
+    assert!(s.record_milestone("f-2", "out", "2026-10-16T09:10:00Z").unwrap_err().message.contains("while the flight is open"));
+}
+
+#[test]
+fn milestones_and_releases_never_change_recorded_flight_rows() {
+    let mut s = Store::open_in_memory().unwrap();
+    let mut b = batch(flight("f-1", "active", "2026-10-16T12:30:00.000Z"));
+    b.events = vec![event(1, "flight.started")];
+    b.samples = vec![sample(1)];
+    s.commit(&b).unwrap();
+    let before = detail_json(&s, "f-1");
+    s.record_milestone("f-1", "out", "2026-10-16T12:45:00Z").unwrap();
+    s.create_release(&release_json("rel-1", "1")).unwrap();
+    s.attach_release("rel-1", "f-1", "2026-10-16T12:46:00Z").unwrap();
+    assert_eq!(detail_json(&s, "f-1"), before);
+    // Recording continues normally afterwards.
+    let mut next = batch(flight("f-1", "active", "2026-10-16T12:30:00.000Z"));
+    next.events = vec![event(2, "phase.changed")];
+    s.commit(&next).unwrap();
+    assert_eq!(detail_json(&s, "f-1")["events"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn upgrading_a_populated_v3_database_keeps_flights_plans_and_snapshots() {
+    let path = temp_db("v3-upgrade");
+    {
+        let mut s = Store::open(&path).unwrap();
+        s.commit(&batch(flight("old", "completed", "2026-10-01T10:00:00.000Z"))).unwrap();
+        open_flight(&mut s, "open-1");
+        s.save_dispatch_plan(&plan_json("77"), "2026-10-15T12:00:00Z").unwrap();
+        s.associate_plan("old", &snapshot_json("old", "55")).unwrap();
+        s.conn.execute_batch(DROP_V4).unwrap();
+        s.conn.pragma_update(None, "user_version", 3).unwrap();
+    }
+    let mut s = Store::open(&path).unwrap();
+    assert_eq!(s.schema_version().unwrap(), 4);
+    assert_eq!(s.list_flights(10, 0).unwrap().len(), 2);
+    assert_eq!(s.dispatch_plan().unwrap().unwrap().plan["source"]["requestId"], "77");
+    assert_eq!(s.plan_snapshot("old").unwrap().unwrap().snapshot["plan"]["source"]["requestId"], "55");
+    assert_eq!(s.open_flight().unwrap().unwrap().id, "open-1");
+    assert!(s.list_releases(10).unwrap().is_empty());
+    s.create_release(&release_json("rel-1", "77")).unwrap();
+    s.attach_release("rel-1", "open-1", "2026-10-16T12:40:00Z").unwrap();
 }
