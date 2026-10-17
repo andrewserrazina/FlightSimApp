@@ -1,5 +1,9 @@
 # Turnline live waitlist acceptance — 2026-10-14
 
+> **Superseded for steps 4, 6 and 7:** the confirmation and unsubscribe links now open first-party pages on
+> turnlineops.com (hosted Supabase rewrites HTML responses to text/plain). Use the procedure in
+> [waitlist-first-party-confirmation.md](waitlist-first-party-confirmation.md).
+
 This is a **live-test checklist**, not evidence of completion. Run only after the website deploys the updated `marketing/config.js`.
 
 Environment:
@@ -25,7 +29,7 @@ Environment:
 ## Evidence status as of 2026-10-14\n- **PASSED:** first real visitor signup, Resend delivery, and confirmation persisted in staging (one active confirmed subscriber).\n- **PASSED (database checks):** rate limiter rejected attempt three at a test threshold of two; no anonymous access to waitlist tables or rate limiter; retention job scheduled.\n- **NOT VERIFIED / DEFERRED:** second-email duplicate and unsubscribe tests, invalid CAPTCHA, foreign Origin, rate limiting through public HTTP, post-change confirmation GET/POST in a real browser, email scanner behavior, mobile browser tests, and independent legal/trademark review.\n- Keep the deferred cases open; they are **not blockers resolved by assumption**.\n\n## Backend changes
 - 0005: hour-bucketed atomic rate counters: global 300/hour, IP 20/hour, email 4/hour; per-IP header handling is best-effort, not a replacement for perimeter WAF.
 - 0006: daily 03:15 database cron cleanup of pending records after 30 days, unsubscribed records after 30 days and confirmed inactive records after 24 months.
-- Unsubscribe and email-confirmation GET URLs each display a confirmation form; POST performs the requested action to prevent email scanner prefetch.
+- (Superseded) The function no longer serves HTML: email links open turnlineops.com/confirm and /unsubscribe, which POST JSON on an explicit click. GET never changes data.
 - Signup method validates Origin and Cloudflare Turnstile response hostname and uses secrets server-side.
 
 ## Hold / rollback

@@ -26,6 +26,8 @@ jobs:
       - run: pnpm -r --filter "./packages/**" build
       - run: pnpm typecheck
       - run: pnpm test
+      - name: Waitlist Edge Function handler (unit tests, in-memory store, mocked email)
+        run: node --test supabase/functions/turnline-waitlist/handler.test.ts
       - name: Recording tools from the checkout (replay, acceptance, sanitize on the simulated reference recording)
         run: |
           rec=fixtures/recordings/simulated/mock-nominal-markers.jsonl.gz

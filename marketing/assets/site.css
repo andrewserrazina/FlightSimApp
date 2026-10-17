@@ -566,3 +566,19 @@ a.shot-frame:hover { border-color: var(--gold); }
 .prose .signoff { margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--slate-200); }
 .legal-main :focus-visible { outline-color: var(--navy); }
 @media (max-width: 520px) { .back-link { display: none; } }
+/* ---------- email confirmation / unsubscribe pages ---------- */
+.verify-main { min-height: 60vh; }
+.verify-card { max-width: 640px; background: var(--white); border: 1px solid var(--slate-200); border-radius: var(--radius); padding: 36px 32px; box-shadow: 0 1px 2px rgba(11, 31, 58, .05); }
+.verify-card h1 { font-size: clamp(1.7rem, 4vw, 2.3rem); letter-spacing: -.03em; margin: 12px 0 14px; }
+.verify-intro { color: var(--slate-700); font-size: 1.06rem; }
+.verify-actions { margin-top: 26px; }
+.verify-actions .btn { min-width: 220px; }
+.verify-actions .btn[hidden] { display: none; }
+.verify-status { margin-top: 18px; font-weight: 600; border-radius: 10px; color: var(--ink); }
+.verify-status:not(:empty) { padding: 13px 15px; border: 1px solid var(--slate-200); background: var(--slate-50); }
+.verify-status[data-tone="ok"] { border-color: #13734b; background: #e7f6ee; }
+.verify-status[data-tone="warn"] { border-color: #7a5900; background: #fff6dc; }
+.verify-status[data-tone="error"] { border-color: #a3341f; background: #fdeceb; }
+.verify-status a, .verify-fine a { color: var(--ink); font-weight: 650; }
+.verify-fine { margin-top: 22px; font-size: .88rem; color: var(--slate-600); }
+@media (max-width: 680px) { .verify-card { padding: 26px 20px; } .verify-actions .btn { width: 100%; } }

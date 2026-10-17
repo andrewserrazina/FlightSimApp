@@ -1,99 +1,57 @@
 // Supabase Edge Function: turnline-waitlist
 // Public endpoint; deploy with verify_jwt=false ONLY after configuring Turnstile, Resend and origin allowlist.
 // Secrets live in function environment, never in the browser or Git.
+// All request logic is in handler.ts; this file only wires it to Supabase, Resend and Cloudflare Turnstile.
+// Nothing here logs request bodies, tokens or email addresses.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-const env=(key:string)=>Deno.env.get(key)?.trim() || "";
-const SUPABASE_URL=env("SUPABASE_URL"), SERVICE=env("SUPABASE_SERVICE_ROLE_KEY");
-const ORIGIN=env("WAITLIST_ALLOWED_ORIGIN"), SITE=env("WAITLIST_SITE_URL");
-const endpoint=env("WAITLIST_FUNCTION_URL");
-const service=()=>createClient(SUPABASE_URL,SERVICE,{auth:{autoRefreshToken:false,persistSession:false}});
-const encoder=new TextEncoder();
-const toHex=(bytes:Uint8Array)=>Array.from(bytes).map(x=>x.toString(16).padStart(2,"0")).join("");
-const sha=async(s:string)=>toHex(new Uint8Array(await crypto.subtle.digest("SHA-256",encoder.encode(s))));
-const hmac=async(s:string)=>{
- const k=await crypto.subtle.importKey("raw",encoder.encode(env("WAITLIST_SIGNING_SECRET")),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
- return toHex(new Uint8Array(await crypto.subtle.sign("HMAC",k,encoder.encode(s))));
-};
-const cors={"Access-Control-Allow-Origin":ORIGIN,"Access-Control-Allow-Methods":"POST, GET, OPTIONS","Access-Control-Allow-Headers":"content-type","Vary":"Origin"};
-const response=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store",...cors}});
-const redirect=(state:string)=>Response.redirect(SITE+"/?waitlist="+encodeURIComponent(state)+"#early-access",303);
-const escapeHtml=(s:string)=>s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]||c));
-const allowConfigured=()=>[SUPABASE_URL,SERVICE,ORIGIN,SITE,endpoint,env("TURNSTILE_SECRET_KEY"),env("RESEND_API_KEY"),env("WAITLIST_FROM_EMAIL"),env("WAITLIST_SIGNING_SECRET")].every(Boolean);
-const send=async(to:string,subject:string,html:string)=>{
- const r=await fetch("https://api.resend.com/emails",{method:"POST",headers:{"Authorization":"Bearer "+env("RESEND_API_KEY"),"Content-Type":"application/json"},body:JSON.stringify({from:env("WAITLIST_FROM_EMAIL"),to:[to],subject,html})});
- if(!r.ok)throw new Error("email provider rejected send");
-};
-Deno.serve(async(req)=>{
- if(!allowConfigured())return response({error:"service_unconfigured"},503);
- if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors});
- const url=new URL(req.url);
- // Email clients and security scanners may prefetch GET URLs. Never unsubscribe on GET.
- if(url.searchParams.get("action")==="unsubscribe"&&(req.method==="GET"||req.method==="POST")){
-   const id=url.searchParams.get("id")||"",token=url.searchParams.get("token")||"";
-   if(!/^[0-9a-f-]{36}$/i.test(id)||!/^[0-9a-f]{64}$/.test(token)||(await hmac("unsubscribe:"+id))!==token)return redirect("invalid");
-   if(req.method==="GET"){
-     const html='<!doctype html><html lang="en"><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>Unsubscribe from Turnline</title><body style="font:18px system-ui;max-width:640px;margin:10vh auto;padding:20px"><h1>Turnline email preferences</h1><p>Confirm that you want to unsubscribe from Turnline updates.</p><form method="POST"><button type="submit" style="background:#f4b400;padding:14px 22px;border:0;border-radius:7px;font-weight:bold">Unsubscribe me</button></form></body></html>';
-     return new Response(html,{headers:{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store","Referrer-Policy":"no-referrer","X-Content-Type-Options":"nosniff"}});
-   }
-   const {error}=await service().from("turnline_waitlist").update({unsubscribed_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",id);
-   return redirect(error?"error":"unsubscribed");
- }
- // Require an intentional POST to confirm email; GET is safe against mail scanner prefetch.
- if(url.searchParams.get("action")==="confirm"&&(req.method==="GET"||req.method==="POST")){
-   const id=url.searchParams.get("id")||"",token=url.searchParams.get("token")||"";
-   if(!/^[0-9a-f-]{36}$/i.test(id)||token.length<32||token.length>200)return redirect("invalid");
-   const db=service();
-   const {data,error}=await db.from("turnline_waitlist").select("id,verification_hash,verification_expires_at,unsubscribed_at,confirmed_at").eq("id",id).maybeSingle();
-   if(error||!data||data.unsubscribed_at)return redirect("invalid");
-   if(data.confirmed_at)return redirect("confirmed");
-   if(Date.parse(data.verification_expires_at)<Date.now()||(await sha(token))!==data.verification_hash)return redirect("invalid");
-   if(req.method==="GET"){
-     const html='<!doctype html><html lang="en"><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>Confirm Turnline email</title><body style="font:18px system-ui;max-width:640px;margin:10vh auto;padding:20px"><h1>Confirm your Turnline email</h1><p>Confirm that you want Turnline development updates and beta invitations.</p><form method="POST"><button type="submit" style="background:#f4b400;padding:14px 22px;border:0;border-radius:7px;font-weight:bold">Confirm my email</button></form></body></html>';
-     return new Response(html,{headers:{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store","Referrer-Policy":"no-referrer","X-Content-Type-Options":"nosniff"}});
-   }
-   const {data:updated,error:upErr}=await db.from("turnline_waitlist").update({confirmed_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",id).eq("verification_hash",data.verification_hash).is("unsubscribed_at",null).is("confirmed_at",null).select("id").maybeSingle();
-   return redirect(upErr||!updated?"error":"confirmed");
- }
+import { createHandler, type WaitlistRow, type WaitlistStore } from "./handler.ts";
 
- if(req.method!=="POST")return response({error:"method_not_allowed"},405);
- if(req.headers.get("origin")!==ORIGIN)return response({error:"invalid_origin"},403);
- let input:Record<string,unknown>;try{const raw=await req.text();if(raw.length>5000)return response({error:"invalid_request"},413);input=JSON.parse(raw);if(!input||typeof input!=="object"||Array.isArray(input))throw Error("invalid");}catch{return response({error:"invalid_request"},400);}
- const email=String(input.email||"").trim().toLowerCase();
- if(email.length>254||! /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||input.consent!==true||typeof input.captcha!=="string"||input.captcha.length>4096)return response({error:"invalid_request"},400);
- // Database-backed atomic limits; global and email limits still apply if proxy IP headers are absent.
- const db=service();
- const digest=async(v:string)=>sha(env("WAITLIST_SIGNING_SECRET")+":"+v);
- const rate=async(label:string,identity:string,limit:number)=>{
-   const {data,error}=await db.rpc("turnline_waitlist_check_limit",{p_bucket:label+":"+await digest(identity),p_limit:limit});
-   return !error&&data===true;
- };
- const ip=req.headers.get("cf-connecting-ip")||req.headers.get("x-real-ip")||req.headers.get("x-forwarded-for")?.split(",").slice(-1)[0]?.trim()||"unknown";
- if(!(await rate("global","waitlist",300))||!(await rate("ip",ip,20))||!(await rate("email",email,4)))
-   return response({error:"rate_limited"},429);
- const captcha=new URLSearchParams({secret:env("TURNSTILE_SECRET_KEY"),response:input.captcha});
- const cf=await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify",{method:"POST",body:captcha});
- if(!cf.ok)return response({error:"temporarily_unavailable"},503);
- const check=await cf.json();
- if(!check.success||check.hostname!==new URL(ORIGIN).hostname)return response({error:"verification_failed"},400);
- const {data:existing,error:readError}=await db.from("turnline_waitlist").select("id,created_at,confirmed_at,unsubscribed_at,updated_at").eq("email_normalized",email).maybeSingle();
- if(readError)return response({error:"temporarily_unavailable"},503);
- // Avoid revealing whether an email already belongs to the list.
- if(existing?.confirmed_at&&!existing.unsubscribed_at)return response({ok:true});
- if(existing && Date.now()-Date.parse(existing.updated_at)<60_000)return response({ok:true});
- const token=crypto.randomUUID()+crypto.randomUUID(), hash=await sha(token);
- const meta=(k:string)=>typeof input[k]==="string"?String(input[k]).slice(0,100):null;
- const patch={email,consented_at:new Date().toISOString(),verification_hash:hash,verification_expires_at:new Date(Date.now()+48*3600_000).toISOString(),confirmed_at:null,unsubscribed_at:null,source:"turnline_waitlist",utm_source:meta("utm_source"),utm_medium:meta("utm_medium"),utm_campaign:meta("utm_campaign"),updated_at:new Date().toISOString()};
- let id:string;
- if(existing){
-   const {error}=await db.from("turnline_waitlist").update(patch).eq("id",existing.id);
-   if(error)return response({error:"temporarily_unavailable"},503);id=existing.id;
- }else{
-   const {data,error}=await db.from("turnline_waitlist").insert(patch).select("id").single();
-   if(error||!data)return response({error:"temporarily_unavailable"},503);id=data.id;
- }
- const confirm=endpoint+"?action=confirm&id="+encodeURIComponent(id)+"&token="+encodeURIComponent(token);
- const unsubscribe=endpoint+"?action=unsubscribe&id="+encodeURIComponent(id)+"&token="+encodeURIComponent(await hmac("unsubscribe:"+id));
- const body='<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#0b1f3a"><h1>TURNLINE</h1><p>Confirm your email to receive development updates and beta invitations.</p><p><a style="background:#f4b400;color:#0b1f3a;padding:12px 18px;display:inline-block" href="'+escapeHtml(confirm)+'">Confirm my email</a></p><p>This link expires in 48 hours. If you did not request this, ignore the message.</p><hr><p style="font-size:12px">You can <a href="'+escapeHtml(unsubscribe)+'">unsubscribe</a> at any time.</p></div>';
- try{await send(email,"Confirm your Turnline updates",body);}catch{return response({error:"temporarily_unavailable"},503);}
- return response({ok:true});
-});
+const env = (key: string) => Deno.env.get(key)?.trim() || "";
+const db = () => createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { autoRefreshToken: false, persistSession: false } });
+const COLUMNS = "id,created_at,updated_at,verification_hash,verification_expires_at,confirmed_at,unsubscribed_at";
+
+const store: WaitlistStore = {
+  async checkLimit(bucket, limit) {
+    const { data, error } = await db().rpc("turnline_waitlist_check_limit", { p_bucket: bucket, p_limit: limit });
+    return !error && data === true;
+  },
+  async findByEmail(email) {
+    const { data, error } = await db().from("turnline_waitlist").select(COLUMNS).eq("email_normalized", email).maybeSingle();
+    return error ? null : { row: (data as WaitlistRow | null) ?? null };
+  },
+  async findById(id) {
+    const { data, error } = await db().from("turnline_waitlist").select(COLUMNS).eq("id", id).maybeSingle();
+    return error ? null : { row: (data as WaitlistRow | null) ?? null };
+  },
+  async insert(patch) {
+    const { data, error } = await db().from("turnline_waitlist").insert(patch).select("id").single();
+    return error || !data ? null : { id: data.id as string };
+  },
+  async update(id, patch) {
+    const { error } = await db().from("turnline_waitlist").update(patch).eq("id", id);
+    return !error;
+  },
+  async confirm(id, verificationHash, at) {
+    const { data, error } = await db().from("turnline_waitlist").update({ confirmed_at: at, updated_at: at }).eq("id", id).eq("verification_hash", verificationHash).is("unsubscribed_at", null).is("confirmed_at", null).select("id").maybeSingle();
+    return error ? null : { updated: Boolean(data) };
+  },
+  async unsubscribe(id, at) {
+    const { data, error } = await db().from("turnline_waitlist").update({ unsubscribed_at: at, updated_at: at }).eq("id", id).is("unsubscribed_at", null).select("id").maybeSingle();
+    return error ? null : { updated: Boolean(data) };
+  },
+};
+
+Deno.serve(createHandler({
+  env,
+  store,
+  async sendEmail(to, subject, html) {
+    const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: "Bearer " + env("RESEND_API_KEY"), "Content-Type": "application/json" }, body: JSON.stringify({ from: env("WAITLIST_FROM_EMAIL"), to: [to], subject, html }) });
+    if (!r.ok) throw new Error("email provider rejected send");
+  },
+  async verifyCaptcha(token) {
+    const cf = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: new URLSearchParams({ secret: env("TURNSTILE_SECRET_KEY"), response: token }) });
+    if (!cf.ok) return { ok: false };
+    const check = await cf.json();
+    return { ok: true, success: Boolean(check.success), hostname: check.hostname };
+  },
+}));
