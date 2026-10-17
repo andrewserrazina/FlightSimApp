@@ -83,6 +83,26 @@
     reveals.forEach((el) => el.classList.add('is-visible'));
   }
 
+  // ---------- screenshot lightbox (links open the image directly without JS or <dialog>) ----------
+  const lightbox = $('#lightbox');
+  if (lightbox && typeof lightbox.showModal === 'function') {
+    const img = $('img', lightbox);
+    const title = $('#lightbox-title');
+    $$('[data-lightbox]').forEach((link) => link.addEventListener('click', (e) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; // keep new-tab behaviour
+      e.preventDefault();
+      const shown = $('img', link);
+      img.src = link.getAttribute('href');
+      img.alt = shown ? shown.alt : '';
+      title.textContent = link.closest('figure')?.querySelector('h3')?.textContent || 'Live Flight';
+      lightbox.showModal();
+      $('.lightbox-close', lightbox).focus();
+    }));
+    $('.lightbox-close', lightbox).addEventListener('click', () => lightbox.close());
+    lightbox.addEventListener('click', (e) => { if (e.target === lightbox) lightbox.close(); });
+    lightbox.addEventListener('close', () => { img.removeAttribute('src'); });
+  }
+
   // ---------- waitlist ----------
   const cfg = window.TURNLINE_CONFIG || {};
   const form = $('#signup');

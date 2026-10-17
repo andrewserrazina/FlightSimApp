@@ -100,8 +100,9 @@ async function openPage({ width = 1280, height = 900, query = '', api = () => ({
   check('noindex,nofollow kept on index.html and privacy.html', /<meta name="robots" content="noindex,nofollow">/.test(html) && /<meta name="robots" content="noindex,nofollow">/.test(privacy));
   check('title, description, Open Graph and Twitter metadata present', ['<title>', 'name="description"', 'property="og:title"', 'property="og:description"', 'property="og:image"', 'name="twitter:card"', 'rel="icon"'].every((s) => html.includes(s)));
   check('consent text unchanged from V1', html.includes('I agree to receive Turnline development news and beta invitations by email. I can unsubscribe at any time.'));
-  const imgs = [...html.matchAll(/<img\b[^>]*>/gi)].map((m) => m[0]);
-  const badImgs = imgs.filter((tag) => !/\ssrc="assets\/screens\/[a-z]+-\d+\.webp"/.test(tag) || !/\salt="[^"]{40,}"/.test(tag) || !/\swidth="\d+"/.test(tag) || !/\sheight="\d+"/.test(tag));
+  // The lightbox's <img alt=""> has no src until a screenshot is opened.
+  const imgs = [...html.matchAll(/<img\b[^>]*>/gi)].map((m) => m[0]).filter((tag) => !/^<img alt=""/.test(tag));
+  const badImgs = imgs.filter((tag) => !/\ssrc="assets\/screens\/[a-z]+-(?:detail-)?\d+\.webp"/.test(tag) || !/\salt="[^"]{40,}"/.test(tag) || !/\swidth="\d+"/.test(tag) || !/\sheight="\d+"/.test(tag));
   check('no third-party logos: the only images are Turnline screenshots, each with alt text and dimensions', imgs.length > 0 && badImgs.length === 0, `${imgs.length} images${badImgs.length ? '; bad: ' + badImgs.join(' ').slice(0, 200) : ''}`);
   // V3 status language (the page must never overstate the product).
   const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
@@ -117,6 +118,14 @@ for (const width of [320, 390, 768, 1024, 1280, 1440]) {
   const [sw, iw] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
   check(`no horizontal scroll at ${width}px`, sw <= iw, `scrollWidth ${sw}, viewport ${iw}`);
   if (outDir && [390, 1440].includes(width)) await page.screenshot({ path: join(outDir, `full-${width}.png`), fullPage: true });
+  if (width === 390) {
+    const srcs = await page.evaluate(async () => {
+      const imgs = [...document.querySelectorAll('#product img')];
+      for (const img of imgs) { img.loading = 'eager'; if (!img.complete) await new Promise((r) => { img.onload = img.onerror = r; }); }
+      return imgs.map((img) => img.currentSrc.split('/').pop());
+    });
+    check('mobile (390px): the gallery shows the readable detail crops', srcs.length === 4 && srcs.every((s) => s.includes('-detail-')), srcs.join(', '));
+  }
   if (width === 1280) {
     const bad = [...served.entries()].filter(([, s]) => s !== 200);
     check('every local resource loads (no 404)', bad.length === 0, bad.map(([p]) => p).join(', ') || [...served.keys()].join(', '));
@@ -143,7 +152,7 @@ for (const width of [320, 390, 768, 1024, 1280, 1440]) {
   await page.waitForTimeout(300);
   check('"See What’s Working" scrolls to the Built and tested section', Math.abs(await page.evaluate(() => document.getElementById('working').getBoundingClientRect().top)) < 140);
   const built = await page.evaluate(() => [...document.querySelectorAll('#working .built')].map((li) => [li.querySelector('h3').textContent.trim(), li.querySelector('.status').textContent.trim()]));
-  const wantBuilt = ['Windows desktop simulator connection', 'Flight recording and history', 'SimBrief OFP import', 'Scheduled and estimated flight information', 'Plan persistence and offline use', 'Immutable flight-plan attachment', 'Planned-versus-actual debrief'];
+  const wantBuilt = ['Windows desktop simulator connection', 'Flight recording and history', 'SimBrief OFP import', 'Scheduled flight times', 'Plan persistence and offline use', 'Flight-plan attachment', 'Planned-versus-actual debrief'];
   check('Built and tested: the seven validated capabilities, each "Implemented internally · MSFS 2020 tested"', built.length === 7 && wantBuilt.every((n, i) => built[i]?.[0] === n && built[i][1] === 'Implemented internally · MSFS 2020 tested'), built.map((b) => b[0]).join(', '));
   const limits = await page.textContent('#working .limits');
   check('Built and tested states its limits (one PC, supported scenarios, no public availability, MSFS 2024 unverified)', ['Windows PC with MSFS 2020', 'currently supports', 'Public availability', 'compatibility have not been established', '2024 compatibility has not been verified'].every((t) => limits.includes(t)));
@@ -154,12 +163,19 @@ for (const width of [320, 390, 768, 1024, 1280, 1440]) {
   check('passenger, ground, ATC, ACARS and delay/decision features stay Planned or Research', neverBuilt.length >= 12 && neverBuilt.every(([, st]) => st === 'Planned' || st === 'Research'), neverBuilt.map(([n, st]) => `${n}=${st}`).join('; '));
   check('MSFS 2024 is "In active development"; MSFS 2020 and SimBrief are tested', features['Microsoft Flight Simulator 2024'] === 'In active development' && features['Microsoft Flight Simulator 2020'] === 'Implemented internally · MSFS 2020 tested' && features['SimBrief'] === 'Implemented internally · MSFS 2020 tested');
   const shots = await page.evaluate(async () => {
-    const imgs = [...document.querySelectorAll('img')];
+    const imgs = [...document.querySelectorAll('main section img')];
     const loading = imgs.map((img) => img.getAttribute('loading'));
     for (const img of imgs) { img.loading = 'eager'; if (!img.complete) await new Promise((r) => { img.onload = img.onerror = r; }); }
     return imgs.map((img, i) => [img.currentSrc.split('/').pop(), img.naturalWidth, loading[i] ?? 'eager', img.closest('section').id]);
   });
   check('screenshots load (hero eager, showcase lazy) and cover Dispatch, Live Flight, History and Debrief', shots.length === 5 && shots.every(([, w]) => w > 0) && shots[0][2] === 'eager' && shots[0][3] === 'top' && shots.slice(1).every(([, , l]) => l === 'lazy') && ['dispatch', 'live', 'history', 'debrief'].every((n) => shots.some(([src, , , sec]) => sec === 'product' && src.startsWith(n))), shots.map((s) => s.join(':')).join(', '));
+  await page.locator('#product a[data-lightbox]').nth(3).click();
+  await page.waitForFunction(() => document.getElementById('lightbox').open && document.querySelector('#lightbox img').complete);
+  const box = await page.evaluate(() => { const i = document.querySelector('#lightbox img'); return [i.naturalWidth, i.alt === document.querySelectorAll('#product img')[3].alt, document.getElementById('lightbox-title').textContent, document.activeElement.className]; });
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  const after = await page.evaluate(() => [document.getElementById('lightbox').open, document.activeElement.getAttribute('href')]);
+  check('screenshot lightbox: opens the full-size image with the same alt text, closes with Escape and restores focus', box[0] === 1600 && box[1] && box[2] === 'Operational Debrief' && box[3] === 'lightbox-close' && after[0] === false && after[1] === 'assets/screens/debrief-1600.webp', JSON.stringify([...box, ...after]));
   const captions = await page.evaluate(() => [document.querySelector('.hero-shot figcaption').textContent, document.querySelector('#product .section-head').textContent, document.querySelector('.gallery-note').textContent].join(' '));
   check('screenshots are labelled as internal builds with sample data', /Internal build/.test(captions) && /sample data/i.test(captions) && /not a real aircraft/.test(captions));
   await page.click('.nav-links a[href="#roadmap"]');

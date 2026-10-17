@@ -191,7 +191,8 @@ section { position: relative; }
   display: block; border-radius: 14px; overflow: hidden; background: var(--navy-900);
   border: 1px solid var(--line-strong); box-shadow: 0 24px 60px rgba(0, 0, 0, .4), 0 0 0 1px rgba(0, 0, 0, .25);
 }
-.shot-frame img { width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; object-position: top left; }
+.shot-frame img { width: 100%; height: auto; }
+.shot-frame picture { display: block; }
 a.shot-frame { transition: border-color .15s ease; }
 a.shot-frame:hover { border-color: var(--gold); }
 .shot-caption { margin-top: 14px; font-size: .86rem; color: var(--dim); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -204,6 +205,20 @@ a.shot-frame:hover { border-color: var(--gold); }
 .gallery figcaption h3 { font-size: 1.12rem; }
 .gallery figcaption p { margin-top: 4px; color: var(--muted); font-size: .94rem; }
 .gallery-note { margin-top: 30px; color: var(--dim); font-size: .9rem; max-width: 820px; }
+.lightbox {
+  width: min(1240px, calc(100vw - 24px)); max-width: none; max-height: calc(100vh - 24px); padding: 0; overflow: hidden;
+  border: 1px solid var(--line-strong); border-radius: 14px; background: var(--navy-950); color: var(--text);
+}
+.lightbox::backdrop { background: rgba(3, 10, 20, .82); }
+.lightbox[open] { display: flex; flex-direction: column; }
+.lightbox-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 18px; border-bottom: 1px solid var(--line); }
+.lightbox-title { font-weight: 700; }
+.lightbox-close { min-height: 40px; padding: 6px 14px; border-radius: 9px; border: 1px solid var(--line-strong); background: transparent; color: var(--text); font-weight: 650; }
+.lightbox-close:hover { border-color: var(--gold); }
+.lightbox-body { overflow: auto; flex: 1; min-height: 0; -webkit-overflow-scrolling: touch; }
+.lightbox-body img { width: 100%; height: auto; }
+.lightbox-note { padding: 8px 18px 12px; font-size: .82rem; color: var(--dim); border-top: 1px solid var(--line); }
+@media (max-width: 680px) { .lightbox-body img { width: 1100px; max-width: none; } }
 /* ---------- built and tested ---------- */
 .built-grid { list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .built { background: var(--white); border: 1px solid var(--slate-200); border-radius: var(--radius); padding: 22px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 1px 2px rgba(11, 31, 58, .05); }

@@ -93,9 +93,9 @@
     </div>
 
     <figure class="shot hero-shot reveal">
-      <div class="shot-frame">
-        <img src="assets/screens/live-1600.webp" srcset="assets/screens/live-800.webp 800w, assets/screens/live-1600.webp 1600w" sizes="(max-width: 960px) calc(100vw - 32px), 560px" width="1600" height="1000" fetchpriority="high" decoding="async" alt="Turnline Live Flight screen from an internal build: a flight from KSEA to KPAE is being recorded in cruise, with its attached SimBrief plan, live connection status, altitude 8,433 ft and ground speed 300 kt. Sample data from the built-in demo simulator.">
-      </div>
+      <a class="shot-frame" href="assets/screens/live-1600.webp" data-lightbox aria-label="Open the full Live Flight screenshot">
+        <img src="assets/screens/live-detail-1000.webp" srcset="assets/screens/live-detail-600.webp 600w, assets/screens/live-detail-1000.webp 1000w" sizes="(max-width: 960px) calc(100vw - 32px), 560px" width="1000" height="750" fetchpriority="high" decoding="async" alt="Turnline Live Flight screen from an internal build: a flight from KSEA to KPAE is being recorded in cruise with its attached SimBrief plan, live connection status and a demo-data notice. Sample data from the built-in demo simulator.">
+      </a>
       <figcaption class="shot-caption"><span class="real-tag">Internal build</span> Live Flight screen. Sample data from Turnline’s built-in demo simulator, not a real aircraft.</figcaption>
     </figure>
   </div>
@@ -107,21 +107,21 @@
     <div class="section-head reveal">
       <p class="eyebrow">Built and tested</p>
       <h2 id="working-title">What’s working today</h2>
-      <p>These capabilities are implemented in internal Windows builds and have been tested on a real PC running Microsoft Flight Simulator 2020. They aren’t publicly available yet.</p>
+      <p>These capabilities are implemented in internal Windows builds and have passed hands-on acceptance testing on a real PC running Microsoft Flight Simulator 2020, with a real SimBrief account. They aren’t publicly available yet.</p>
     </div>
     <ul class="built-grid" role="list">
       <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Windows desktop simulator connection</h3><p>A Windows app with a background simulator bridge that reads live aircraft data from MSFS 2020 and shows connection and data freshness honestly.</p></li>
-      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Flight recording and history</h3><p>Start a flight and Turnline records phases, events and a track. Completed flights stay in your history on your PC.</p></li>
-      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>SimBrief OFP import</h3><p>Import your latest SimBrief operational flight plan by username or pilot ID: route, fuel, weights and aircraft. No Navigraph password is ever requested.</p></li>
-      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Scheduled and estimated flight information</h3><p>Scheduled and estimated off-block, takeoff, landing and on-block times from the plan, in UTC.</p></li>
-      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Plan persistence and offline use</h3><p>An imported plan is saved locally and stays available after a restart or without an internet connection.</p></li>
-      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Immutable flight-plan attachment</h3><p>Attach the plan to a flight as a fixed snapshot. Later SimBrief imports never change what that flight was planned against.</p></li>
+      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Flight recording and history</h3><p>Start a flight and Turnline records phases, events and a track until you confirm completion. Completed flights are listed in your history.</p></li>
+      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>SimBrief OFP import</h3><p>Import your latest SimBrief operational flight plan by username or pilot ID: route, fuel, weights and aircraft. Re-importing the same plan is handled cleanly, and no Navigraph password is ever requested.</p></li>
+      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Scheduled flight times</h3><p>Scheduled off-block, takeoff, landing and on-block times (OUT/OFF/ON/IN) from your OFP, in UTC, matching SimBrief. Estimated times are shown alongside.</p></li>
+      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Plan persistence and offline use</h3><p>An imported plan is saved locally and stays available after a restart or without an internet connection. An import attempted offline fails with a clear message.</p></li>
+      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Flight-plan attachment</h3><p>Attach the plan to a flight as a fixed snapshot. Later SimBrief imports never change what that flight was planned against.</p></li>
       <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Planned-versus-actual debrief</h3><p>After landing, compare planned and detected takeoff, landing and flight time. Values that weren’t detected are shown as such, never guessed.</p></li>
     </ul>
     <div class="limits reveal">
       <h3>What “tested” means here</h3>
       <ul>
-        <li>Tested by the developer on a Windows PC with MSFS 2020, in the scenarios Turnline currently supports.</li>
+        <li>Hands-on acceptance testing by the Turnline team on one Windows PC with MSFS 2020 and a real SimBrief account, in the scenarios Turnline currently supports. It is not a formal compatibility certification.</li>
         <li>Public availability and broad aircraft, add-on and hardware compatibility have not been established.</li>
         <li>Microsoft Flight Simulator 2024 compatibility has not been verified.</li>
       </ul>
@@ -142,27 +142,27 @@
     <div class="section-head reveal">
       <p class="eyebrow">Inside the app</p>
       <h2 id="product-title">Real screens from the current internal build</h2>
-      <p>Captured from Turnline’s desktop app using sample data: a fictional SimBrief plan and the demo flight from the built-in mock simulator. The title bar shows the project’s working name.</p>
+      <p>Captured from Turnline’s desktop app using sample data: a fictional SimBrief plan and the demo flight from the built-in mock simulator. The app’s title bar is cropped out; nothing on the screens has been edited.</p>
     </div>
     <div class="gallery">
       <figure class="shot reveal">
-        <a class="shot-frame" href="assets/screens/dispatch-1600.webp" aria-label="Open the full-size Dispatch screenshot"><img src="assets/screens/dispatch-800.webp" srcset="assets/screens/dispatch-800.webp 800w, assets/screens/dispatch-1600.webp 1600w" sizes="(max-width: 960px) calc(100vw - 32px), 560px" width="1600" height="1000" loading="lazy" decoding="async" alt="Dispatch screen: a SimBrief plan for fictional flight TLN247 from Boston to Chicago O’Hare has been imported, showing aircraft, route, scheduled and estimated times, and planned fuel."></a>
+        <a class="shot-frame" href="assets/screens/dispatch-1600.webp" data-lightbox aria-label="Open the full-size Dispatch screenshot"><picture><source media="(max-width: 600px)" srcset="assets/screens/dispatch-detail-600.webp 600w, assets/screens/dispatch-detail-1000.webp 1000w" sizes="calc(100vw - 32px)" width="1000" height="750"><img src="assets/screens/dispatch-800.webp" srcset="assets/screens/dispatch-800.webp 800w, assets/screens/dispatch-1600.webp 1600w" sizes="(max-width: 960px) calc(100vw - 32px), 560px" width="1600" height="944" loading="lazy" decoding="async" alt="Dispatch screen: a SimBrief plan for fictional flight TLN247 from Boston to Chicago O’Hare has been imported, showing aircraft, route, scheduled and estimated times, and planned fuel."></picture></a>
         <figcaption><h3>Dispatch and SimBrief import</h3><p>Your latest OFP, imported on request: route, schedule, fuel and weights.</p></figcaption>
       </figure>
       <figure class="shot reveal">
-        <a class="shot-frame" href="assets/screens/live-1600.webp" aria-label="Open the full-size Live Flight screenshot"><img src="assets/screens/live-800.webp" srcset="assets/screens/live-800.webp 800w, assets/screens/live-1600.webp 1600w" sizes="(max-width: 960px) calc(100vw - 32px), 560px" width="1600" height="1000" loading="lazy" decoding="async" alt="Live Flight screen: a flight in cruise is being recorded with its attached plan, detected phase, live telemetry status, aircraft, altitude, speed and position."></a>
+        <a class="shot-frame" href="assets/screens/live-1600.webp" data-lightbox aria-label="Open the full-size Live Flight screenshot"><picture><source media="(max-width: 600px)" srcset="assets/screens/live-detail-600.webp 600w, assets/screens/live-detail-1000.webp 1000w" sizes="calc(100vw - 32px)" width="1000" height="750"><img src="assets/screens/live-800.webp" srcset="assets/screens/live-800.webp 800w, assets/screens/live-1600.webp 1600w" sizes="(max-width: 960px) calc(100vw - 32px), 560px" width="1600" height="944" loading="lazy" decoding="async" alt="Live Flight screen: a flight in cruise is being recorded with its attached plan, detected phase, live telemetry status, aircraft, altitude, speed and position."></picture></a>
         <figcaption><h3>Live Flight telemetry</h3><p>Detected phase, live aircraft data and the attached plan while the flight is recorded.</p></figcaption>
       </figure>
       <figure class="shot reveal">
-        <a class="shot-frame" href="assets/screens/history-1600.webp" aria-label="Open the full-size Flight History screenshot"><img src="assets/screens/history-800.webp" srcset="assets/screens/history-800.webp 800w, assets/screens/history-1600.webp 1600w" sizes="(max-width: 960px) calc(100vw - 32px), 560px" width="1600" height="1000" loading="lazy" decoding="async" alt="Flight History screen listing three completed demo flights with start time, aircraft, session time, airborne time and a link to each debrief."></a>
+        <a class="shot-frame" href="assets/screens/history-1600.webp" data-lightbox aria-label="Open the full-size Flight History screenshot"><picture><source media="(max-width: 600px)" srcset="assets/screens/history-detail-600.webp 600w, assets/screens/history-detail-1000.webp 1000w" sizes="calc(100vw - 32px)" width="1000" height="750"><img src="assets/screens/history-800.webp" srcset="assets/screens/history-800.webp 800w, assets/screens/history-1600.webp 1600w" sizes="(max-width: 960px) calc(100vw - 32px), 560px" width="1600" height="944" loading="lazy" decoding="async" alt="Flight History screen listing three completed demo flights with start time, aircraft, session time, airborne time and a link to each debrief."></picture></a>
         <figcaption><h3>Flight History</h3><p>Every recorded flight, stored on your PC, with session and airborne time.</p></figcaption>
       </figure>
       <figure class="shot reveal">
-        <a class="shot-frame" href="assets/screens/debrief-1600.webp" aria-label="Open the full-size Debrief screenshot"><img src="assets/screens/debrief-800.webp" srcset="assets/screens/debrief-800.webp 800w, assets/screens/debrief-1600.webp 1600w" sizes="(max-width: 960px) calc(100vw - 32px), 560px" width="1600" height="1000" loading="lazy" decoding="async" alt="Flight debrief screen: a planned-versus-actual table compares planned and detected takeoff, landing and flight time, with off-block and on-block marked as not detected, above the recorded flight overview."></a>
+        <a class="shot-frame" href="assets/screens/debrief-1600.webp" data-lightbox aria-label="Open the full-size Debrief screenshot"><picture><source media="(max-width: 600px)" srcset="assets/screens/debrief-detail-600.webp 600w, assets/screens/debrief-detail-1000.webp 1000w" sizes="calc(100vw - 32px)" width="1000" height="750"><img src="assets/screens/debrief-800.webp" srcset="assets/screens/debrief-800.webp 800w, assets/screens/debrief-1600.webp 1600w" sizes="(max-width: 960px) calc(100vw - 32px), 560px" width="1600" height="944" loading="lazy" decoding="async" alt="Flight debrief screen: a planned-versus-actual table compares planned and detected takeoff, landing and flight time, with off-block and on-block marked as not detected, above the recorded flight overview."></picture></a>
         <figcaption><h3>Operational Debrief</h3><p>Planned versus actual, from what was really detected. No invented delays or scores.</p></figcaption>
       </figure>
     </div>
-    <p class="gallery-note">Screens show sample data, not a real aircraft or a real SimBrief account. Dispatch release, route monitoring and the other features still in development are not shown.</p>
+    <p class="gallery-note">Screens show sample data, not a real aircraft or a real SimBrief account. Select a screen to see it full size; on small screens each preview shows a detail of the full screen. Dispatch release, route monitoring and the other features still in development are not shown.</p>
   </div>
 </section>
 
@@ -241,8 +241,8 @@
           <ul class="feature-list">
             <li><div class="fl-top"><strong>SimBrief OFP import</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Import your latest SimBrief plan by username or pilot ID, only when you ask. Tested with a real SimBrief account.</p></li>
             <li><div class="fl-top"><strong>Operational flight plan information</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Flight, aircraft, route, alternate, weights and planned fuel shown alongside the flight.</p></li>
-            <li><div class="fl-top"><strong>Scheduled &amp; estimated times</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Scheduled and estimated off-block, takeoff, landing and on-block times from the plan.</p></li>
-            <li><div class="fl-top"><strong>Plan persistence &amp; offline use</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>The imported plan is stored locally and survives restarts and lost connectivity.</p></li>
+            <li><div class="fl-top"><strong>Scheduled times (OUT/OFF/ON/IN)</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Scheduled off-block, takeoff, landing and on-block times from the plan, matching SimBrief; estimates shown alongside.</p></li>
+            <li><div class="fl-top"><strong>Plan persistence &amp; offline use</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>The imported plan survives restarts and lost connectivity; an offline import fails gracefully.</p></li>
             <li><div class="fl-top"><strong>Immutable plan attachment</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>A fixed snapshot of the plan is attached to the flight; later imports never change it.</p></li>
             <li><div class="fl-top"><strong>Dispatch release workflow</strong><span class="status dev">In active development</span></div><p>A formal point where the flight is released. Built; awaiting acceptance testing on Windows.</p></li>
             <li><div class="fl-top"><strong>Waypoint navigation log</strong><span class="status dev">In active development</span></div><p>The plan’s waypoints with planned altitude, distance, time and fuel. Awaiting real-flight acceptance.</p></li>
@@ -300,7 +300,7 @@
           <ul class="feature-list">
             <li><div class="fl-top"><strong>Flight timeline</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>A phase-by-phase timeline and event log of each recorded flight.</p></li>
             <li><div class="fl-top"><strong>Planned versus actual</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Detected takeoff, landing and flight time compared with the attached plan; anything not detected is shown as such.</p></li>
-            <li><div class="fl-top"><strong>Persistent flight history</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Flights stored locally on your PC, so your history doesn’t depend on a cloud account.</p></li>
+            <li><div class="fl-top"><strong>Persistent flight history</strong><span class="status impl">Implemented internally</span></div><p>Flights stored locally on your PC, so your history doesn’t depend on a cloud account. Survives restarts in internal tests; not yet separately checked with MSFS.</p></li>
             <li><div class="fl-top"><strong>Navigation debrief</strong><span class="status dev">In active development</span></div><p>Planned versus flown route distance and time outside the planned route corridor, described as observations, not judgements.</p></li>
             <li><div class="fl-top"><strong>Delay classification</strong><span class="status plan">Planned</span></div><p>Delays attributed to causes such as boarding, servicing or air traffic.</p></li>
             <li><div class="fl-top"><strong>Decision-based analysis</strong><span class="status plan">Planned</span></div><p>The decisions you made and the consequences that followed.</p></li>
@@ -518,6 +518,15 @@
     </div>
   </div>
 </section>
+
+<dialog class="lightbox" id="lightbox" aria-labelledby="lightbox-title">
+  <div class="lightbox-bar">
+    <p class="lightbox-title" id="lightbox-title">Screenshot</p>
+    <button class="lightbox-close" type="button" aria-label="Close screenshot">Close</button>
+  </div>
+  <div class="lightbox-body"><img alt="" width="1600" height="944" decoding="async"></div>
+  <p class="lightbox-note">Internal build · sample data. On small screens, scroll to see the whole screen.</p>
+</dialog>
 
 </main>
 
