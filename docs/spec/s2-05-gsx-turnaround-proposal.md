@@ -1,7 +1,44 @@
 # S2-05 Phase A: GSX-connected turnaround and ground-expense ledger (proposal)
 
-Status: **PROPOSAL — awaiting owner approval.** Nothing here is implemented, and nothing has been tested against GSX
-or a simulator.
+Status: **Phase A approved by the owner with refinements (§0.1).**
+- **Authorized so far:** only the first slice, a read-only GSX L: variable probe plus read-only receipts discovery
+  (see [gsx-probe-msfs2020.md](../testing/gsx-probe-msfs2020.md)).
+- **Not yet authorized:** the turnaround migration, UI, ledger and invoice parser. They wait for a successful real-GSX
+  probe and inspection of real, redacted invoice samples.
+- **Testing:** nothing has been tested against GSX or a simulator.
+
+## 0.1 Owner decisions and required refinements
+
+**Decisions:**
+1. Bridge: the existing .NET SimConnect bridge, used strictly read-only, for an initial GSX L: probe (§3, option 1).
+2. Remote API v2: deferred. Review the installed guide once available.
+3. Receipts: build toward a read-only importer, starting with Fuel.
+4. Retention: archived receipts are kept with their flight by default, with clear user-controlled deletion.
+5. Manual recording: allowed for every supported service, with required provenance and a note.
+6. No GSX service commands, simulator-control changes or automatic GSX menu interactions.
+
+**Refinements (they supersede anything below that conflicts):**
+- **R1. A departure turnaround can start before a Turnline recording.**
+  - A turnaround may open from GSX observations or a manual entry while no flight is recorded (`flight_id` NULL).
+  - It is linked to a flight only when the link is unambiguous, or when the user confirms it.
+  - Unambiguous means exactly one open departure turnaround, at the airport and aircraft of the flight being started,
+    observed within the same simulator session.
+- **R2. Servicing readiness is separate from pushback.**
+  - "Servicing readiness" covers boarding, refuelling, catering and cargo only.
+  - Pushback/departure state is shown on its own and never counts towards readiness.
+- **R3. Never auto-supersede a receipt on a heuristic key.**
+  - A matching logical key only flags a *possible revision*.
+  - The old receipt and its ledger entry stay active until the user confirms the replacement.
+  - Identical content (same SHA-256) is the only automatic duplicate rule.
+- **R4. Invoice formats are unknown until real redacted samples are inspected.** The extraction model in §2.3 is a
+  target, not a specification.
+- **R5. Absence is not completion.**
+  - Missing GSX data, stale values, a GSX restart, a probe failure or an unsupported read never mark a service as
+    completed, or as any other state.
+  - Only GSX value 6 or an explicit manual entry means completed.
+- **R6. Everything GSX is optional.**
+  - Flight recording, the telemetry frame and the recorder must behave identically with GSX absent.
+  - The first slice uses a **separate** SimConnect client and process mode, and does not touch the telemetry path.
 
 ## 0. Evidence key
 
@@ -176,7 +213,8 @@ when the user asks and at flight end, never while parsing telemetry.
 -- One turnaround = ground handling at one airport for one flight (departure or arrival side).
 CREATE TABLE turnarounds (
   id               TEXT PRIMARY KEY,
-  flight_id        TEXT REFERENCES flights(id),          -- nullable until linked; never guessed
+  flight_id        TEXT REFERENCES flights(id),          -- NULL until linked (R1); may open before recording starts
+  flight_link      TEXT NOT NULL DEFAULT 'unlinked' CHECK (flight_link IN ('unlinked','matched_unambiguous','confirmed_by_user')),
   side             TEXT NOT NULL CHECK (side IN ('departure','arrival')),
   airport_icao     TEXT,                                 -- from plan/GSX/telemetry; provenance below
   airport_source   TEXT CHECK (airport_source IN ('gsx','plan','telemetry','user')),
@@ -250,10 +288,10 @@ CREATE TABLE expense_entries (
   - estimates are shown separately, labelled **Estimated**;
   - no cross-currency total.
   - The receipt's "~$" figure is kept as GSX's informational conversion and never replaces the invoice currency.
-- **Duplicates:**
+- **Duplicates (R3):**
   - the same SHA-256 is skipped;
-  - the same `logical_key` with different content is treated as a **revision**: the new receipt `supersedes_id` the
-    old; the old ledger entry becomes `superseded`; the new entry inherits the association;
+  - the same `logical_key` with different content is only flagged as a **possible revision**;
+  - `supersedes_id` is set, and the old ledger entry becomes `superseded`, only after the user confirms;
   - both stay visible in the audit trail.
 - **Association** (conservative):
   - a receipt is auto-linked only when **all** of these hold:
@@ -270,7 +308,7 @@ CREATE TABLE expense_entries (
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Open: flight active & on ground at gate (departure)\nor landing detected (arrival)
+  [*] --> Open: departure: GSX observation or manual entry on the ground\n(a recording is optional; linked later, R1)\narrival: landing detected
   Open --> Open: gsx.state change → append service event
   Open --> Interrupted: sim/bridge disconnect or GSX stale
   Interrupted --> Open: data resumes (no events inferred for the gap)
@@ -297,8 +335,9 @@ stateDiagram-v2
 - **Completion:** "Completed" comes only from GSX value 6 or a manual entry with a note.
   - Moving 5 → 1 (GSX reset or restart) is recorded as "reset by GSX", not completed.
   - A gap shows as an interruption.
-- **Departure readiness (advisory only):** a checklist ("Boarding completed · Refuel completed · Catering
-  completed/bypassed · Pushback requested").
+- **Servicing readiness (advisory only, R2):** a checklist of boarding, refuelling, catering and cargo
+  (e.g. "Boarding completed · Refuel completed · Catering completed/bypassed"). Pushback/departure state is shown
+  separately and is not a readiness item.
   - Each item shows its source.
   - "Unknown" items are never shown as done.
   - It never gates recording or dispatch.
@@ -330,6 +369,13 @@ stateDiagram-v2
   - footer: "Simulated operating costs from GSX Pro. Not real financial transactions."
 
 ## 7. Smallest practical vertical slice (Phase B)
+
+> **First authorized slice (implemented):** only step 1 as a standalone, read-only diagnostic.
+> - `--gsx-probe`: a separate SimConnect client; no `gsx.state` wire message yet, and no change to the telemetry
+>   frame.
+> - `--gsx-receipts`: metadata-only discovery.
+>
+> Steps 2–5 wait for owner authorization after the real-GSX probe and sample inspection.
 
 Ordered; each step is shippable and keeps S2-01 to S2-04 unchanged.
 
