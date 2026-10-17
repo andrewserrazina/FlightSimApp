@@ -4,20 +4,21 @@
  * Samples are down-sampled (every 1–15 s depending on phase), so distances are sums of straight
  * segments between samples and slightly underestimate the true path. A segment is left out when
  * the samples around it are more than MAX_SEGMENT_GAP_S apart or imply an impossible speed
- * (slew/teleport): nothing is interpolated across a gap. Off-route periods are observations, not
- * errors: ATC vectors, weather, holding and direct-to clearances all look the same here.
+ * (slew/teleport): nothing is interpolated across a gap. Periods outside the planned route corridor
+ * are observations, never judgements: ATC vectors, holding, weather avoidance and direct-to
+ * clearances all look the same here, and Turnline cannot tell which (if any) applied.
  */
 import type { NavFix, PlanNavlog } from "../dispatch/navlog";
 import type { SampleRowDto } from "../recording/types";
 import { distanceNm, legPosition } from "./geo";
 import type { RouteGeometry } from "./geometry";
-import { MAX_PLAUSIBLE_KT, replay, type RouteSample } from "./progress";
+import { DEFAULT_TRACKING_CONFIG, replay, type RouteSample } from "./progress";
 
 export const MAX_SEGMENT_GAP_S = 120;
-export const MIN_OFF_ROUTE_S = 120;
+export const MIN_OUTSIDE_CORRIDOR_S = 120;
 export const FIX_MATCH_NM = 3;
 
-export interface OffRoutePeriod {
+export interface OutsideCorridorPeriod {
   fromUtc: string;
   toUtc: string;
   durationS: number;
@@ -47,7 +48,7 @@ export interface NavObservations {
   positionJumps: number;
   /** Share of sampled airborne time with the route reliably tracked; null without geometry. */
   trackedShare: number | null;
-  offRoute: OffRoutePeriod[];
+  outsideCorridor: OutsideCorridorPeriod[];
   fixAltitudes: FixAltitude[];
   limitations: string[];
 }
@@ -60,7 +61,10 @@ export function navObservations(args: { navlog: PlanNavlog | null; geometry: Rou
   if (samplesPruned) limitations.push("Detailed track samples were removed by the retention setting, so no recorded distances or route observations can be shown.");
   if (interruptions > 0) limitations.push(`The recording was interrupted ${interruptions === 1 ? "once" : `${interruptions} times`}; nothing is observed during a gap.`);
   if (!navlog) limitations.push("The attached flight plan has no navigation log (plans imported before waypoint support have none).");
-  else if (geometry && geometry.unpositionedFixes > 0) limitations.push(`${geometry.unpositionedFixes} planned waypoint(s) had no position; route observations are withheld on the legs around them.`);
+  else if (geometry) {
+    if (geometry.unpositionedFixes > 0) limitations.push(`${geometry.unpositionedFixes} planned waypoint(s) had no valid position; route observations are withheld on the legs around them.`);
+    if (geometry.unverifiedFixIndexes.length > 0) limitations.push(`${geometry.unverifiedFixIndexes.length} planned position(s) contradict SimBrief's own leg distances and were not used; route observations are withheld on the legs around them.`);
+  }
 
   const samples = samplesPruned ? [] : args.samples.filter((s) => Number.isFinite(ms(s.observedAtUtc))).sort((a, b) => ms(a.observedAtUtc) - ms(b.observedAtUtc));
   const positioned = samples.filter((s) => s.latDeg !== null && s.lonDeg !== null && Math.abs(s.latDeg) <= 90 && Math.abs(s.lonDeg) <= 180);
@@ -82,7 +86,7 @@ export function navObservations(args: { navlog: PlanNavlog | null; geometry: Rou
       gapS += dt;
       continue;
     }
-    if (d > 2 && (d / dt) * 3600 > MAX_PLAUSIBLE_KT) {
+    if (d > 2 && (d / dt) * 3600 > DEFAULT_TRACKING_CONFIG.maxPlausibleKt) {
       jumps++;
       continue;
     }
@@ -95,7 +99,7 @@ export function navObservations(args: { navlog: PlanNavlog | null; geometry: Rou
 
   // Route tracking replay over the same samples, with the live engine.
   let trackedShare: number | null = null;
-  const offRoute: OffRoutePeriod[] = [];
+  const outsideCorridor: OutsideCorridorPeriod[] = [];
   const fixAltitudes: FixAltitude[] = [];
   if (geometry && geometry.legs.length > 0 && positioned.length >= 2) {
     const routeSamples: RouteSample[] = positioned.map((s) => ({ atUtc: s.observedAtUtc, lat: s.latDeg, lon: s.lonDeg, onGround: s.onGround, usable: true }));
@@ -113,19 +117,19 @@ export function navObservations(args: { navlog: PlanNavlog | null; geometry: Rou
         airS += dt;
         if (prev.mode === "tracking" && st.mode === "tracking" && !geometry.legs[st.legIndex!]!.unreliable) trackedS += dt;
       }
-      // Off-route periods (closed when the route is reacquired, or the track ends).
-      if (st.mode === "off_route") {
+      // Periods outside the corridor (closed when the route is reacquired, or the track ends).
+      if (st.mode === "outside_corridor") {
         const leg = st.legIndex !== null ? geometry.legs[st.legIndex]! : null;
         const xt = leg ? Math.abs(legPosition(leg.from, leg.to, { lat: positioned[i]!.latDeg!, lon: positioned[i]!.lonDeg! }).crossTrackNm) : null;
         if (!open) open = { from: i, maxXt: xt, leg: leg ? `${leg.from.ident} → ${leg.to.ident}` : null };
         else if (xt !== null) open.maxXt = Math.max(open.maxXt ?? 0, xt);
       }
-      if (open && (st.mode !== "off_route" || i === states.length - 1)) {
-        const end = st.mode !== "off_route" ? i - 1 : i;
+      if (open && (st.mode !== "outside_corridor" || i === states.length - 1)) {
+        const end = st.mode !== "outside_corridor" ? i - 1 : i;
         const fromUtc = positioned[open.from]!.observedAtUtc;
         const toUtc = positioned[end]!.observedAtUtc;
         const durationS = (ms(toUtc) - ms(fromUtc)) / 1000;
-        if (durationS >= MIN_OFF_ROUTE_S) offRoute.push({ fromUtc, toUtc, durationS, maxCrossTrackNm: open.maxXt, afterLeg: open.leg });
+        if (durationS >= MIN_OUTSIDE_CORRIDOR_S) outsideCorridor.push({ fromUtc, toUtc, durationS, maxCrossTrackNm: open.maxXt, afterLeg: open.leg });
         open = null;
       }
       // Fixes sequenced while tracking: compare planned and recorded altitude at the closest sample.
@@ -160,7 +164,7 @@ export function navObservations(args: { navlog: PlanNavlog | null; geometry: Rou
     excludedGapSeconds: gapS,
     positionJumps: jumps,
     trackedShare,
-    offRoute,
+    outsideCorridor,
     fixAltitudes,
     limitations,
   };

@@ -268,7 +268,8 @@ code.mono { font-size: var(--text-sm); overflow-wrap: anywhere; }
 .route-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-3) var(--space-5); margin: 0 0 var(--space-3); }
 .route-status { padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); border: 1px solid var(--border-strong); border-left-width: 4px; margin-bottom: var(--space-3); }
 .route-status--unavailable { border-left-color: var(--status-neutral); color: var(--text-secondary); }
-.route-status--off { border-left-color: var(--status-warn); }
+.navlog-pos-note { display: block; font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-muted); white-space: normal; }
+.route-status--outside { border-left-color: var(--status-info); }
 .route-upcoming { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-2); }
 .route-upcoming li { display: grid; gap: 2px; padding: var(--space-2) var(--space-3); background: var(--surface-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); font-size: var(--text-sm); }
 .route-upcoming li .mono { color: var(--color-gold); font-weight: 700; }

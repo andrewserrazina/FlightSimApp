@@ -93,6 +93,25 @@ describe("Dispatch navigation log", () => {
     expect(panel).toHaveTextContent(/derived from SimBrief's leg distances/);
   });
 
+  it("shows a contradicted (0, 0) as unverified and a malformed position with its raw text, keeping every row", async () => {
+    const ofp = fx("ofp-v2-navlog.json");
+    ofp.navlog[3].pos_lat = "0"; // TLNC3 sent as (0, 0), contradicted by its own leg distances
+    ofp.navlog[3].pos_long = "0";
+    ofp.navlog[5].pos_lat = "4 1.9"; // TLND4 malformed
+    const svc = new DispatchService({ store: new MemoryDispatchStore(), fetch: vi.fn(async () => new Response(JSON.stringify(ofp))) as unknown as typeof fetch, now: () => NOW });
+    await svc.init();
+    await svc.importLatest("username", "test_pilot");
+    await renderApp({ dispatch: svc });
+    const panel = screen.getByRole("region", { name: "Navigation log" });
+    const rows = within(panel).getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(11);
+    expect(rows[3]).toHaveTextContent(/TLNC3.*0\.000N 0\.000E.*Unverified · not used for route geometry/);
+    expect(rows[5]).toHaveTextContent(/TLND4.*Unavailable.*Malformed · sent: 4 1\.9, -/);
+    expect(rows[4]).toHaveTextContent(/TLNZZ.*Unavailable.*Not sent/);
+    expect(within(panel).getByText("8 of 11")).toBeInTheDocument();
+    expect(panel).toHaveTextContent(/1 waypoint position\(s\) contradict SimBrief's own leg distances/);
+  });
+
   it("explains a plan without a navigation log (imported before S2-03)", async () => {
     const store = new MemoryDispatchStore();
     const legacy = navPlan();
@@ -124,11 +143,11 @@ describe("Live Flight route monitoring", () => {
     expect(within(panel).getByText("On track")).toBeInTheDocument();
     const upcoming = within(panel).getByRole("heading", { name: "Upcoming waypoints (planned)" }).nextElementSibling!;
     expect(within(upcoming as HTMLElement).getAllByRole("listitem")[0]).toHaveTextContent(/TLNB2/);
-    expect(within(panel).getByText(/Remaining distance is unavailable because a later leg crosses a waypoint without a position/)).toBeInTheDocument();
+    expect(within(panel).getByText(/Remaining distance is unavailable because a later leg crosses a waypoint without a usable position/)).toBeInTheDocument();
     expect(within(panel).getByRole("img", { name: "Route map KBOS → KORD" })).toBeInTheDocument();
   });
 
-  it("shows off-route and never a progress figure when the aircraft is elsewhere", async () => {
+  it("never shows a progress figure when the aircraft is flying elsewhere", async () => {
     const { svc } = await serviceWith("ofp-v2-navlog.json");
     const t = await renderApp({ dispatch: svc, page: "live" });
     await flyFrames(t, [
@@ -138,6 +157,26 @@ describe("Live Flight route monitoring", () => {
     ]);
     const panel = screen.getByRole("region", { name: "Route monitoring" });
     expect(within(panel).getByRole("status")).toHaveTextContent("Route progress unavailable. Not within the planned route corridor");
+    expect(within(panel).queryByText("Current leg")).toBeNull();
+  });
+
+  it("describes leaving the corridor neutrally, with possible (unverified) causes and no progress figure", async () => {
+    const { svc } = await serviceWith("ofp-v2-navlog.json");
+    const t = await renderApp({ dispatch: svc, page: "live" });
+    const leg = buildRouteGeometry(navPlan().navlog!).legs[2]!; // TOC → TLNB2, roughly westbound
+    // Established on the leg, then a steady drift north (about 1 nm per 10 s frame) to ~14 nm off.
+    const pts = [0.2, 0.205].map((f) => interpolate(leg.from, leg.to, f));
+    for (let k = 1; k <= 14; k++) {
+      const p = interpolate(leg.from, leg.to, 0.205 + 0.003 * k);
+      pts.push({ lat: p.lat + k / 60, lon: p.lon });
+    }
+    await flyFrames(t, pts);
+    const panel = screen.getByRole("region", { name: "Route monitoring" });
+    const status = within(panel).getByRole("status");
+    expect(status).toHaveTextContent(/^Outside planned route corridor\./);
+    expect(status).toHaveTextContent(/Possible causes include ATC vectors, holding, weather avoidance or a direct-to clearance; Turnline cannot verify the cause\./);
+    expect(status).toHaveTextContent(/nm right of TOC → TLNB2/);
+    expect(status).not.toHaveTextContent(/deviation|violation|error|off route/i);
     expect(within(panel).queryByText("Current leg")).toBeNull();
   });
 
@@ -215,7 +254,11 @@ describe("Debrief navigation", () => {
     expect(panel).toHaveTextContent(/Recorded airborne track distance\d{3} nm/);
     expect(panel).toHaveTextContent(/None observed for 2 minutes or longer/);
     expect(within(panel).getByRole("table")).toHaveTextContent(/TLNA1.*9,000 ft.*36,000 ft/);
-    expect(panel).toHaveTextContent(/These are observations, not errors/);
+    expect(panel).toHaveTextContent(/Periods outside the planned route corridor/);
+    expect(panel).toHaveTextContent(/not an assessment of the flight/);
+    expect(panel).toHaveTextContent(/Turnline cannot verify the cause/);
+    expect(panel).toHaveTextContent(/Holding is not detected/);
+    expect(panel).not.toHaveTextContent(/deviation|violation|error/i);
   });
 
   it("a flight without a navlog plan shows only recorded distances; a pruned track shows nothing invented", async () => {

@@ -2,13 +2,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseImportedFlightPlan, parseSnapshot, type ImportedFlightPlan } from "../src/dispatch/model";
-import { isNavlog, plannedRemainingNm, type PlanNavlog } from "../src/dispatch/navlog";
-import { coordinate, durationS, navlogRecords, normalizeNavlog } from "../src/dispatch/simbrief/navlog";
+import { fixLabel, isNavlog, plannedRemainingNm, positionStatusOf, type NavFix, type PlanNavlog } from "../src/dispatch/navlog";
+import { classifyCoordinate, coordinate, durationS, navlogRecords, normalizeNavlog } from "../src/dispatch/simbrief/navlog";
 import { normalizeOfp } from "../src/dispatch/simbrief/normalize";
 import { distanceNm, interpolate, legPosition, type LatLon } from "../src/route/geo";
 import { buildRouteGeometry } from "../src/route/geometry";
 import { navObservations } from "../src/route/observations";
-import { INITIAL_TRACKER, replay, routeProgress, stepTracker, type RouteSample, type TrackerState } from "../src/route/progress";
+import { DEFAULT_TRACKING_CONFIG, INITIAL_TRACKER, replay, routeProgress, stepTracker, type RouteSample, type RouteTrackingConfig, type TrackerState } from "../src/route/progress";
 import type { SampleRowDto } from "../src/recording/types";
 
 // Synthetic, sanitized fixtures modelled on the structure of a real json=v2 navlog. Fictional fixes.
@@ -52,6 +52,18 @@ function offset(a: LatLon, b: LatLon, p: LatLon, nm: number): LatLon {
   return { lat: (φ2 * 180) / Math.PI, lon: (((λ2 * 180) / Math.PI + 540) % 360) - 180 };
 }
 
+/** A synthetic navlog through the given points (fictional fixes), departing from the first point. Leg distances are the great-circle distance rounded up, like a flown path. */
+const navlogThrough = (points: Array<LatLon & { ident: string }>): PlanNavlog => {
+  const template = plan("ofp-v2-navlog.json").navlog!.fixes[2]!;
+  return {
+    departure: { icao: points[0]!.ident, lat: points[0]!.lat, lon: points[0]!.lon },
+    fixes: points.slice(1).map((p, i) => ({ ...template, seq: i, ident: p.ident, name: null, kind: "waypoint" as const, lat: p.lat, lon: p.lon, positionStatus: "valid" as const, legDistanceNm: Math.ceil(distanceNm(points[i]!, p)) })),
+    legDistanceTotalNm: null,
+    routeDistanceNm: null,
+    droppedRecords: 0,
+  };
+};
+
 describe("navlog import", () => {
   it("maps a real-structure navlog in order, keeping repeated fixes and leaving bad positions unavailable", () => {
     const p = plan("ofp-v2-navlog.json");
@@ -69,7 +81,9 @@ describe("navlog import", () => {
     expect(n.legDistanceTotalNm).toBeNull(); // one leg has no distance: not summed with a guess
     expect(plannedRemainingNm(n).every((d) => d === null)).toBe(true);
     const r = normalizeOfp(fx("ofp-v2-navlog.json"), { requestedBy: "username", importedAtUtc: "2026-10-15T13:00:00Z" });
-    expect(r.ok && r.warnings).toContain("1 waypoint(s) have no valid position; route progress is withheld on the legs around them.");
+    expect(r.ok && r.warnings).toContain("1 waypoint(s) have no valid position (1 missing); they are kept in the navlog, and route progress is withheld on the legs around them.");
+    expect(zz.positionStatus).toBe("missing");
+    expect(zz.rawPosition).toBeUndefined();
   });
 
   it("accepts navlog.fix (array or single object) with times in seconds, across the date line", () => {
@@ -87,7 +101,6 @@ describe("navlog import", () => {
   it("validates every value defensively and never guesses units or coordinates", () => {
     expect(coordinate("91", "10")).toBeNull();
     expect(coordinate("45", "-181")).toBeNull();
-    expect(coordinate("0", "0")).toBeNull();
     expect(coordinate("abc", "1")).toBeNull();
     expect(coordinate({}, "1")).toBeNull();
     expect(coordinate("-33.94", "151.18")).toEqual({ lat: -33.94, lon: 151.18 });
@@ -100,11 +113,15 @@ describe("navlog import", () => {
       null,
       { icao: "XXXX" },
     );
-    expect(r.navlog!.fixes).toHaveLength(1);
-    expect(r.navlog!.fixes[0]).toMatchObject({ ident: "ABC12", lat: 10, lon: 20, legDistanceNm: null, plannedAltitudeFt: null, fuelLeg: null, seq: 3 });
-    expect(r.navlog!.droppedRecords).toBe(3);
+    // Records without an identifier are kept in order (labelled by position); only the non-record is left out.
+    expect(r.navlog!.fixes.map((f) => [f.seq, f.ident, f.name])).toEqual([[0, null, null], [1, null, "no ident"], [3, "ABC12", null]]);
+    expect(r.navlog!.fixes.map(fixLabel)).toEqual(["Waypoint 1", "no ident", "ABC12"]);
+    expect(r.navlog!.fixes[0]).toMatchObject({ lat: 1, lon: 1, positionStatus: "valid" });
+    expect(r.navlog!.fixes[2]).toMatchObject({ ident: "ABC12", lat: 10, lon: 20, legDistanceNm: null, plannedAltitudeFt: null, fuelLeg: null, seq: 3 });
+    expect(r.navlog!.droppedRecords).toBe(1);
     expect(r.navlog!.departure).toBeNull(); // the origin has no position in this input
-    expect(r.warnings[0]).toMatch(/3 navigation log record/);
+    expect(r.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/^1 navigation log record\(s\) could not be read/), expect.stringMatching(/^2 navigation log record\(s\) have no identifier; they are kept in order/)]));
+    expect(isNavlog(r.navlog)).toBe(true);
   });
 
   it("reports a missing or oversized navlog instead of importing part of it", () => {
@@ -114,6 +131,141 @@ describe("navlog import", () => {
     const minimal = plan("ofp-v2-kgs.json").navlog!;
     expect(minimal.fixes.map((f) => [f.ident, f.kind, f.lat])).toEqual([["BOS", "airport", null], ["SSOXS", "waypoint", null], ["ORD", "airport", null]]);
     expect(buildRouteGeometry(minimal).legs).toEqual([]);
+  });
+});
+
+describe("coordinates: zero is a position, not a missing value (S2-03 decision 3)", () => {
+  it("classifies missing, incomplete, malformed and out-of-range values and keeps the raw text", () => {
+    expect(classifyCoordinate(undefined, undefined)).toEqual({ status: "missing", raw: { lat: null, lon: null } });
+    expect(classifyCoordinate("", "  ")).toEqual({ status: "missing", raw: { lat: null, lon: null } });
+    expect(classifyCoordinate(null, "")).toMatchObject({ status: "missing" });
+    expect(classifyCoordinate("12.5", "")).toEqual({ status: "incomplete", raw: { lat: "12.5", lon: null } });
+    expect(classifyCoordinate("abc", "1")).toEqual({ status: "malformed", raw: { lat: "abc", lon: "1" } });
+    expect(classifyCoordinate({}, "1")).toEqual({ status: "malformed", raw: { lat: "(object)", lon: "1" } });
+    expect(classifyCoordinate("1e3", "0")).toMatchObject({ status: "malformed" });
+    expect(classifyCoordinate("NaN", "0")).toMatchObject({ status: "malformed" });
+    expect(classifyCoordinate(" 4 2.1", "0")).toMatchObject({ status: "malformed" });
+    expect(classifyCoordinate("91", "10")).toEqual({ status: "out_of_range", raw: { lat: "91", lon: "10" } });
+    expect(classifyCoordinate("45", "-180.5")).toMatchObject({ status: "out_of_range" });
+    expect(classifyCoordinate("x".repeat(80), "1")).toMatchObject({ raw: { lat: "x".repeat(32) } });
+  });
+
+  it("accepts the equator, the prime meridian, their intersection and the extremes as valid", () => {
+    expect(classifyCoordinate("0", "0")).toEqual({ status: "valid", lat: 0, lon: 0 });
+    expect(classifyCoordinate(0, 0)).toEqual({ status: "valid", lat: 0, lon: 0 });
+    expect(classifyCoordinate("0.000000", "-0.000")).toEqual({ status: "valid", lat: 0, lon: 0 });
+    expect(Object.is(coordinate("-0", "-0")!.lat, -0)).toBe(false); // no signed zero is stored
+    expect(coordinate("0", "-1.5")).toEqual({ lat: 0, lon: -1.5 }); // on the equator
+    expect(coordinate("51.4779", "0")).toEqual({ lat: 51.4779, lon: 0 }); // on the prime meridian
+    expect(coordinate("-90", "180")).toEqual({ lat: -90, lon: 180 });
+    expect(coordinate("90", "-180")).toEqual({ lat: 90, lon: -180 });
+  });
+
+  it("imports and draws a legitimate route across 0°N 0°E with nothing left out", () => {
+    // Fictional fixes over the Gulf of Guinea: prime meridian, (0, 0) itself, and the equator.
+    const route = [
+      { ident: "TLNGA", lat: 5.6, lon: -0.17 },
+      { ident: "TLNG1", lat: 2, lon: 0 },
+      { ident: "TLNG0", lat: 0, lon: 0 },
+      { ident: "TLNG2", lat: 0, lon: 2 },
+      { ident: "TLNGB", lat: 0.4, lon: 6.7 },
+    ];
+    const ofp = {
+      origin: { pos_lat: "5.6", pos_long: "-0.17" },
+      navlog: route.slice(1).map((p, i) => ({ ident: p.ident, type: "wpt", pos_lat: String(p.lat), pos_long: String(p.lon), distance: String(Math.ceil(distanceNm(route[i]!, p))) })),
+    };
+    const n = normalizeNavlog(ofp, "kg", { icao: "TLNGA" }).navlog!;
+    expect(n.fixes.map((f) => [f.ident, f.lat, f.lon, f.positionStatus])).toEqual([
+      ["TLNG1", 2, 0, "valid"],
+      ["TLNG0", 0, 0, "valid"],
+      ["TLNG2", 0, 2, "valid"],
+      ["TLNGB", 0.4, 6.7, "valid"],
+    ]);
+    const g = buildRouteGeometry(n);
+    expect(g.unverifiedFixIndexes).toEqual([]);
+    expect(g.legs.map((l) => l.to.ident)).toEqual(["TLNG1", "TLNG0", "TLNG2", "TLNGB"]);
+    expect(g.legs.some((l) => l.unreliable)).toBe(false);
+    // And it can be tracked through (0, 0).
+    const s = replay(g, fly([g.legs[0]!.from, g.legs[1]!.to, interpolate(g.legs[2]!.from, g.legs[2]!.to, 0.5)], 400, 10, T0)).at(-1)!;
+    expect(s.mode).toBe("tracking");
+    expect(s.legIndex).toBe(2);
+  });
+
+  it("marks (0, 0) unverified only on record-specific evidence, keeping the waypoint, its order and its planning data", () => {
+    // A waypoint mid-route over the US sent as (0, 0): its own leg distances put it within ~100 nm of its neighbours.
+    const ofp = fx("ofp-v2-navlog.json");
+    const c3 = ofp.navlog.findIndex((r: any) => r.ident === "TLNC3");
+    ofp.navlog[c3].pos_lat = "0";
+    ofp.navlog[c3].pos_long = "0";
+    const r = normalizeOfp(ofp, { requestedBy: "username", importedAtUtc: "2026-10-15T13:00:00Z" });
+    if (!r.ok) throw new Error("fixture");
+    const n = r.plan.navlog!;
+    expect(n.fixes).toHaveLength(11); // nothing dropped
+    expect(n.fixes[3]).toMatchObject({ ident: "TLNC3", lat: 0, lon: 0, positionStatus: "valid", plannedAltitudeFt: 36000 }); // raw value preserved, not replaced
+    const g = buildRouteGeometry(n);
+    expect(g.unverifiedFixIndexes).toEqual([3]);
+    expect(g.legs.map((l) => `${l.from.ident}>${l.to.ident}`)).toContain("TLNB2>TLND4");
+    expect(g.legs.find((l) => l.to.ident === "TLND4")!.unreliable).toBe(true);
+    expect(g.legs.every((l) => Math.abs(l.from.lat) > 1 && Math.abs(l.to.lat) > 1)).toBe(true); // no leg to (0, 0)
+  });
+
+  it("an origin sent as (0, 0) is contradicted by the plan and not used; the rest of the route still is", () => {
+    const ofp = fx("ofp-v2-navlog.json");
+    ofp.origin.pos_lat = "0";
+    ofp.origin.pos_long = "0";
+    const r = normalizeOfp(ofp, { requestedBy: "username", importedAtUtc: "2026-10-15T13:00:00Z" });
+    if (!r.ok) throw new Error("fixture");
+    expect(r.plan.navlog!.departure).toEqual({ icao: "KBOS", lat: 0, lon: 0 });
+    const g = buildRouteGeometry(r.plan.navlog!);
+    expect(g.unverifiedFixIndexes).toEqual([-1]);
+    expect(g.legs[0]!.from.ident).toBe("TLNA1");
+  });
+
+  it("(0, 0) that nothing can confirm is unverified; other positions without leg distances are used", () => {
+    const route = [
+      { ident: "TLNGA", lat: 5.6, lon: -0.17 },
+      { ident: "TLNG0", lat: 0, lon: 0 },
+      { ident: "TLNGB", lat: 0.4, lon: 6.7 },
+    ];
+    const n = navlogThrough(route);
+    n.fixes = n.fixes.map((f) => ({ ...f, legDistanceNm: null }));
+    const g = buildRouteGeometry(n);
+    expect(g.unverifiedFixIndexes).toEqual([0]);
+    expect(g.legs).toHaveLength(1);
+    expect(g.legs[0]).toMatchObject({ from: { ident: "TLNGA" }, to: { ident: "TLNGB" }, unreliable: true });
+  });
+
+  it("malformed and out-of-range positions keep the waypoint, its raw text and its planning data", () => {
+    const ofp = fx("ofp-v2-navlog.json");
+    ofp.navlog[2].pos_lat = "4 2.9";
+    ofp.navlog[3].pos_long = "-273.5";
+    ofp.navlog[5].pos_long = "";
+    const r = normalizeOfp(ofp, { requestedBy: "username", importedAtUtc: "2026-10-15T13:00:00Z" });
+    if (!r.ok) throw new Error("fixture");
+    const f = r.plan.navlog!.fixes;
+    expect(f.map((x) => x.ident)).toEqual(["TLNA1", "TOC", "TLNB2", "TLNC3", "TLNZZ", "TLND4", "TOD", "TLNE5", "TLNF6", "TLNE5", "KORD"]);
+    expect(f[2]).toMatchObject({ lat: null, lon: null, positionStatus: "malformed", rawPosition: { lat: "4 2.9", lon: expect.any(String) }, plannedAltitudeFt: 36000, legDistanceNm: expect.any(Number) });
+    expect(f[3]).toMatchObject({ positionStatus: "out_of_range", rawPosition: { lon: "-273.5" } });
+    expect(f[5]).toMatchObject({ positionStatus: "incomplete", rawPosition: { lon: null } });
+    expect(r.warnings).toContain("4 waypoint(s) have no valid position (1 missing, 1 incomplete, 1 malformed, 1 out of range); they are kept in the navlog, and route progress is withheld on the legs around them.");
+    // Survives storage and validation.
+    const back = parseImportedFlightPlan(JSON.parse(JSON.stringify(r.plan)));
+    expect(back?.navlog?.fixes[2]).toEqual(f[2]);
+    const g = buildRouteGeometry(r.plan.navlog!);
+    expect(g.unpositionedFixes).toBe(4);
+    expect(g.legs.filter((l) => l.unreliable).length).toBeGreaterThan(0);
+  });
+
+  it("stored fixes: legacy records without a status load; contradictory status or raw values are rejected", () => {
+    const n = plan("ofp-v2-navlog.json").navlog!;
+    const legacy: PlanNavlog = { ...n, fixes: n.fixes.map(({ positionStatus: _s, rawPosition: _r, ...f }) => f as NavFix) };
+    expect(isNavlog(legacy)).toBe(true);
+    expect(legacy.fixes.map(positionStatusOf).filter((x) => x === "missing")).toHaveLength(1);
+    expect(isNavlog({ ...n, fixes: [{ ...n.fixes[0]!, positionStatus: "valid", lat: null, lon: null }] })).toBe(false);
+    expect(isNavlog({ ...n, fixes: [{ ...n.fixes[0]!, positionStatus: "malformed" }] })).toBe(false); // has a position
+    expect(isNavlog({ ...n, fixes: [{ ...n.fixes[0]!, rawPosition: { lat: "1", lon: "2" } }] })).toBe(false); // raw only when invalid
+    expect(isNavlog({ ...n, fixes: [{ ...n.fixes[4]!, positionStatus: "bogus" }] })).toBe(false);
+    expect(isNavlog({ ...n, fixes: [{ ...n.fixes[4]!, ident: null }] })).toBe(true);
   });
 });
 
@@ -237,7 +389,7 @@ describe("route progress engine", () => {
     expect(routeProgress(geo, s)).toEqual({ status: "unavailable", reason: expect.stringMatching(/no reliable geometry/) });
   });
 
-  it("goes off route on a large deviation, never jumps backwards, and reacquires forward", () => {
+  it("reports outside the corridor on a large deviation, never jumps backwards, and reacquires forward", () => {
     const leg = geo.legs[2]!;
     const onRoute = fly([leg.from, interpolate(leg.from, leg.to, 0.3)], 450, 10, T0);
     let s = run(onRoute, { ...INITIAL_TRACKER, everAirborne: true, mode: "acquiring", floorLeg: 2 });
@@ -245,11 +397,11 @@ describe("route progress engine", () => {
     const away = offset(leg.from, leg.to, interpolate(leg.from, leg.to, 0.5), 25);
     const deviation = fly([interpolate(leg.from, leg.to, 0.3), away, interpolate(leg.from, leg.to, 0.75)], 450, 10, Date.parse(onRoute.at(-1)!.atUtc) + 10_000);
     const modes = deviation.map((x) => (s = stepTracker(geo, s, x)).mode);
-    expect(modes).toContain("off_route");
+    expect(modes).toContain("outside_corridor");
     expect(s.mode).toBe("tracking");
     expect(s.legIndex).toBe(2);
-    const off = routeProgress(geo, { ...s, mode: "off_route" });
-    expect(off.status).toBe("off_route");
+    const off = routeProgress(geo, { ...s, mode: "outside_corridor" });
+    expect(off.status).toBe("outside_corridor");
   });
 
   it("direct-to: rejoining a later leg moves forward, skipping the bypassed fix", () => {
@@ -319,6 +471,96 @@ describe("route progress engine", () => {
   });
 });
 
+describe("provisional tracking thresholds (S2-03 decision 1)", () => {
+  const airborne: TrackerState = { ...INITIAL_TRACKER, everAirborne: true, mode: "acquiring" };
+  const runWith = (g: ReturnType<typeof buildRouteGeometry>, samples: RouteSample[], s: TrackerState = airborne, c: RouteTrackingConfig = DEFAULT_TRACKING_CONFIG) => samples.reduce((st, x) => stepTracker(g, st, x, c), s);
+  const geo = buildRouteGeometry(plan("ofp-v2-navlog.json").navlog!);
+  const leg = geo.legs[2]!;
+
+  it("are documented defaults, frozen, and read from one config object", () => {
+    expect(DEFAULT_TRACKING_CONFIG).toEqual({ acquireCorridorNm: 5, confirmSamples: 2, outsideCorridorNm: 8, alongMarginNm: 1.5, sequenceAnticipationNm: 2, maxForwardLegs: 3, maxPlausibleKt: 1000, maxSampleGapS: 60 });
+    expect(Object.isFrozen(DEFAULT_TRACKING_CONFIG)).toBe(true);
+  });
+
+  it("can be overridden without changing the engine: lock-on corridor, confirmations and outside-corridor distance", () => {
+    // 4 nm right of the leg: inside the default 5 nm lock-on corridor, outside a 3 nm one.
+    const parallel = fly([offset(leg.from, leg.to, interpolate(leg.from, leg.to, 0.2), 4), offset(leg.from, leg.to, interpolate(leg.from, leg.to, 0.3), 4)], 450, 10, T0);
+    const s0 = { ...airborne, floorLeg: 2 };
+    expect(runWith(geo, parallel, s0).mode).toBe("tracking");
+    expect(runWith(geo, parallel, s0, { ...DEFAULT_TRACKING_CONFIG, acquireCorridorNm: 3 }).mode).toBe("acquiring");
+    // Two consecutive observations by default; three when configured.
+    expect(runWith(geo, parallel.slice(0, 2), s0).mode).toBe("tracking");
+    const three = { ...DEFAULT_TRACKING_CONFIG, confirmSamples: 3 };
+    expect(runWith(geo, parallel.slice(0, 2), s0, three).mode).toBe("acquiring");
+    expect(runWith(geo, parallel.slice(0, 3), s0, three).mode).toBe("tracking");
+    // A steady 12 nm offset: outside the default 8 nm corridor (after two observations), inside a 15 nm one.
+    const tracked = runWith(geo, fly([leg.from, interpolate(leg.from, leg.to, 0.3)], 450, 10, T0), s0);
+    const drift = fly([interpolate(leg.from, leg.to, 0.3), offset(leg.from, leg.to, interpolate(leg.from, leg.to, 0.4), 12), offset(leg.from, leg.to, interpolate(leg.from, leg.to, 0.5), 12)], 450, 10, tracked.last!.atMs + 10_000).slice(1);
+    const modes = drift.map((_, i) => runWith(geo, drift.slice(0, i + 1), tracked).mode);
+    expect(modes.at(-1)).toBe("outside_corridor");
+    const firstOutside = modes.indexOf("outside_corridor");
+    expect(firstOutside).toBeGreaterThan(0);
+    // Exactly one beyond-8-nm observation before it is reported.
+    const xts = drift.map((x) => Math.abs(legPosition(leg.from, leg.to, { lat: x.lat!, lon: x.lon! }).crossTrackNm));
+    expect(xts.filter((x, i) => i < firstOutside && x > 8)).toHaveLength(1);
+    expect(runWith(geo, drift, tracked, { ...DEFAULT_TRACKING_CONFIG, outsideCorridorNm: 15 }).mode).toBe("tracking");
+  });
+
+  it("closely spaced terminal waypoints sequence in order, never backwards, with remaining distance falling", () => {
+    // An approach with fixes 4, 2.5, 1.5 and 1 nm apart (fictional), ending at the runway.
+    const start = { ident: "TLNIA", lat: 41.5, lon: -88.6 };
+    const nm = (n: number) => n / 60; // nm of latitude
+    const pts = [start, { ident: "TLNIF", lat: start.lat + nm(10), lon: start.lon }, { ident: "TLNFA", lat: start.lat + nm(14), lon: start.lon }, { ident: "TLNS1", lat: start.lat + nm(16.5), lon: start.lon }, { ident: "TLNS2", lat: start.lat + nm(18), lon: start.lon }, { ident: "KTLN", lat: start.lat + nm(19), lon: start.lon }];
+    const g = buildRouteGeometry(navlogThrough(pts));
+    expect(g.legs.map((l) => l.to.ident)).toEqual(["TLNIF", "TLNFA", "TLNS1", "TLNS2", "KTLN"]);
+    const approach = fly([pts[0]!, { lat: start.lat + nm(18.9), lon: start.lon }], 140, 5, T0);
+    let s = airborne;
+    const seen: number[] = [];
+    let lastRemaining = Infinity;
+    for (const x of approach) {
+      s = stepTracker(g, s, x);
+      if (s.mode !== "tracking") continue;
+      seen.push(s.legIndex!);
+      const p = routeProgress(g, s);
+      expect(p.status).toBe("tracking");
+      if (p.status === "tracking") {
+        expect(p.remainingNm!).toBeLessThanOrEqual(lastRemaining + 1e-6);
+        lastRemaining = p.remainingNm!;
+      }
+    }
+    expect(seen.every((l, i) => i === 0 || l >= seen[i - 1]!)).toBe(true);
+    expect([...new Set(seen)]).toEqual([0, 1, 2, 3, 4]); // every short leg, in order, none skipped
+    expect(lastRemaining).toBeLessThan(0.5);
+  });
+
+  it("near a segment endpoint: a sharp turn, an overshoot and a start just before the first leg", () => {
+    // A 90° right turn at TLNTB (fictional).
+    const a = { ident: "TLNTA", lat: 40, lon: -80 };
+    const b = { ident: "TLNTB", lat: 40 + 30 / 60, lon: -80 };
+    const c = { ident: "TLNTC", lat: 40 + 30 / 60, lon: -80 + 30 / 60 / Math.cos((40.5 * Math.PI) / 180) };
+    const g = buildRouteGeometry(navlogThrough([a, b, c]));
+    expect(g.legs).toHaveLength(2);
+    // Acquires 1 nm before the start of the first leg (within the along-track margin), moving onto it.
+    const before = { lat: a.lat - 1 / 60, lon: a.lon };
+    let s = runWith(g, fly([before, interpolate(a, b, 0.05)], 300, 10, T0));
+    expect(s.mode).toBe("tracking");
+    expect(s.legIndex).toBe(0);
+    // Overshoots the turn by 1.5 nm along the inbound course, then turns onto the outbound leg.
+    const overshoot = { lat: b.lat + 1.5 / 60, lon: b.lon };
+    const turn = fly([interpolate(a, b, 0.05), overshoot, interpolate(b, c, 0.3)], 300, 10, s.last!.atMs + 10_000).slice(1);
+    const states = turn.map((x) => (s = stepTracker(g, s, x)));
+    expect(states.every((x) => x.mode === "tracking")).toBe(true); // never "outside the corridor" in a normal turn
+    const legs = states.map((x) => x.legIndex!);
+    expect(legs.every((l, i) => i === 0 || l >= legs[i - 1]!)).toBe(true);
+    expect(legs.at(-1)).toBe(1);
+    // Exactly at the turn fix: either leg is acceptable, the cross-track is ~0 and nothing goes backwards.
+    const atFix = runWith(g, fly([interpolate(a, b, 0.9), b], 300, 10, T0 + 7_200_000), { ...airborne, mode: "tracking", legIndex: 0 });
+    expect(atFix.mode).toBe("tracking");
+    const p = routeProgress(g, atFix);
+    expect(p.status === "tracking" && Math.abs(p.crossTrackNm)).toBeLessThan(0.1);
+  });
+});
+
 describe("navigation observations (debrief)", () => {
   const p = plan("ofp-v2-navlog.json");
   const geo = buildRouteGeometry(p.navlog!);
@@ -334,7 +576,7 @@ describe("navigation observations (debrief)", () => {
     expect(o.totalDistanceNm).toBeCloseTo(flown, 0);
     expect(o.plannedRouteNm).toBe(778);
     expect(o.trackedShare).toBeGreaterThan(0.9);
-    expect(o.offRoute).toEqual([]);
+    expect(o.outsideCorridor).toEqual([]);
     // TOC is a computed point, not compared; TLNB2 is reached at the end of the track (sequenced).
     expect(o.fixAltitudes.map((f) => f.fix.ident)).toEqual(["TLNA1", "TLNB2"]);
     expect(o.fixAltitudes[0]).toMatchObject({ plannedAltitudeFt: 9000, recordedAltitudeFt: 36000 });
@@ -351,15 +593,15 @@ describe("navigation observations (debrief)", () => {
     expect(navObservations({ navlog: p.navlog!, geometry: geo, samples: jump, interruptions: 0, samplesPruned: false }).positionJumps).toBe(2);
   });
 
-  it("reports sustained off-route periods neutrally, with the leg that was left", () => {
+  it("reports sustained periods outside the corridor neutrally, with the leg that was left", () => {
     const leg = geo.legs[2]!;
     const path = [leg.from, interpolate(leg.from, leg.to, 0.2), offset(leg.from, leg.to, interpolate(leg.from, leg.to, 0.5), 30), interpolate(leg.from, leg.to, 0.8), leg.to];
     const rows = toRows(fly(path, 450, 10, T0));
     const o = navObservations({ navlog: p.navlog!, geometry: buildRouteGeometry(p.navlog!), samples: [...toRows(fly([geo.legs[1]!.from, leg.from], 450, 10, T0 - 600_000)), ...rows], interruptions: 0, samplesPruned: false });
-    expect(o.offRoute).toHaveLength(1);
-    expect(o.offRoute[0]).toMatchObject({ afterLeg: "TOC → TLNB2" });
-    expect(o.offRoute[0]!.maxCrossTrackNm!).toBeGreaterThan(20);
-    expect(o.offRoute[0]!.durationS).toBeGreaterThanOrEqual(120);
+    expect(o.outsideCorridor).toHaveLength(1);
+    expect(o.outsideCorridor[0]).toMatchObject({ afterLeg: "TOC → TLNB2" });
+    expect(o.outsideCorridor[0]!.maxCrossTrackNm!).toBeGreaterThan(20);
+    expect(o.outsideCorridor[0]!.durationS).toBeGreaterThanOrEqual(120);
   });
 
   it("never reconstructs anything without samples, and states why", () => {

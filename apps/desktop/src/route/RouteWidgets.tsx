@@ -13,7 +13,7 @@ import { useBridgeState } from "../bridge/BridgeContext";
 import { useFlightHistory } from "../data/flightHistory";
 import { useDispatch, useDispatchView } from "../dispatch/DispatchContext";
 import type { ImportedFlightPlan } from "../dispatch/model";
-import { plannedRemainingNm, type NavFix, type PlanNavlog } from "../dispatch/navlog";
+import { fixLabel, plannedRemainingNm, positionStatusOf, type NavFix, type PlanNavlog, type PositionStatus } from "../dispatch/navlog";
 import { fmtAltitude, fmtDuration, fmtUtcTime, fmtWeight, routeTitle, UNAVAILABLE } from "../dispatch/presentation";
 import { telemetryFreshness } from "../domain/freshness";
 import { usePreferences } from "../preferences/PreferencesContext";
@@ -25,7 +25,7 @@ import { Tag } from "../ui/Tag";
 import type { LatLon } from "./geo";
 import { buildRouteGeometry, type RouteGeometry } from "./geometry";
 import { navObservations } from "./observations";
-import { INITIAL_TRACKER, routeProgress, stepTracker, type RouteProgress, type TrackerState } from "./progress";
+import { INITIAL_TRACKER, OUTSIDE_CORRIDOR_CAUSES, routeProgress, stepTracker, type RouteProgress, type TrackerState } from "./progress";
 
 const nm = (v: number | null, digits = 0) => (v === null ? UNAVAILABLE : `${v.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: digits })} nm`);
 const Unavail = ({ text = UNAVAILABLE }: { text?: string }) => <span className="unavailable">{text}</span>;
@@ -39,9 +39,31 @@ function speedText(f: NavFix): string {
 
 const KIND_LABEL: Record<NavFix["kind"], string> = { airport: "Airport", waypoint: "Waypoint", navaid: "Navaid", latlon: "Lat/long", toc: "Top of climb", tod: "Top of descent", other: "Other" };
 
-function fmtCoord(f: NavFix): string {
-  if (f.lat === null || f.lon === null) return UNAVAILABLE;
-  return `${Math.abs(f.lat).toFixed(3)}${f.lat >= 0 ? "N" : "S"} ${Math.abs(f.lon).toFixed(3)}${f.lon >= 0 ? "E" : "W"}`;
+const fmtLatLon = (lat: number, lon: number) => `${Math.abs(lat).toFixed(3)}${lat >= 0 ? "N" : "S"} ${Math.abs(lon).toFixed(3)}${lon >= 0 ? "E" : "W"}`;
+
+const POSITION_PROBLEM: Record<Exclude<PositionStatus, "valid">, string> = { missing: "Not sent", incomplete: "Incomplete", malformed: "Malformed", out_of_range: "Out of range" };
+
+/** Position cell: valid coordinates (flagged when the plan's own distances contradict them), else why not, with the raw text. */
+function PositionCell({ f, unverified }: { f: NavFix; unverified: boolean }) {
+  const st = positionStatusOf(f);
+  if (st === "valid" && f.lat !== null && f.lon !== null) {
+    return (
+      <>
+        {fmtLatLon(f.lat, f.lon)}
+        {unverified && <span className="navlog-pos-note">Unverified · not used for route geometry</span>}
+      </>
+    );
+  }
+  const raw = f.rawPosition;
+  const rawText = raw ? ` · sent: ${raw.lat ?? "—"}, ${raw.lon ?? "—"}` : "";
+  return (
+    <>
+      <Unavail />
+      <span className="navlog-pos-note">
+        {st === "missing" || st === "valid" ? "Not sent" : `${POSITION_PROBLEM[st]}${rawText}`}
+      </span>
+    </>
+  );
 }
 
 /** Dispatch: the imported navigation log, as planned by SimBrief. */
@@ -57,7 +79,8 @@ export function NavlogPanel({ plan }: { plan: ImportedFlightPlan }) {
     );
   }
   const remaining = plannedRemainingNm(n);
-  const positioned = n.fixes.filter((f) => f.lat !== null).length;
+  const unverified = new Set(geometry?.unverifiedFixIndexes ?? []);
+  const positioned = n.fixes.filter((f, i) => f.lat !== null && !unverified.has(i)).length;
   const rows = expanded ? n.fixes : n.fixes.slice(0, 12);
   return (
     <Panel title="Navigation log" className="span-all" actions={<Tag tone="info">SimBrief plan</Tag>}>
@@ -71,7 +94,7 @@ export function NavlogPanel({ plan }: { plan: ImportedFlightPlan }) {
           <dd>{val(nm(n.routeDistanceNm ?? n.legDistanceTotalNm))}</dd>
         </div>
         <div>
-          <dt>With position</dt>
+          <dt>With usable position</dt>
           <dd>
             {positioned} of {n.fixes.length}
           </dd>
@@ -81,7 +104,13 @@ export function NavlogPanel({ plan }: { plan: ImportedFlightPlan }) {
           <dd>{geometry && geometry.legs.length > 0 ? `${geometry.legs.length} legs · ${nm(geometry.totalNm)} straight-line` : <Unavail />}</dd>
         </div>
       </dl>
-      {n.droppedRecords > 0 && <p className="muted">{n.droppedRecords} navlog record(s) without an identifier were left out.</p>}
+      {n.droppedRecords > 0 && <p className="muted">{n.droppedRecords} navlog record(s) could not be read and were left out.</p>}
+      {unverified.size > 0 && (
+        <p className="muted">
+          {unverified.has(-1) ? "The departure airport position and " : ""}
+          {[...unverified].filter((i) => i >= 0).length} waypoint position(s) contradict SimBrief&apos;s own leg distances, so they are unverified and not used for the route geometry or progress. The coordinates are shown exactly as imported.
+        </p>
+      )}
       {geometry && geometry.legs.length > 0 && <RouteMap geometry={geometry} label={`Planned route ${routeTitle(plan)}`} />}
       <div className="table-wrap">
         <table className="table table--compact navlog-table">
@@ -104,7 +133,7 @@ export function NavlogPanel({ plan }: { plan: ImportedFlightPlan }) {
               <tr key={f.seq} className={f.kind === "toc" || f.kind === "tod" ? "navlog-row--pseudo" : undefined}>
                 <td className="num">{i + 1}</td>
                 <th scope="row">
-                  <span className="mono">{f.ident}</span> <span className="muted navlog-kind">{KIND_LABEL[f.kind]}</span>
+                  <span className="mono">{fixLabel(f)}</span> <span className="muted navlog-kind">{KIND_LABEL[f.kind]}</span>
                 </th>
                 <td className="mono">{f.via ?? <Unavail text="—" />}</td>
                 <td className="num">{val(fmtAltitude(f.plannedAltitudeFt))}</td>
@@ -113,7 +142,9 @@ export function NavlogPanel({ plan }: { plan: ImportedFlightPlan }) {
                 <td className="num">{val(nm(remaining[i] ?? null))}</td>
                 <td className="num">{val(fmtDuration(f.elapsedTimeS))}</td>
                 <td className="num">{val(fmtWeight(f.fuelPlanOnboard))}</td>
-                <td className="num mono">{val(fmtCoord(f))}</td>
+                <td className="num mono">
+                  <PositionCell f={f} unverified={unverified.has(i)} />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -189,7 +220,7 @@ export function RouteMap({ geometry, position, label }: { geometry: RouteGeometr
         ))}
         {pos && <circle cx={pos.x} cy={pos.y} r={8} className="route-map__aircraft" />}
       </svg>
-      <figcaption className="muted">Planned route drawn from waypoint coordinates (projection centred on the route). Dashed legs cross waypoints without a position.{pos ? " Gold dot: aircraft position from telemetry." : ""}</figcaption>
+      <figcaption className="muted">Planned route drawn from waypoint coordinates (projection centred on the route). Dashed legs cross waypoints without a usable position.{pos ? " Gold dot: aircraft position from telemetry." : ""}</figcaption>
     </figure>
   );
 }
@@ -209,14 +240,14 @@ function ProgressBody({ progress, navlog }: { progress: RouteProgress; navlog: P
       </div>
     );
   }
-  if (progress.status === "off_route") {
+  if (progress.status === "outside_corridor") {
     return (
-      <div className="route-status route-status--off" role="status">
-        <strong>Off the planned route.</strong> {progress.reason}
+      <div className="route-status route-status--outside" role="status">
+        <strong>Outside planned route corridor.</strong> {progress.reason}
         {progress.crossTrackNm !== null && progress.lastLeg && (
           <span>
             {" "}
-            {Math.abs(progress.crossTrackNm).toFixed(1)} nm {progress.crossTrackNm >= 0 ? "right" : "left"} of {progress.lastLeg.from.ident} → {progress.lastLeg.to.ident}. Progress resumes when the route is rejoined.
+            {Math.abs(progress.crossTrackNm).toFixed(1)} nm {progress.crossTrackNm >= 0 ? "right" : "left"} of {progress.lastLeg.from.ident} → {progress.lastLeg.to.ident}. Route progress resumes when the aircraft is back within the corridor of a leg ahead.
           </span>
         )}
       </div>
@@ -256,12 +287,12 @@ function ProgressBody({ progress, navlog }: { progress: RouteProgress; navlog: P
           <dd className="num">{Math.abs(xt) < 0.05 ? "On track" : `${Math.abs(xt).toFixed(1)} nm ${xt > 0 ? "right" : "left"}`}</dd>
         </div>
       </dl>
-      {progress.remainingNm === null && <p className="muted">Remaining distance is unavailable because a later leg crosses a waypoint without a position.</p>}
+      {progress.remainingNm === null && <p className="muted">Remaining distance is unavailable because a later leg crosses a waypoint without a usable position.</p>}
       <h3 className="subsection__title">Upcoming waypoints (planned)</h3>
       <ol className="route-upcoming">
         {upcoming.map((f) => (
           <li key={f.seq}>
-            <span className="mono">{f.ident}</span>
+            <span className="mono">{fixLabel(f)}</span>
             <span className="num">{val(fmtAltitude(f.plannedAltitudeFt))}</span>
             <span className="num">{val(fmtDuration(f.elapsedTimeS))}</span>
           </li>
@@ -406,14 +437,14 @@ export function NavigationDebrief({ detail }: { detail: FlightDetail }) {
             </div>
           </dl>
           <p className="muted">Recorded distances add up straight segments between stored track points (every 1–15 s), so they slightly underestimate the path flown. Gaps are left out, never filled in.</p>
-          <h3 className="subsection__title">Periods away from the planned route</h3>
+          <h3 className="subsection__title">Periods outside the planned route corridor</h3>
           {!geometry ? (
             <p className="unavailable-text">Not available without a navigation log with waypoint positions.</p>
-          ) : obs.offRoute.length === 0 ? (
+          ) : obs.outsideCorridor.length === 0 ? (
             <p className="muted">None observed for 2 minutes or longer while the route could be tracked.</p>
           ) : (
             <ul className="plain-list">
-              {obs.offRoute.map((o) => (
+              {obs.outsideCorridor.map((o) => (
                 <li key={o.fromUtc}>
                   {fmtUtcTime(o.fromUtc)} → {o.toUtc.slice(11, 16)}Z ({fmtDuration(o.durationS)}){o.afterLeg ? ` after ${o.afterLeg}` : ""}
                   {o.maxCrossTrackNm !== null ? `, up to ${o.maxCrossTrackNm.toFixed(1)} nm from the planned leg` : ""}
@@ -421,7 +452,11 @@ export function NavigationDebrief({ detail }: { detail: FlightDetail }) {
               ))}
             </ul>
           )}
-          {geometry && <p className="muted">ATC vectors, weather avoidance, holding and direct-to clearances all appear as time away from the planned route. These are observations, not errors.</p>}
+          {geometry && (
+            <p className="muted">
+              Observed position relative to Turnline&apos;s straight-line corridor around the planned legs, not an assessment of the flight. {OUTSIDE_CORRIDOR_CAUSES} Holding is not detected.
+            </p>
+          )}
           {obs.fixAltitudes.length > 0 && (
             <>
               <h3 className="subsection__title">Planned and recorded altitude at sequenced fixes</h3>
@@ -439,7 +474,7 @@ export function NavigationDebrief({ detail }: { detail: FlightDetail }) {
                     {obs.fixAltitudes.map((f) => (
                       <tr key={f.fix.seq}>
                         <th scope="row" className="mono">
-                          {f.fix.ident}
+                          {fixLabel(f.fix)}
                         </th>
                         <td className="num">{fmtAltitude(f.plannedAltitudeFt)}</td>
                         <td className="num">{Math.round(f.recordedAltitudeFt).toLocaleString("en-US")} ft</td>

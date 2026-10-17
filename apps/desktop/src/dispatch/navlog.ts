@@ -15,10 +15,22 @@ export const MAX_NAVLOG_FIXES = 1500;
 
 export type NavFixKind = "airport" | "waypoint" | "navaid" | "latlon" | "toc" | "tod" | "other";
 
+/**
+ * How a record's coordinates were classified on import (S2-03 decision 3). (0, 0) is a valid
+ * position like any other: it is never treated as missing on its value alone. Whether a valid
+ * position is consistent with the rest of the plan is a separate check in the route geometry.
+ * - missing: neither coordinate was sent (absent, null or empty);
+ * - incomplete: only one of the two was sent;
+ * - malformed: a value is not a plain decimal number;
+ * - out_of_range: latitude outside ±90 or longitude outside ±180.
+ */
+export type PositionStatus = "valid" | "missing" | "incomplete" | "malformed" | "out_of_range";
+
 export interface NavFix {
   /** Position in SimBrief's navlog (0-based). Order is preserved; duplicates are kept as separate rows. */
   seq: number;
-  ident: string;
+  /** null when SimBrief sent no identifier: the record is kept (in order) and labelled by fixLabel(). */
+  ident: string | null;
   name: string | null;
   /** SimBrief's `type` as sent (wpt, apt, vor, ndb, ltlg, …), lower-case. */
   type: string | null;
@@ -26,6 +38,10 @@ export interface NavFix {
   /** Both null unless both are valid decimal degrees. */
   lat: number | null;
   lon: number | null;
+  /** Absent in plans imported before decision 3; then derived by positionStatusOf(). */
+  positionStatus?: PositionStatus;
+  /** The coordinates exactly as sent (trimmed, at most 32 characters), kept when they were not valid. */
+  rawPosition?: { lat: string | null; lon: string | null };
   /** CLB / CRZ / DSC. */
   stage: "CLB" | "CRZ" | "DSC" | null;
   /** Airway or procedure this fix is reached by (`via_airway`, e.g. DCT, UL9, a SID/STAR name). */
@@ -55,9 +71,14 @@ export interface PlanNavlog {
   legDistanceTotalNm: number | null;
   /** `general.route_distance`, as SimBrief reported it. */
   routeDistanceNm: number | null;
-  /** Records SimBrief sent that could not be used (e.g. no identifier). Disclosed, never repaired. */
+  /** Records SimBrief sent that were not readable records at all (not objects). Disclosed, never repaired. */
   droppedRecords: number;
 }
+
+export const positionStatusOf = (f: NavFix): PositionStatus => f.positionStatus ?? (f.lat !== null && f.lon !== null ? "valid" : "missing");
+
+/** Display label: the identifier, else the name, else the record's place in the navlog. */
+export const fixLabel = (f: Pick<NavFix, "ident" | "name" | "seq">): string => f.ident ?? f.name ?? `Waypoint ${f.seq + 1}`;
 
 /** Planned distance remaining after each fix, derived from SimBrief's leg distances (null once a leg is missing). */
 export function plannedRemainingNm(navlog: PlanNavlog): Array<number | null> {
@@ -83,13 +104,18 @@ const isWeightOrNull = (v: unknown): boolean => {
 };
 const isLat = (v: unknown) => typeof v === "number" && v >= -90 && v <= 90;
 const isLon = (v: unknown) => typeof v === "number" && v >= -180 && v <= 180;
+const STATUSES: ReadonlySet<string> = new Set(["valid", "missing", "incomplete", "malformed", "out_of_range"]);
+const rawCoord = (v: unknown) => v === null || (typeof v === "string" && v.length <= 32);
 
 function isFix(f: unknown): boolean {
   if (!isObj(f)) return false;
   if (typeof f.seq !== "number" || !Number.isInteger(f.seq) || f.seq < 0) return false;
-  if (typeof f.ident !== "string" || f.ident.length === 0 || f.ident.length > 16) return false;
+  if (!(f.ident === null || (typeof f.ident === "string" && f.ident.length > 0 && f.ident.length <= 16))) return false;
   if (!optStr(f.name) || !optStr(f.type, 16) || typeof f.kind !== "string" || !KINDS.has(f.kind)) return false;
-  if (!((f.lat === null && f.lon === null) || (isLat(f.lat) && isLon(f.lon)))) return false;
+  const positioned = isLat(f.lat) && isLon(f.lon);
+  if (!((f.lat === null && f.lon === null) || positioned)) return false;
+  if (f.positionStatus !== undefined && (typeof f.positionStatus !== "string" || !STATUSES.has(f.positionStatus) || (f.positionStatus === "valid") !== positioned)) return false;
+  if (f.rawPosition !== undefined && (positioned || !isObj(f.rawPosition) || !rawCoord(f.rawPosition.lat) || !rawCoord(f.rawPosition.lon))) return false;
   if (!(f.stage === null || f.stage === "CLB" || f.stage === "CRZ" || f.stage === "DSC") || !optStr(f.via) || !optBool(f.isSidStar)) return false;
   const nums = [f.legDistanceNm, f.plannedAltitudeFt, f.plannedIasKt, f.plannedTasKt, f.plannedMach, f.plannedGroundSpeedKt, f.legTimeS, f.elapsedTimeS];
   if (!nums.every(optNum)) return false;
