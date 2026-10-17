@@ -22,7 +22,9 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 
 const served = new Map();
 const server = createServer(async (req, res) => {
   const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^(\.\.[/\\])+/, '');
-  const file = join(root, path.endsWith('/') ? path + 'index.html' : path);
+  let file = join(root, path.endsWith('/') ? path + 'index.html' : path);
+  // Cloudflare Pages clean URLs: /confirm serves confirm.html.
+  if (!extname(file)) file += '.html';
   try {
     const body = await readFile(file);
     served.set(path, 200);
@@ -350,6 +352,120 @@ for (const [state, expect] of [['confirmed', 'Your email is confirmed'], ['unsub
   await page.click('#submit');
   check('rollback config (empty apiUrl) shows "Signups are not open yet" and loads no CAPTCHA', (await page.textContent('#status')).includes('not open yet') && !(await page.evaluate(() => [...document.scripts].some((s) => s.src.includes('turnstile')))));
   await ctx.close();
+}
+
+// ---------- 5b. email confirmation and unsubscribe pages (/confirm, /unsubscribe) ----------
+{
+  const ID = '6b1f0c2e-4d5a-4e8b-9f3c-2a7d1e5b8c40';
+  const CTOKEN = 'a'.repeat(36) + 'b'.repeat(36);
+  const UTOKEN = 'c'.repeat(64);
+  const hash = (page, token) => `${page}#id=${ID}&token=${token}`;
+  for (const name of ['confirm', 'unsubscribe']) {
+    const src = await readFile(join(root, `${name}.html`), 'utf8');
+    check(`/${name}: noindex, no-referrer meta, no inline script or style (strict CSP compatible)`, src.includes('<meta name="robots" content="noindex,nofollow">') && src.includes('<meta name="referrer" content="no-referrer">') && !/<script(?![^>]*\bsrc=)[^>]*>/i.test(src) && !/\sstyle="/i.test(src) && !/<style/i.test(src));
+  }
+  const headers = await readFile(join(root, '_headers'), 'utf8');
+  const block = (path) => (headers.split(/\n(?=\/)/).find((b) => b.startsWith(path + '\n')) || '');
+  check('_headers: token pages get no-store, no-referrer and an enforced CSP limited to self + the waitlist function', ['/confirm', '/confirm.html', '/unsubscribe', '/unsubscribe.html'].every((p) => { const b = block(p); return /Cache-Control: no-store/.test(b) && /Referrer-Policy: no-referrer/.test(b) && /Content-Security-Policy: default-src 'none'; script-src 'self';[^\n]*connect-src https:\/\/itapyrwjijnvzdsatttp\.supabase\.co;[^\n]*form-action 'none'/.test(b); }));
+
+  // Opening the page changes nothing; the token leaves the address bar.
+  {
+    const { page, ctx, log } = await openPage({ width: 1280, query: hash('confirm', CTOKEN) });
+    await page.waitForTimeout(300);
+    const state = await page.evaluate(() => [location.href, document.getElementById('verify-button').disabled, document.body.innerHTML]);
+    check('/confirm: opening the link sends nothing (scanner prefetch is harmless) and removes the token from the URL', log.apiCalls.length === 0 && !state[0].includes('token') && !state[0].includes('#') && state[1] === false && !state[2].includes('bbbbbbbb'), state[0]);
+    check('/confirm: Cloudflare-style clean URL serves the page with no console errors or external requests', log.errors.length === 0 && log.external.length === 0 && (await page.title()).includes('Confirm'), log.errors.concat(log.external).join(' | '));
+    await ctx.close();
+  }
+  for (const [label, api, expect, tone] of [
+    ['confirmed', () => ({ status: 200, body: '{"status":"confirmed"}' }), 'Your email is confirmed', 'ok'],
+    ['already confirmed', () => ({ status: 200, body: '{"status":"already_confirmed"}' }), 'already confirmed', 'ok'],
+    ['invalid or expired', () => ({ status: 400, body: '{"error":"invalid_or_expired"}' }), 'invalid or has expired', 'warn'],
+  ]) {
+    const { page, ctx, log } = await openPage({ width: 390, height: 844, query: hash('confirm', CTOKEN), api });
+    await page.click('#verify-button');
+    await page.waitForFunction(() => document.getElementById('verify-status').textContent.length > 0);
+    const call = log.apiCalls[0] || {};
+    const body = JSON.parse(call.body || '{}');
+    const ui = await page.evaluate(() => [document.getElementById('verify-status').textContent, document.getElementById('verify-status').dataset.tone, document.getElementById('verify-button').hidden]);
+    check(`/confirm: explicit click → one JSON POST {action, id, token} without Referer → "${label}" shown`, log.apiCalls.length === 1 && call.method === 'POST' && call.url === API_URL && call.headers['content-type'] === 'application/json' && !call.headers.referer && body.action === 'confirm' && body.id === ID && body.token === CTOKEN && Object.keys(body).length === 3 && ui[0].includes(expect) && ui[1] === tone && ui[2] === true, ui[0]);
+    await ctx.close();
+  }
+  {
+    let n = 0;
+    const { page, ctx, log } = await openPage({ width: 1280, query: hash('confirm', CTOKEN), api: () => (n++ === 0 ? { status: 503, body: '{"error":"temporarily_unavailable"}' } : { status: 200, body: '{"status":"confirmed"}' }) });
+    await page.click('#verify-button');
+    await page.waitForFunction(() => document.getElementById('verify-status').dataset.tone === 'error');
+    const retryable = await page.evaluate(() => [document.getElementById('verify-button').disabled, document.getElementById('verify-button').hidden, document.getElementById('verify-status').textContent]);
+    await page.click('#verify-button');
+    await page.waitForFunction(() => document.getElementById('verify-status').dataset.tone === 'ok');
+    check('/confirm: a server error says nothing changed and allows a retry, which then succeeds', retryable[0] === false && retryable[1] === false && retryable[2].includes('nothing has been changed') && log.apiCalls.length === 2, retryable[2]);
+    await ctx.close();
+  }
+  for (const [label, q] of [['no token', 'confirm'], ['malformed token', `confirm#id=${ID}&token=short`], ['bad id', `confirm#id=x&token=${CTOKEN}`], ['legacy query string', `confirm?id=${ID}&token=${CTOKEN}`]]) {
+    const { page, ctx, log } = await openPage({ width: 1280, query: q });
+    await page.waitForTimeout(200);
+    const ui = await page.evaluate(() => [document.getElementById('verify-status').textContent, document.getElementById('verify-button').hidden, location.href]);
+    check(`/confirm with ${label}: explains the problem, offers no button, sends nothing, URL cleaned`, ui[0].includes('incomplete or damaged') && ui[1] === true && log.apiCalls.length === 0 && !ui[2].includes('token'), ui[0].slice(0, 80));
+    await ctx.close();
+  }
+  {
+    const { page, ctx, log } = await openPage({ width: 1280, query: hash('confirm', CTOKEN), configOverride: 'window.TURNLINE_CONFIG={apiUrl:"",turnstileSiteKey:""};' });
+    await page.waitForTimeout(200);
+    check('/confirm with signups rolled back (empty apiUrl): says unavailable, nothing sent', (await page.textContent('#verify-status')).includes('temporarily unavailable') && log.apiCalls.length === 0);
+    await ctx.close();
+  }
+  {
+    const { page, ctx, log } = await openPage({ width: 1280, query: hash('unsubscribe', UTOKEN), api: () => ({ status: 200, body: '{"status":"unsubscribed"}' }) });
+    await page.waitForTimeout(200);
+    const before = log.apiCalls.length;
+    await page.click('#verify-button');
+    await page.waitForFunction(() => document.getElementById('verify-status').dataset.tone === 'ok');
+    const body = JSON.parse(log.apiCalls[0]?.body || '{}');
+    check('/unsubscribe: opening sends nothing; explicit click POSTs {action:"unsubscribe", id, token} and confirms', before === 0 && log.apiCalls.length === 1 && body.action === 'unsubscribe' && body.id === ID && body.token === UTOKEN && (await page.textContent('#verify-status')).includes('You are unsubscribed') && !(await page.evaluate(() => location.href)).includes('token'));
+    await ctx.close();
+  }
+  {
+    const { page, ctx, log } = await openPage({ width: 1280, query: hash('unsubscribe', UTOKEN), api: () => ({ status: 400, body: '{"error":"invalid_or_expired"}' }) });
+    await page.click('#verify-button');
+    await page.waitForFunction(() => document.getElementById('verify-status').textContent.length > 0);
+    check('/unsubscribe: an invalid link is reported with a support route', (await page.textContent('#verify-status')).includes('support@turnlineops.com') && log.apiCalls.length === 1);
+    await ctx.close();
+  }
+  {
+    // Serve /confirm with the production CSP from _headers (the local server does not apply _headers).
+    const csp = /\/confirm\n[^/]*?Content-Security-Policy: ([^\n]+)/.exec(headers)[1];
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await ctx.newPage();
+    const violations = [];
+    page.on('console', (m) => { if (/Content Security Policy|Refused to/i.test(m.text())) violations.push(m.text()); });
+    let posted = 0;
+    await page.route('**/*', async (route) => {
+      const url = route.request().url();
+      if (url.startsWith(`${BASE}/confirm`)) { const r = await route.fetch(); return route.fulfill({ response: r, headers: { ...r.headers(), 'content-security-policy': csp } }); }
+      if (url.startsWith(BASE)) return route.continue();
+      if (API_URL && url.startsWith(API_URL)) { posted++; return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': BASE }, body: '{"status":"confirmed"}' }); }
+      return route.abort();
+    });
+    await page.goto(`${BASE}/${hash('confirm', CTOKEN)}`, { waitUntil: 'load' });
+    const styled = await page.evaluate(() => getComputedStyle(document.querySelector('.verify-card')).borderRadius !== '0px');
+    await page.click('#verify-button');
+    await page.waitForFunction(() => document.getElementById('verify-status').dataset.tone === 'ok');
+    check('/confirm under the enforced production CSP: styles and script load, the POST is allowed, no violations', styled && posted === 1 && violations.length === 0, violations.join(' | '));
+    await ctx.close();
+  }
+  for (const name of ['confirm', 'unsubscribe']) {
+    const { page, ctx, log } = await openPage({ width: 1280, js: false, query: hash(name, name === 'confirm' ? CTOKEN : UTOKEN) });
+    const noscript = await page.evaluate(() => document.querySelector('noscript') ? document.querySelector('noscript').textContent : '');
+    check(`/${name} without JavaScript: explains that nothing changed and how to recover; the button stays disabled`, (await page.locator('noscript').count()) === 1 && /nothing has been changed/.test(await page.content()) && (await page.isDisabled('#verify-button')) && log.apiCalls.length === 0, noscript.slice(0, 60));
+    await ctx.close();
+    for (const width of [320, 768]) {
+      const r = await openPage({ width, query: hash(name, name === 'confirm' ? CTOKEN : UTOKEN) });
+      const [sw, iw] = await r.page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
+      check(`/${name}: no horizontal scroll at ${width}px`, sw <= iw, `scrollWidth ${sw}, viewport ${iw}`);
+      await r.ctx.close();
+    }
+  }
 }
 
 // ---------- 6. optional: real Cloudflare Turnstile with the public always-pass TEST key ----------

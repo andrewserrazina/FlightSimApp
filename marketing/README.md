@@ -127,14 +127,22 @@ without a separate release step, so merge marketing PRs only with explicit owner
   fictional values. Each one is labelled as a concept. Never replace them with images presented as real software.
 - **No third-party logos.** Provider names are plain text, with a non-affiliation disclaimer.
 
+### Confirmation and unsubscribe pages
+- `confirm.html` and `unsubscribe.html` (served as `/confirm` and `/unsubscribe`), with `assets/verify.js`.
+- Email links carry `#id=…&token=…` in the fragment. The page strips it from the URL and POSTs
+  `{action, id, token}` to `apiUrl` only when the user clicks.
+- `_headers` gives these paths `no-store`, `no-referrer` and an enforced CSP.
+- Details, the rollout order and the manual acceptance procedure are in
+  `docs/testing/waitlist-first-party-confirmation.md`.
+
 ### Waitlist contract (unchanged from V1; do not change without the backend)
 - `config.js` provides `window.TURNLINE_CONFIG = { apiUrl, turnstileSiteKey }`. Both values are public. An empty
   `apiUrl` is the documented rollback, and the page then shows "Signups are not open yet".
 - The form POSTs JSON `{email, consent:true, captcha, source:'turnline_waitlist', utm_source, utm_medium,
   utm_campaign}`, with the UTM values capped at 100 characters. The Turnstile container `#turnstile` must stay
   inside `#signup`.
-- The edge function redirects back to `/?waitlist=confirmed|unsubscribed|invalid|error#early-access`. The
-  `#early-access` id must not change.
+- Older function versions redirected back to `/?waitlist=confirmed|unsubscribed|invalid|error#early-access`. The
+  homepage still shows those messages, and the `#early-access` id must not change.
 - V2 client-side additions:
   - messages for `error`, 429 and 400
   - a duplicate-submit guard

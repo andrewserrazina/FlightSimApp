@@ -6,3 +6,22 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
   X-Robots-Tag: noindex, nofollow
   Content-Security-Policy-Report-Only: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://challenges.cloudflare.com; connect-src 'self' https://itapyrwjijnvzdsatttp.supabase.co https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; font-src 'self' data:; upgrade-insecure-requests
+
+# Email confirmation / unsubscribe pages carry a token in the URL fragment: never cache them, never send a referrer,
+# and enforce a strict CSP (no inline code on these pages; the only connection is the waitlist function).
+/confirm
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://itapyrwjijnvzdsatttp.supabase.co; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+/confirm.html
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://itapyrwjijnvzdsatttp.supabase.co; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+/unsubscribe
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://itapyrwjijnvzdsatttp.supabase.co; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+/unsubscribe.html
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://itapyrwjijnvzdsatttp.supabase.co; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
