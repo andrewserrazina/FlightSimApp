@@ -1,6 +1,15 @@
 # S2-05: GSX-connected turnaround and ground-expense ledger
 
-Status: **vertical slice implemented and awaiting owner acceptance on MSFS 2020 + GSX Pro.**
+Status: **vertical slice implemented; owner acceptance on MSFS 2020 + GSX Pro partially run (2026-10-18), merge
+approved.**
+- **Passed on real MSFS 2020 + GSX Pro:**
+  - live GSX feed;
+  - boarding, refueling, pushback and deboarding states observed;
+  - departure turnaround history preserved;
+  - a real GSX Fuel receipt parsed with its currency confirmed, and USD 2,912.46 associated with the completed flight;
+  - the expense survived a restart, and a re-scan found 0 new receipts.
+- The remaining checklist rows are **pending**. See the
+  [acceptance record](../testing/s2-05-gsx-turnaround-acceptance.md#owner-acceptance-record-2026-10-18-msfs-2020--gsx-pro).
 - **Delivered in focused PRs:**
   - #17: live GSX feed;
   - #18: SQLite store and Tauri commands;
@@ -125,6 +134,14 @@ Triggers enforce immutability, no deletion, link-once and final states.
    are kept and cannot be deleted from the UI.
 2. GSX values other than deboarding 1/4/5/6 still need observation on real GSX (see the acceptance checklist).
 3. Only GSX Fuel receipts are parsed. Catering, handling and bus receipts need real redacted samples.
+
+### A.7 Follow-ups (tracked, not started)
+
+1. Automatic OUT milestone when GSX pushback enters In Progress (state 5).
+2. Expandable live Turnaround service history.
+3. Receipt queue filtering and search.
+4. Archived receipt deletion controls (owner decision 4; see A.6).
+5. Remaining GSX service, restart and financial edge-case acceptance tests.
 
 ## 0.1 Owner decisions and required refinements (Phase A; see section A for what was built)
 
