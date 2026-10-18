@@ -130,7 +130,7 @@ pub struct ManualExpense {
 
 /// How to resolve a receipt flagged as a possible revision when turning it into an expense.
 #[derive(Debug, Clone, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase", tag = "kind")]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "kind")]
 pub enum RevisionResolution {
     /// Replaces this active expense of an earlier receipt (it becomes superseded).
     Supersedes { expense_id: String },
