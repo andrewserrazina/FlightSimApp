@@ -219,3 +219,123 @@ pub async fn flight_milestone_record(store: State<'_, StoreHandle>, flight_id: S
 pub async fn flight_milestones(store: State<'_, StoreHandle>, flight_id: String) -> Result<Vec<MilestoneOut>, StoreError> {
     store.call(move |slot| slot.get()?.milestones(&flight_id)).await
 }
+
+// --- S2-05: GSX turnarounds, receipts and the simulated expense ledger ---
+
+use super::ledger::{ExpenseOut, ImportReport, ManualExpense, ReceiptOut, RevisionResolution};
+use super::turnaround::{TurnaroundOpen, TurnaroundOut};
+use crate::receipts::scan::{self, RootStatus, ScanResult};
+
+#[tauri::command]
+pub async fn turnaround_open(store: State<'_, StoreHandle>, request: TurnaroundOpen) -> Result<TurnaroundOut, StoreError> {
+    store.call(move |slot| slot.get()?.turnaround_open(&request)).await
+}
+
+#[tauri::command]
+pub async fn turnaround_current(store: State<'_, StoreHandle>) -> Result<Option<TurnaroundOut>, StoreError> {
+    store.call(|slot| slot.get()?.turnaround_current()).await
+}
+
+#[tauri::command]
+pub async fn turnaround_get(store: State<'_, StoreHandle>, id: String) -> Result<TurnaroundOut, StoreError> {
+    store.call(move |slot| slot.get()?.turnaround_get(&id)).await
+}
+
+#[tauri::command]
+pub async fn turnarounds_for_flight(store: State<'_, StoreHandle>, flight_id: String) -> Result<Vec<TurnaroundOut>, StoreError> {
+    store.call(move |slot| slot.get()?.turnarounds_for_flight(&flight_id)).await
+}
+
+#[tauri::command]
+pub async fn turnarounds_recent(store: State<'_, StoreHandle>, limit: Option<i64>) -> Result<Vec<TurnaroundOut>, StoreError> {
+    store.call(move |slot| slot.get()?.turnarounds_recent(limit.unwrap_or(20))).await
+}
+
+/// A valid GSX observation from the bridge feed; unchanged states are not recorded twice.
+#[tauri::command]
+pub async fn turnaround_record_gsx(store: State<'_, StoreHandle>, id: String, service: String, state: String, raw: f64, observed_at_utc: String) -> Result<bool, StoreError> {
+    store.call(move |slot| slot.get()?.turnaround_record_gsx(&id, &service, &state, raw, &observed_at_utc)).await
+}
+
+#[tauri::command]
+pub async fn turnaround_record_feed(store: State<'_, StoreHandle>, id: String, feed: String) -> Result<bool, StoreError> {
+    store.call(move |slot| slot.get()?.turnaround_record_feed(&id, &feed)).await
+}
+
+#[tauri::command]
+pub async fn turnaround_record_manual(store: State<'_, StoreHandle>, id: String, service: String, status: String, note: String) -> Result<TurnaroundOut, StoreError> {
+    store.call(move |slot| slot.get()?.turnaround_record_manual(&id, &service, &status, &note)).await
+}
+
+#[tauri::command]
+pub async fn turnaround_set_status(store: State<'_, StoreHandle>, id: String, action: String, reason: Option<String>) -> Result<TurnaroundOut, StoreError> {
+    store.call(move |slot| slot.get()?.turnaround_set_status(&id, &action, reason.as_deref())).await
+}
+
+#[tauri::command]
+pub async fn turnaround_mark_restarted(store: State<'_, StoreHandle>) -> Result<Option<TurnaroundOut>, StoreError> {
+    store.call(|slot| slot.get()?.turnaround_mark_restarted()).await
+}
+
+#[tauri::command]
+pub async fn turnaround_link_flight(store: State<'_, StoreHandle>, id: String, flight_id: String) -> Result<TurnaroundOut, StoreError> {
+    store.call(move |slot| slot.get()?.turnaround_link_flight(&id, &flight_id)).await
+}
+
+/// Scan GSX's own Receipts folder (fixed location, read-only; no path is accepted from the UI) and import
+/// new content.
+#[tauri::command]
+pub async fn receipts_scan(store: State<'_, StoreHandle>) -> Result<ImportReport, StoreError> {
+    let result = tauri::async_runtime::spawn_blocking(|| match scan::default_root() {
+        Some(root) => scan::scan(&root),
+        None => ScanResult { root_status: RootStatus::NotFound, detail: Some("The GSX Receipts folder is only available on Windows.".into()), files: vec![], skipped: vec![], truncated: false },
+    })
+    .await
+    .map_err(|e| StoreError::invalid(format!("The receipts scan failed: {e}")))?;
+    store.call(move |slot| slot.get()?.receipts_import(result)).await
+}
+
+#[tauri::command]
+pub async fn receipts_list(store: State<'_, StoreHandle>) -> Result<Vec<ReceiptOut>, StoreError> {
+    store.call(|slot| slot.get()?.receipts_list()).await
+}
+
+#[tauri::command]
+pub async fn receipt_confirm_currency(store: State<'_, StoreHandle>, receipt_id: String, currency: String, note: Option<String>, supersede: Option<bool>) -> Result<ReceiptOut, StoreError> {
+    store.call(move |slot| slot.get()?.receipt_confirm_currency(&receipt_id, &currency, note.as_deref(), supersede == Some(true))).await
+}
+
+#[tauri::command]
+pub async fn receipt_associate(store: State<'_, StoreHandle>, receipt_id: String, flight_id: Option<String>, turnaround_id: Option<String>) -> Result<ReceiptOut, StoreError> {
+    store.call(move |slot| slot.get()?.receipt_associate(&receipt_id, flight_id.as_deref(), turnaround_id.as_deref())).await
+}
+
+#[tauri::command]
+pub async fn receipt_dismiss(store: State<'_, StoreHandle>, receipt_id: String) -> Result<ReceiptOut, StoreError> {
+    store.call(move |slot| slot.get()?.receipt_dismiss(&receipt_id)).await
+}
+
+#[tauri::command]
+pub async fn expense_create_from_receipt(store: State<'_, StoreHandle>, receipt_id: String, resolution: Option<RevisionResolution>) -> Result<ExpenseOut, StoreError> {
+    store.call(move |slot| slot.get()?.expense_create_from_receipt(&receipt_id, resolution)).await
+}
+
+#[tauri::command]
+pub async fn expense_create_manual(store: State<'_, StoreHandle>, expense: ManualExpense) -> Result<ExpenseOut, StoreError> {
+    store.call(move |slot| slot.get()?.expense_create_manual(&expense)).await
+}
+
+#[tauri::command]
+pub async fn expense_void(store: State<'_, StoreHandle>, id: String, reason: String) -> Result<ExpenseOut, StoreError> {
+    store.call(move |slot| slot.get()?.expense_void(&id, &reason)).await
+}
+
+#[tauri::command]
+pub async fn expense_associate(store: State<'_, StoreHandle>, id: String, flight_id: Option<String>, turnaround_id: Option<String>) -> Result<ExpenseOut, StoreError> {
+    store.call(move |slot| slot.get()?.expense_associate(&id, flight_id.as_deref(), turnaround_id.as_deref())).await
+}
+
+#[tauri::command]
+pub async fn expenses_list(store: State<'_, StoreHandle>, flight_id: Option<String>) -> Result<Vec<ExpenseOut>, StoreError> {
+    store.call(move |slot| slot.get()?.expenses_list(flight_id.as_deref())).await
+}
