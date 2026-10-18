@@ -99,6 +99,8 @@ export class MemoryOpsStore implements OpsStore {
   totals = new Map<string, number>();
   recordingFlightId: string | null = null;
   failNext: string | null = null;
+  /** Fail the next N calls of one method (e.g. { method: "recordGsx", message: "disk full", times: 1 }). */
+  failMethod: { method: string; message: string; times: number } | null = null;
   calls: string[] = [];
   private seq = 0;
   private clock = Date.parse("2026-10-17T16:00:00Z");
@@ -107,6 +109,10 @@ export class MemoryOpsStore implements OpsStore {
 
   private enter(name: string) {
     this.calls.push(name);
+    if (this.failMethod?.method === name && this.failMethod.times > 0) {
+      this.failMethod.times--;
+      throw new Error(this.failMethod.message);
+    }
     if (this.failNext) {
       const m = this.failNext;
       this.failNext = null;

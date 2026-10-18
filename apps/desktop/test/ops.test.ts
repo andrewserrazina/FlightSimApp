@@ -10,11 +10,11 @@ import { flush } from "./support";
 
 const AT = "2026-10-17T16:40:05.000Z";
 
-function feed(status: GsxFeedView["status"], states: Partial<Record<string, [GsxServiceView["state"], number, GsxServiceView["quality"]?]>> = {}): GsxFeedView {
+function feed(status: GsxFeedView["status"], states: Partial<Record<string, [GsxServiceView["state"], number, GsxServiceView["quality"]?]>> = {}, at = AT): GsxFeedView {
   return {
     status,
-    lastDataAt: AT,
-    observedAt: AT,
+    lastDataAt: at,
+    observedAt: at,
     services: GSX_SERVICES.map((service) => {
       const s = states[service];
       return s ? { service, state: s[0], raw: s[1], quality: s[2] ?? "valid", detail: "" } : { service, state: null, raw: null, quality: "none", detail: "" };
@@ -132,7 +132,7 @@ describe("GSX observations into the turnaround", () => {
     store.failNext = "disk full";
     ops.observeGsx(feed("live", { boarding: ["requested", 4] }));
     await settle();
-    expect(ops.getView().gsxRecordError).toBe("disk full");
+    expect(ops.getView().gsxRecordError).toContain("disk full");
   });
 
   it("without a local store everything is unavailable and nothing throws", async () => {
@@ -152,5 +152,113 @@ describe("servicing readiness (advisory)", () => {
     await ops.recordManual(id(), "catering", "not_required", "No catering on this leg");
     const r = readiness(store.turnarounds[0]!);
     expect(r).toEqual({ done: ["boarding", "catering"], pending: ["refueling"] });
+  });
+});
+
+describe("failed GSX writes stay retryable (no history lost, nothing doubled)", () => {
+  const T1 = "2026-10-17T16:40:05.000Z";
+  const T2 = "2026-10-17T16:40:06.000Z";
+  const T3 = "2026-10-17T16:40:07.000Z";
+  const gsxEvents = (s: MemoryOpsStore) => s.turnarounds[0]!.events.map((e) => [e.service, e.gsxState, e.observedAtUtc]);
+
+  it("a failed first state write is retried with its original observation time and stored once", async () => {
+    const { store, ops } = await withOpenTurnaround();
+    store.failMethod = { method: "recordGsx", message: "disk full", times: 1 };
+    ops.observeGsx(feed("live", { boarding: ["requested", 4] }, T1));
+    await settle();
+    expect(gsxEvents(store)).toEqual([]);
+    expect(ops.getView().gsxRecordError).toContain("disk full");
+    expect(ops.pendingObservations).toBe(1);
+
+    // Next tick, same reading: before the fix this was suppressed as a duplicate and lost.
+    ops.observeGsx(feed("live", { boarding: ["requested", 4] }, T2));
+    await settle();
+    expect(gsxEvents(store)).toEqual([["boarding", "requested", T1]]);
+    expect(ops.getView().gsxRecordError).toBeNull();
+    expect(ops.pendingObservations).toBe(0);
+
+    ops.observeGsx(feed("live", { boarding: ["requested", 4] }, T3));
+    await settle();
+    expect(gsxEvents(store)).toEqual([["boarding", "requested", T1]]);
+    expect(store.calls.filter((c) => c === "recordGsx")).toHaveLength(2);
+  });
+
+  it("a failed feed-state write is retried, and later feed changes follow in order", async () => {
+    const { store, ops } = await withOpenTurnaround();
+    store.failMethod = { method: "recordFeed", message: "database locked", times: 1 };
+    ops.observeGsx(feed("stale"));
+    await settle();
+    expect(store.turnarounds[0]!.feedLog).toEqual([]);
+    expect(ops.getView().gsxRecordError).toContain("database locked");
+
+    ops.observeGsx(feed("stale"));
+    await settle();
+    ops.observeGsx(feed("not_detected"));
+    await settle();
+    expect(store.turnarounds[0]!.feedLog.map((f) => f.feed)).toEqual(["stale", "not_detected"]);
+    expect(ops.getView().gsxRecordError).toBeNull();
+  });
+
+  it("observations made while a failed write is pending are stored after it, in the order seen", async () => {
+    const { store, ops } = await withOpenTurnaround();
+    store.failMethod = { method: "recordGsx", message: "disk full", times: 2 };
+    ops.observeGsx(feed("live", { boarding: ["requested", 4] }, T1));
+    await settle();
+    ops.observeGsx(feed("live", { boarding: ["being_performed", 5] }, T2));
+    await settle();
+    expect(gsxEvents(store)).toEqual([]);
+    expect(ops.pendingObservations).toBe(2);
+
+    ops.observeGsx(feed("live", { boarding: ["being_performed", 5] }, T3));
+    await settle();
+    expect(gsxEvents(store)).toEqual([
+      ["boarding", "requested", T1],
+      ["boarding", "being_performed", T2],
+    ]);
+    expect(ops.pendingObservations).toBe(0);
+  });
+
+  it("a partly stored observation retries only what failed", async () => {
+    const { store, ops } = await withOpenTurnaround();
+    store.failMethod = { method: "recordGsx", message: "disk full", times: 1 };
+    ops.observeGsx(feed("live", { catering: ["completed", 6] }, T1));
+    await settle();
+    expect(store.turnarounds[0]!.feedLog.map((f) => f.feed)).toEqual(["live"]);
+    ops.observeGsx(feed("live", { catering: ["completed", 6] }, T2));
+    await settle();
+    expect(store.calls.filter((c) => c === "recordFeed")).toHaveLength(1);
+    expect(gsxEvents(store)).toEqual([["catering", "completed", T1]]);
+  });
+
+  it("a write that committed but reported failure is not doubled on retry", async () => {
+    const { store, ops } = await withOpenTurnaround();
+    const real = store.recordGsx.bind(store);
+    let first = true;
+    store.recordGsx = async (...args) => {
+      const r = await real(...args);
+      if (first) {
+        first = false;
+        throw new Error("connection reset after commit");
+      }
+      return r;
+    };
+    ops.observeGsx(feed("live", { pushback: ["requested", 4] }, T1));
+    await settle();
+    ops.observeGsx(feed("live", { pushback: ["requested", 4] }, T2));
+    await settle();
+    expect(gsxEvents(store)).toEqual([["pushback", "requested", T1]]);
+    expect(ops.getView().gsxRecordError).toBeNull();
+  });
+
+  it("pending observations of a turnaround finished meanwhile are dropped, not retried forever", async () => {
+    const { store, ops, id } = await withOpenTurnaround();
+    store.failMethod = { method: "recordGsx", message: "disk full", times: 1 };
+    ops.observeGsx(feed("live", { boarding: ["requested", 4] }, T1));
+    await settle();
+    await ops.setTurnaroundStatus(id(), "close", null);
+    ops.observeGsx(feed("live", { boarding: ["requested", 4] }, T2));
+    await settle();
+    expect(ops.pendingObservations).toBe(0);
+    expect(gsxEvents(store)).toEqual([]);
   });
 });
