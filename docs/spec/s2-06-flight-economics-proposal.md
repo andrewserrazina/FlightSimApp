@@ -1,311 +1,395 @@
-# S2-06: Automated flight economics (proposal)
+# S2-06: Automated flight economics (proposal, revision 2)
 
-Status: **proposal for owner review. No code yet.** Nothing here is merged or enabled without owner approval.
-Builds on S2-05 as merged (#17, #18, #19, #20).
+Status: **revised proposal for owner review. Feature implementation not started.** Nothing is merged or enabled
+without owner approval. Builds on S2-05 as merged (#17–#20).
 
-Every amount in this document is a **simulated** operating figure for a virtual airline. No figure is presented as a
-real tariff, a real fare or an operator invoice. GSX invoices are simulator documents: Turnline treats them as
-"invoiced" within the simulation, never as real money.
+**Revision 2** (owner review of revision 1, 2026-10-18):
+- **Decisions:** D1, D2, D4 (AUTO initially disabled), D5, D7 (USD), D8, D10 and D12 approved; D13 approved with
+  arming, once-only and correction rules.
+- **D3:** provisionally validated against two real Fuel receipts; a strict parser is in its own PR.
+- **D9 redesigned:** fuel purchases are separated from consumed-fuel cost.
+- **match-v1 strengthened:** a planned registration can never qualify an automatic match.
 
-## 0. What the merged code gives us (evidence inventory)
+Every amount here is a **simulated** operating figure for a virtual airline. No figure is presented as a real
+tariff, a real fare or an operator invoice. GSX invoices are simulator documents: "invoiced" means invoiced inside
+the simulation.
 
-What exists today determines what can be matched and costed honestly.
+## 0. Evidence inventory (merged code plus approved additions)
 
-| Evidence | Where it comes from today | Quality |
-|---|---|---|
-| Flight start/end, takeoff, landing (UTC) | Recorder (`flights`), detected from telemetry | Observed |
-| OUT / IN | Pilot-recorded milestones (S2-02) | Manual |
-| Aircraft title, ICAO type | Telemetry `aircraft.title`, `aircraft.icao_type` | Observed |
-| Aircraft **registration** | Only the SimBrief plan (`plan.aircraft.registration`) | **Planned**, not observed |
-| Departure / arrival airport | `flights.origin_icao` and `destination_icao` exist but are **always null** ("no source yet"). Plan snapshot origin/destination (planned); turnaround airport (plan or user) | Planned / manual |
-| Position track | Telemetry `lat_deg`/`lon_deg` samples. No airport reference data in the repo to turn a position into an ICAO code | Observed, unmapped |
-| Planned pax, payload, cargo | SimBrief `weights.pax_count` (parsed), `weights.payload` (parsed), `weights.cargo` (present in the OFP, **not parsed**) | Planned |
-| Seats, MTOW | Not parsed. Real SimBrief OFPs carry `aircraft.max_passengers` and `weights.max_tow`; to be verified against a real OFP | Planned (OFP) |
-| Distance | `plan.route.airDistanceNm` (route air distance); navlog | Planned |
-| Fuel on board | Telemetry `total_fuel_kg` (may be unavailable per aircraft) | Observed |
-| GSX service states with times | `turnaround_service_events` (live, valid, owner-verified for the services listed in the acceptance record) | Observed |
-| GSX Fuel receipt | Parsed: receipt number, provider, airport (ICAO), printed date, aircraft registration and type, lines, total, currency recognition | Invoiced (simulated) |
-| Receipt **issue time** | Not parsed as a field. The receipt number on the real KBOS receipt is `GSX-20261017T164423Z-KBOS`, which looks like an embedded UTC timestamp. One sample: **unconfirmed format** | Candidate evidence |
-| Catering / Handling / PassengerBus receipts | Imported but `unsupported_format` (no samples) | None |
+| Evidence | Source | Quality | Status |
+|---|---|---|---|
+| Flight start/end, takeoff, landing (UTC) | Recorder, from telemetry | Observed | Exists |
+| OUT / IN | Pilot-recorded milestones (S2-02); OUT also from GSX pushback 5 under D13 (§7) | Manual / observed | Exists / planned |
+| Aircraft title, ICAO type | Telemetry | Observed | Exists |
+| Aircraft registration (ATC ID) | Bridge reads the `ATC ID` SimVar as an optional read-only identity reading | Observed | **D2 approved**, PR 2c |
+| Planned registration | SimBrief plan | **Planned** | Exists. **Never sufficient for AUTO** (§2) |
+| Departure / arrival airport | Bundled public-domain airport reference subset + on-ground positions near OUT/IN; also plan, turnaround and user | Observed / planned / manual | **D1 approved**, PR 2b |
+| Fuel on board (FOB) | Telemetry `total_fuel_kg` (may be unavailable per aircraft) | Observed | Exists |
+| GSX service states with times | `turnaround_service_events` | Observed | Exists |
+| Fuel receipt uplift quantity | Parsed gallons / lb / kg (cross-checked by the S2-05 parser) | Invoiced | Exists |
+| Receipt-number timestamp | `GSX-YYYYMMDDTHHMMSSZ-ICAO`, seen on two real **Fuel** receipts (`…20261017T164423Z-KBOS`, `…20261018T162650Z-KBOS`) | Provisional | **D3 provisionally validated**, parser in its own PR (§2.1) |
+| Planned pax, payload, cargo, seats, MTOW | SimBrief OFP: `pax_count` and `payload` parsed; `cargo`, `max_passengers`, `max_tow` to be parsed (verify on a real OFP) | Planned | PR 4 |
+| Catering / Handling / PassengerBus receipts | Imported as `unsupported_format` | None | **D11:** needs real redacted samples |
 
-Three gaps block strict automatic matching: no observed registration, no observed airport, and an unconfirmed
-receipt time. The plan below closes them before any automation is enabled (§6, PR 2).
-
-## 1. Schema and data-flow architecture
+## 1. Architecture
 
 ### 1.1 Data flow
 
 ```
 GSX Receipts folder (read-only)
-   │  (a) file-system notifications  +  (b) reconciliation scan: app start, every 5 min, flight close, turnaround close
-   ▼
-ReceiptWatcher (Rust, off the store thread)
-   • candidate file → stability gate (size + mtime unchanged on 2 polls ≥ 3 s apart, readable, ≤ 2 MB)
-   • read once → SHA-256 → existing import (dedup by exact SHA-256; original bytes kept; never written back)
-   ▼
-gsx_receipts (S2-05) ──► ReceiptEvidence (derived: issue time + source, airport, registration, type, service group)
-                                  │
-FlightEvidence (derived per flight and side):                  │
-  airports (position | plan | turnaround | user),              ▼
-  times (OUT/OFF/ON/IN, turnaround window),            Matcher v1 (pure, policy-versioned)
-  registration (observed ATC ID | plan),     ───────►  candidates → evidence → decision:
-  GSX service events                                   AUTO | SUGGESTED | AMBIGUOUS | NONE
-                                                               │
-                                     receipt_match_runs (evidence, explanation, policy version)
-                                     receipt_association_audit (every auto and manual change)
-                                                               │
-                                     expense (S2-05 rules) when the receipt is countable
-                                                               ▼
-Economics engine (pure, model-versioned): cost components + revenue lines
-  inputs: recorded flight, plan snapshot, expenses, aircraft profile, assumption set (immutable versions)
-  → component resolver (actual beats estimate, never both counted)
-  → economics_runs + economics_lines (persisted snapshot)  ──►  Debrief financial report
+  │ notifications + reconciliation scans (app start, every 5 min, flight close, turnaround close)
+  ▼
+ReceiptWatcher → stability gate → SHA-256 import (S2-05, unchanged) → gsx_receipts
+  │
+  ├─► ReceiptEvidence: receipt-number time (Fuel only, consistency-checked), airport, registration,
+  │                    type, group → side, uplift quantity
+  │
+FlightEvidence: observed airports (positions + airport reference), observed ATC ID, OUT/OFF/ON/IN,
+                turnaround windows, GSX service events, FOB samples around refuelling
+  │
+  ▼
+Matcher match-v1 (pure, versioned; AUTO disabled until accepted)
+  → receipt_match_runs (immutable, with explanation) + receipt_association_audit
+  │
+  ▼
+Fuel receipts → FUEL PURCHASES (cash / inventory)           Other receipts → operating expenses (when parsers exist)
+  │                                                          │
+  ▼                                                          │
+Fuel inventory per aircraft (weighted-average cost)          │
+  ▲ consumption: recorded burn, with fallbacks (§3.2)        │
+  │                                                          ▼
+Economics engine (model-versioned) → OPERATING view: consumed fuel + other components + revenue
+                                   → CASH view: purchases (fuel uplift, invoices) — informational
+  → economics_runs + economics_lines (persisted, reproducible) → Debrief
 ```
 
-**Matching triggers:** a receipt was imported; a flight closed; a turnaround closed or was linked; a reconciliation
-scan ran; the matching policy version changed (re-run as suggestions only, never re-assign automatically).
+### 1.2 Two views, never summed together
 
-**Restarts and delayed receipts:** GSX writes some invoices late (Handling "at takeoff", the last one "on quit").
-Matching anchors on **recorded** flight times, not on when the file arrived, so a receipt found after a restart or
-days later matches the same way. Runs are idempotent: one current run per receipt per policy version and input hash.
+- **Cash / purchases view.** What was bought: GSX fuel invoices (uplift at an airport), other invoices and manual
+  purchases. A fuel invoice is evidence of a **purchase**, not of what one flight consumed.
+- **Operating view (flight economics).** What a flight cost and earned: **consumed** fuel valued at inventory cost,
+  airport charges, crew, maintenance and so on, plus revenue.
 
-### 1.2 Schema (additive migrations 0007+, local only)
+Each line belongs to exactly one view (`economics_lines.view`). The Debrief shows both, labelled, and contribution
+uses the operating view only. A fuel purchase never adds to a flight's operating cost directly.
 
-| Table | Purpose | Key rules |
-|---|---|---|
-| `receipt_files` | Watcher bookkeeping: relative path, size, mtime, first seen, last seen, state (`pending_stable` / `imported` / `skipped` / `vanished`), sha256 | Lets restarts resume, records the first-seen time (weak time evidence), and notes when GSX deletes a file (our copy is kept) |
-| `flight_airports` | Per flight and side: ICAO, source (`position` / `plan` / `turnaround` / `user`), distance from the airport reference point | Append-only; the user source wins in display; conflicts are shown |
-| `flight_aircraft_identity` | Observed ATC ID (registration) per flight, if D2 is approved | Observed only |
-| `receipt_match_runs` | receipt, policy version, run time, outcome, chosen flight/turnaround/side, candidates with per-candidate evidence (JSON), human-readable explanation | Immutable; a new run supersedes the old one |
-| `gsx_receipts` (add columns) | `association_source` (`none` / `auto` / `user`), `match_run_id` | A `user` association is never changed by automation |
-| `receipt_association_audit` | Every association change: before/after, actor (`system:matcher-v1` / `local`), policy version, reason, time | Append-only |
-| `aircraft_profiles` | Versioned: ICAO type, seats per cabin (F/J/W/Y), MTOW, engine count, crew complement, source (`ofp` / `user`) | Immutable versions |
-| `assumption_sets` | Versioned rates and revenue assumptions (JSON), base currency, fixed FX rates, airport overrides | Immutable once used by a run; editing creates a new version |
-| `flight_revenue_inputs` | Per-flight manifest per cabin, cargo kg, manual adjustments with notes | Append-only, audited |
-| `expenses` (add column) | `component` (§5); legacy rows mapped from category | Required for new rows |
-| `economics_runs` | flight, model version, assumption set id+version, aircraft profile id+version, resolved inputs (JSON), input hash, computed time, `current` / `superseded` | Reproducible: recomputing old runs yields identical lines |
-| `economics_lines` | run, component, kind (`cost` / `revenue`), basis (`invoiced` / `manual` / `estimated` / `allocated`), amount minor + currency, original amount + currency, FX used, counted (bool), covered-by line, provenance and confidence, formula id | Lines are never edited |
+### 1.3 Schema (additive migrations 0007+, local only)
 
-## 2. Evidence and confidence rules for automatic invoice matching (policy `match-v1`)
+| Table | Purpose and key rules |
+|---|---|
+| `receipt_files` | Watcher bookkeeping: path, size, mtime, first/last seen, state (`pending_stable` / `imported` / `skipped` / `vanished`), sha256 |
+| `airports_ref` | Bundled reference subset (ICAO, name, lat/lon, country), versioned by dataset date (D1) |
+| `flight_airports` | Per flight and side: ICAO, source (`position` / `turnaround` / `plan` / `user`), distance to the reference point. Append-only |
+| `flight_aircraft_identity` | Observed ATC ID per flight (D2), with first/last observed times |
+| `receipt_match_runs` | Receipt, policy version, run time, outcome, chosen flight/turnaround/side, per-candidate evidence (JSON), explanation text. Immutable |
+| `gsx_receipts` (+ columns) | `association_source` (`none` / `auto` / `user`), `match_run_id`. A user association is never changed by automation |
+| `receipt_association_audit` | Every association change with actor (`system:match-v1` / `local`), run id, before/after, reason. Append-only |
+| `expenses` (+ columns) | `component` (§5) and `ledger_class`: `operating` or `fuel_purchase` |
+| `fuel_purchases` | One row per fuel purchase (from an active `fuel_purchase` expense): aircraft key, airport, time, uplift kg (with original printed quantity and unit), amount + currency, receipt |
+| `fuel_inventory_events` | Append-only per aircraft key: `purchase`, `consumption`, `unbilled_adjustment`, `opening_balance`, each with kg, value (base currency), unit cost, source and confidence |
+| `aircraft_profiles` | Versioned: ICAO type, seats per cabin, MTOW, engines, crew complement, **assumed burn kg/h** (fallback only), source (`ofp` / `user`) |
+| `assumption_sets` | Versioned rates, revenue assumptions, base currency (USD, D7) and fixed FX rates. Immutable once used |
+| `flight_revenue_inputs` | Manifest per cabin, cargo kg, adjustments with notes. Append-only, audited |
+| `milestone_corrections` | Corrections of recorded OUT/IN (including auto OUT): original row kept, corrected time, actor, reason |
+| `economics_runs` | Flight, model versions, assumption set and profile versions, resolved inputs, input hash, `current` / `superseded`, stale flag |
+| `economics_lines` | Run, view (`operating` / `cash`), component, kind (`cost` / `revenue`), basis (`invoiced` / `manual` / `observed` / `planned` / `estimated` / `allocated`), amount minor + currency, original amount + currency, FX, counted, covered-by, formula id, provenance, confidence |
+
+**Aircraft key** for fuel inventory: the observed ATC ID when available, otherwise the aircraft profile plus title.
+Inventory is per simulated airframe: two different liveries of one type are separate airframes once they have
+different ATC IDs.
+
+## 2. Matching policy `match-v1` (strengthened)
 
 ### 2.1 Receipt evidence
 
-| Field | Source | Notes |
+| Field | Source | Rule |
 |---|---|---|
-| Airport | Parsed ICAO (`fields.airport`) | Required for any match |
-| Issue time | (1) UTC timestamp in the receipt number, only if it parses **and** agrees with the printed date; (2) otherwise first-seen time, as **weak** evidence | (1) needs owner confirmation (D3) |
-| Registration | Parsed `aircraft_registration` | As configured in the simulator; may differ from SimBrief |
-| Aircraft type | Parsed `aircraft_type` | Compared with the telemetry ICAO type |
-| Service group | Folder group (Fuel, Catering, Handling, PassengerBus) | Decides the side (below) |
+| Airport | Parsed ICAO | Required |
+| Receipt-number time | `GSX-YYYYMMDDTHHMMSSZ-ICAO` | Fuel layout only. Usable only when **Consistent**: the number's airport equals the printed airport, and its date equals the printed uplift date. Malformed, impossible or inconsistent numbers are never evidence |
+| First-seen time | Watcher | Can only **exclude** a candidate, never qualify one |
+| Registration | Parsed | Compared with the observed ATC ID first |
+| Uplift quantity | Parsed (gal / lb / kg, already cross-checked) | Used for fuel corroboration (E6) |
+| Group → side | Folder | Fuel, Catering, Handling → departure; PassengerBus → either; deboarding services → arrival |
 
-**Side by group:** Fuel, Catering and Handling (published at takeoff) → **departure** of a flight at that airport.
-PassengerBus → departure or arrival. Deboarding and arrival services → **arrival**. Fuel bought on arrival for the
-next leg is the next flight's departure cost.
+**Meaning of the timestamp (unvalidated).** Whether it is the invoice creation time or the service completion time
+is not yet known. It is called "receipt-number time", and the windows are wide enough not to depend on which it is.
+Real sessions will measure its offset from the GSX refuelling `completed` event before any window is narrowed.
 
-### 2.2 Candidates
+### 2.2 Candidates and windows
 
-Every recorded flight (open, completed or interrupted) whose service window lies within ±24 h of the receipt issue
-time, plus unlinked turnarounds. Never just the most recent flight.
+Every recorded flight (any status) whose service window is within ±24 h of the receipt-number time, plus unlinked
+turnarounds. Never just the most recent flight.
 
-**Service windows:**
-- **Departure:** from turnaround open (or flight start, if earlier) minus 3 h, to takeoff plus 45 min. If no
-  takeoff: to flight end.
-- **Arrival:** from landing to IN (or flight end) plus 3 h.
+**Windows:**
+- **Departure:** turnaround open (or flight start, if earlier) − 3 h → takeoff + 45 min. If no takeoff: flight end.
+- **Arrival:** landing → IN (or flight end) + 3 h.
 
 ### 2.3 Evidence per candidate
 
-| Id | Test | Strength |
+| Id | Test | Class |
 |---|---|---|
-| E1 | Receipt airport equals the candidate's side airport. Source: observed position (strong), turnaround or user (medium), plan (medium) | **required** |
-| E2 | Issue time inside the side's service window (receipt-number time only; first-seen time can only *exclude*, never qualify) | **required** |
-| E3 | Registration equals the observed ATC ID (strong) or the plan registration (medium) | qualifying |
-| E4 | A turnaround linked to the candidate recorded the matching GSX service (Fuel: refueling `completed`) at that airport within −90…+15 min of the issue time | qualifying (strong) |
-| E5 | Aircraft type equals the telemetry ICAO type | supporting |
-| X1 | Registration **differs** from an observed ATC ID, or the type differs | **disqualifying** |
-| X2 | Airport differs from an *observed* airport for that side | **disqualifying** |
+| E1o | Receipt airport equals the side airport from an **observed position** or a GSX-observed turnaround at that airport | location (strong) |
+| E1p | Receipt airport equals the side airport from the **plan or user** only | location (weak) |
+| E2 | Consistent receipt-number time inside the side window | time (required) |
+| E3o | Receipt registration equals the **observed** ATC ID | identity (strong) |
+| E3p | Receipt registration equals the **planned** registration | identity (weak) |
+| E4 | A turnaround linked to the candidate recorded the matching GSX service (Fuel: refuelling `completed`) at that airport within −120…+30 min of the receipt-number time | service (strong) |
+| E6 | Fuel quantity: the observed FOB increase across that refuelling (samples before refuelling started vs. after it completed) is within ±3 % or ±150 kg of the invoice uplift kg | quantity (strong) |
+| E5 | Receipt aircraft type equals the telemetry ICAO type | supporting |
+| X1 | Receipt registration differs from the observed ATC ID | disqualifying |
+| X2 | Receipt airport differs from the observed side airport | disqualifying |
+| X3 | Receipt type differs from the telemetry ICAO type | disqualifying |
 
 ### 2.4 Decision
 
-- **AUTO** (associate automatically) only if **exactly one** candidate satisfies E1 ∧ E2 ∧ (E3 ∨ E4), has no X, and
-  every other candidate fails E1 or E2.
-- **SUGGESTED** if exactly one candidate satisfies E1 ∧ E2 but lacks E3/E4, or rests only on medium evidence. It is
-  shown with its explanation; one click accepts it.
-- **AMBIGUOUS** if two or more candidates satisfy E1 ∧ E2. The receipt stays unassigned, with all candidates listed.
-- **NONE** otherwise.
-- **Explanation:** stored with the run in plain language, e.g. "Matched to flight 3f2a… departure KBOS: airport
-  KBOS = observed departure airport; receipt time 16:44Z inside window 15:10–17:35Z; registration N247TL = observed
-  ATC ID; GSX refueling completed 16:41Z."
+- **AUTO** (only when the owner enables it; off by default) requires all of the following:
+  - **E1o ∧ E2**;
+  - **at least two** of {E3o, E4, E6}, at least one of which is **E4 or E6** (service-level corroboration);
+  - no X evidence;
+  - every other candidate fails E1 or E2.
+  - **E1p and E3p never count toward AUTO.** A planned registration alone, or planned airport plus planned
+    registration, can at most produce **SUGGESTED**.
+- **SUGGESTED:** exactly one candidate satisfies (E1o ∨ E1p) ∧ E2 with no X, but AUTO is not met. Shown with its
+  explanation; one click accepts.
+- **AMBIGUOUS:** two or more candidates satisfy (E1o ∨ E1p) ∧ E2. Left unassigned, with all candidates and their
+  evidence listed.
+- **NONE:** otherwise.
 
-**User decisions win:** accepting, rejecting, reassigning or unassigning sets `association_source = user`, and the
-matcher never changes that receipt again. Every change is written to `receipt_association_audit`.
+**Explanations are preserved.** Every run stores per-candidate evidence and a plain-language explanation, for
+example:
+> Suggested: flight 3f2a… departure KBOS.
+> ✓ airport KBOS = observed departure airport (0.4 nm from the reference point)
+> ✓ receipt-number time 16:44:23Z inside 15:10–17:35Z
+> ✓ GSX refuelling completed 16:41Z
+> ✗ registration N247TL could not be checked: no observed ATC ID
+> ✗ FOB increase unavailable (fuel not reported)
+> → AUTO not met: needs 2 of {observed registration, GSX service, fuel quantity}.
 
-**Expense creation:** an AUTO or accepted match creates the invoiced expense **only if the receipt is countable**
-(verified explicit currency, or a per-receipt confirmed currency, as today). Symbol-only receipts are matched but
-wait for confirmation, shown as "Matched to flight X · confirm currency to count".
+Runs are immutable. A user correction never deletes the run that preceded it; the audit links them.
 
-**Tests before enabling:** a golden table of scenarios, including two flights from the same airport on the same day,
-a delayed "on quit" receipt, a restart between service and file, a registration conflict, a missing receipt time,
-departure versus arrival, the same airport for arrival and the next departure, and GSX deleting files. The policy
-ships with AUTO **disabled** until the owner approves the results (D4).
+**User decisions win.** Accept, reject, reassign or unassign sets `association_source = user`, and the matcher
+never touches that receipt again.
 
-## 3. Recommended initial expense-rate model and rate sourcing
+**Enabling AUTO** requires all of the following:
+- the golden scenario suite passes (§6, PR 3);
+- a real simulator acceptance run passes;
+- the owner explicitly enables it.
 
-### 3.1 Components and drivers (model `cost-v1`)
+Until then the matcher produces SUGGESTED / AMBIGUOUS / NONE only.
 
-| Component | Actual source | Estimate formula (assumptions in brackets) | Inputs and provenance |
+## 3. Formulas (model `cost-v1`, `fuel-v1`)
+
+### 3.1 Non-fuel components
+
+| Component | Actual source | Estimate (assumptions in brackets) |
+|---|---|---|
+| `airport.landing.arrival` | Manual | MTOW t × [rate/t] (per-airport override) |
+| `airport.parking.departure` | Manual | max(0, gate h − [free h]) × MTOW t × [rate/t·h] |
+| `ground.handling.departure` | GSX Handling invoice once verified (D11) / manual | [flat by MTOW band] |
+| `ground.catering.departure` | GSX Catering invoice once verified (D11) / manual | pax × [per pax] |
+| `nav.enroute` | Manual | (distance km / 100) × √(MTOW t / 50) × [unit rate] |
+| `nav.terminal.arrival` | Manual | (MTOW t / 50)^0.7 × [terminal unit rate] |
+| `crew.flight` | — | block h (min [credit h]) × ([captain] + [FO]) |
+| `crew.cabin` | — | block h × [cabin rate] × crew count ([1 per 50 seats] or profile) |
+| `crew.allowances` | — | [per diem per duty] (+ [overnight]) |
+| `maint.airframe` | — | block h × [rate/BH] + [rate/cycle] |
+| `maint.engine` | — | engines × airborne h × [rate/EFH] |
+| `ownership`, `overhead` | — | Optional, off by default (D12); allocated result only |
+
+### 3.2 Fuel (`fuel-v1`): purchases vs. consumption
+
+**Purchases (cash view).**
+- Each active GSX fuel invoice becomes a `fuel_purchase` expense and one `fuel_purchases` row.
+- Uplift kg comes from the parsed receipt quantities (kg directly, otherwise lb → kg; gallons only with the printed
+  density).
+- The purchase is converted to USD at a **recorded** rate (assumption-set FX), and lands in the airframe's inventory
+  as a `purchase` event.
+- A purchase is **never** an operating cost of a flight.
+
+**Inventory (weighted-average cost per airframe).**
+- **Book state:** kg on book and USD value.
+- **Purchase:** kg += uplift; value += amount.
+- **Consumption:** kg −= burn; value −= burn × unit cost, where unit cost = value ÷ kg.
+- **Opening balance:** the first time an airframe is seen, its observed FOB at OUT enters as `opening_balance`,
+  valued at [fuel price per kg] (estimated basis, flagged).
+- **Reconciliation at each OUT:**
+  - observed FOB − book kg = **unbilled adjustment**, for example simulator refuels without a GSX invoice, or
+    defuelling;
+  - a positive adjustment enters at [fuel price per kg] (estimated, flagged "fuel added without an invoice");
+  - a negative one leaves at the current unit cost (flagged).
+  - Tolerance: ±1 % or ±50 kg. Within tolerance, no adjustment is made.
+
+**Consumption (operating view): burn, by fallback order.**
+
+| Order | Method | Basis | Condition |
 |---|---|---|---|
-| `fuel.departure` | GSX Fuel invoice (uplift) | burned kg × [fuel price per kg] | Burned kg: telemetry fuel start−end (observed) → plan trip+taxi (planned) |
-| `airport.landing.arrival` | Manual entry | MTOW t × [rate per t] (per-airport override possible) | MTOW: aircraft profile |
-| `airport.parking.departure` | Manual entry | max(0, gate hours − [free hours]) × MTOW t × [rate per t·h] | Gate hours: IN at origin → OUT (observed or manual) |
-| `ground.handling.departure` | GSX Handling invoice (when a sample is verified) / manual | [flat by MTOW band] | — |
-| `ground.catering.departure` | GSX Catering invoice (when verified) / manual | pax × [per pax] | pax per §4 precedence |
-| `nav.enroute` | Manual entry | (distance km / 100) × √(MTOW t / 50) × [unit rate] | Distance: plan air distance (planned) |
-| `nav.terminal.arrival` | Manual entry | (MTOW t / 50)^0.7 × [terminal unit rate] | — |
-| `crew.flight` | — | block h (min [credit h]) × ([captain rate] + [FO rate]) | Block: OUT→IN (manual) → OFF→ON plus [taxi allowance] → plan |
-| `crew.cabin` | — | block h × [cabin rate] × cabin crew count ([1 per 50 seats], profile override) | Seats: profile |
-| `crew.allowances` | — | [per diem per duty] (+ [overnight] if the next departure is on another day) | — |
-| `maint.airframe` | — | block h × [rate per BH] + [rate per cycle] | — |
-| `maint.engine` | — | engines × airborne h × [rate per EFH] | Airborne h: recorder (observed) |
-| `ownership` *(optional)* | — | [monthly lease] ÷ [assumed monthly BH] × block h | Off by default |
-| `overhead` *(optional)* | — | [% of DOC] or [per flight] | Allocated result only |
+| 1 | FOB at OUT − FOB at IN, from valid samples (first valid ≥ OUT, last valid ≤ IN) | `observed` | FOB valid at both ends; no FOB increase between OUT and IN beyond tolerance |
+| 2 | FOB at takeoff − FOB at landing + planned taxi-out + [taxi-in kg/min × taxi-in min] | `observed+planned` | Airborne FOB valid, block-end FOB missing |
+| 3 | OFP trip fuel + taxi fuel | `planned` | Plan snapshot attached to the flight |
+| 4 | Block h × profile [assumed burn kg/h] | `estimated` | Block time known |
+| 5 | — | **missing** | Fuel cost excluded; contribution marked **incomplete** with the reason |
 
-The formula shapes are generic (weight-based landing, distance × weight factor navigation, hour-based crew and
-maintenance). **The rates are assumptions, not tariffs.** No airport or ANSP schedule is reproduced or implied.
+- The **consumed-fuel line** = burn kg × inventory unit cost at OUT. Its basis tag combines the burn basis and the
+  cost basis, for example "observed burn × WAC (invoiced 92 %, estimated 8 %)".
+- **Practical handling when burn is unavailable:**
+  - the Debrief says which fallback was used and why;
+  - every fallback ranked 2 and below is flagged;
+  - the user can enter a manual burn kg (audited), which outranks fallbacks 2–4.
+  - Inventory still moves by the chosen burn, so the next OUT reconciliation absorbs any error as a visible
+    adjustment rather than leaving it hidden.
 
-### 3.2 Sourcing rates
+**Why this prevents duplication.**
+- Fuel enters the operating view **only** through consumption.
+- Purchases live only in the cash view and the inventory.
+- A flight that uplifted 10 t but burned 4 t carries 4 t of operating fuel cost; the remaining 6 t stays on book
+  for later flights.
+- If the user also records a manual fuel expense, it must choose a class: a manual **purchase** goes to inventory;
+  a manual **operating fuel** override replaces the consumed-fuel line for that flight and is flagged.
 
-- **Assumption sets** are versioned and immutable once a run uses them. They hold a base currency, rates per
-  component, optional per-airport overrides (landing/parking by ICAO, which the owner enters) and fixed FX rates.
-- **Aircraft profiles:** seats per cabin, MTOW, engines and crew complement are prefilled from the OFP when SimBrief
-  supplies them (provenance `ofp`) and are otherwise entered by the user. They are versioned.
-- **Defaults (D8):** either
-  - (a) ship an **illustrative** set (round placeholder numbers, labelled "Illustrative assumptions, not real
-    charges", shown in every report), or
-  - (b) ship empty, so components show "assumption missing" until filled.
-  - Recommendation: (a), so that end-to-end works on day one. Proposed placeholders for owner review:
+**S2-05 data.**
+- The existing USD 2,912.46 GSX fuel expense, and any other existing GSX fuel expenses, are **reclassified** to
+  `fuel_purchase` by migration. No amounts change, and an audit entry is written.
+- Until PR 4 ships, the S2-05 Debrief "Expenses" table keeps showing them as before.
 
-| Assumption (illustrative, USD) | Value |
+### 3.3 Rates and defaults (D8 approved: illustrative, editable)
+
+- Assumption sets are versioned and immutable once used. Every report shows the label "Illustrative assumptions,
+  not real charges" while defaults are in use.
+- Placeholder values (USD):
+
+| Assumption | Value |
 |---|---|
-| Fuel price | 0.80 / kg |
+| Fuel price | 0.80 / kg (opening balances and unbilled fuel only) |
 | Landing | 8.00 / t MTOW |
 | Parking | 2.00 / t·h after 1 h free |
-| Handling (MTOW ≤ 50 t / ≤ 100 t / > 100 t) | 600 / 1,200 / 2,500 per turnaround |
+| Handling (MTOW ≤ 50 t / ≤ 100 t / > 100 t) | 600 / 1,200 / 2,500 |
 | Catering | 6.00 / pax |
 | En-route unit rate | 60.00 |
 | Terminal unit rate | 150.00 |
-| Captain / first officer | 200 / 120 per block h, 3 h minimum credit |
-| Cabin crew | 45 per block h each, 1 per 50 seats |
-| Per diem | 70 per duty day |
+| Captain / first officer | 200 / 120 per block h, 3 h minimum |
+| Cabin crew | 45 per block h, 1 per 50 seats |
+| Per diem | 70 |
 | Airframe maintenance | 250 per BH + 150 per cycle |
-| Engine maintenance | 120 per engine flight hour |
-| Ownership, overhead | off |
+| Engine maintenance | 120 per EFH |
+| Taxi-in | 12 kg/min (fallback 2 only) |
+| Assumed burn | per profile, user-entered; no default (fallback 4 is unavailable until set) |
 
-## 4. Revenue model (model `revenue-v1`, deterministic)
+## 4. Revenue model (`revenue-v1`, deterministic; D10 approved)
 
-- **Seats** per cabin (F/J/W/Y) come from the aircraft profile. ASM = seats × distance (statute miles).
-- **Passengers per cabin, by precedence:**
-  1. explicit per-flight manifest entered by the user (`manual`);
-  2. SimBrief planned pax, distributed by [cabin mix] and capped by seats (`planned (OFP)`);
-  3. seats × [load factor per cabin] × [demand multiplier] (`simulated`).
-  - Never labelled observed. GSX passenger-count variables may become a source later, once verified.
-- **Fare per cabin** = [base] + [per nm] × distance, × [demand multiplier].
-  - Demand profile v1: a global multiplier plus optional per-route (origin-destination) overrides. Day-of-week and
-    season can come later.
-  - No randomness. If a stochastic demand model is approved later, its seed is persisted with the run.
-- **Ancillary:** pax × ([bags per pax] × [bag fee] + [other per pax]).
-- **Cargo:** cargo kg × [yield per kg per 1,000 nm] × distance / 1,000. Cargo kg comes from the manual entry, then
-  the OFP `weights.cargo` (to be parsed), and otherwise is 0. Never derived by guessing.
-- **Manual adjustments:** per flight, with a required note, audited, shown as their own lines.
-- **Illustrative defaults (D8):**
+- **Seats** per cabin come from the profile (OFP `max_passengers` as a prefill). ASM = seats × distance.
+- **Pax precedence:**
+  1. manual manifest;
+  2. SimBrief planned pax, labelled **planned (OFP)**, split by [cabin mix] and capped by seats;
+  3. seats × [load factor per cabin] × [demand multiplier], labelled **simulated**.
+  - Never labelled observed.
+- **Fare per cabin:** [base] + [per nm] × distance, × [demand multiplier]. Global multiplier plus per-route
+  overrides. No randomness.
+- **Ancillary:** pax × ([bags/pax] × [bag fee] + [other/pax]).
+- **Cargo:** cargo kg (manual, then OFP `cargo`, otherwise 0) × [yield per kg per 1,000 nm] × distance / 1,000.
+- **Adjustments:** manual, with a note, audited.
+- **Illustrative defaults:**
 
 | Assumption | Value |
 |---|---|
 | Base fare Y / W / J / F | 40 / 80 / 150 / 250 USD |
 | Per-nm fare Y / W / J / F | 0.12 / 0.20 / 0.45 / 0.80 USD |
 | Load factor | 82 % Y, 75 % W, 65 % J, 50 % F |
-| Bags | 0.6 bags per pax × 35 USD |
-| Other ancillary | 8 USD per pax |
+| Bags | 0.6 bags/pax × 35 USD |
+| Other ancillary | 8 USD/pax |
 | Cargo yield | 0.40 USD per kg per 1,000 nm |
 
-## 5. Avoiding double counting (actual vs estimated)
+## 5. Double counting: rules
 
-1. **Component keys.** Every cost line belongs to exactly one component per flight (§3.1). Manual and invoiced
-   expenses must carry a component.
-   - GSX Fuel maps to `fuel.departure`. Handling, catering and bus map to theirs once their parsers exist.
-   - A manual "other / additional" component never replaces anything.
-2. **Resolution:** for each flight and component, **invoiced > manual > estimated**.
-   - The estimate is still computed and shown, marked `covered by <expense>` with its value, but with
-     `counted = false`. Totals sum counted lines only.
-   - Two counted actual lines for one component are flagged as a **conflict** and block the contribution figure
-     until the user voids or reclassifies one. The engine never picks for them.
-3. **Revisions and corrections** use the existing S2-05 supersede/void logic. Runs read active expenses only.
-4. **Granularity guards.**
-   - A GSX handling invoice covers ground handling only, never landing, parking or navigation.
-   - Fuel: invoiced uplift and burn-based estimates are never both counted (D9 decides the basis).
-5. **Reproducibility.**
-   - A run stores its resolved inputs, assumption set version, profile version, model version and input hash.
-   - A later change (a new receipt, a currency confirmation, a new assumption version) marks the run **stale**. The
-     Debrief offers "Recalculate", which creates a new run. Old runs stay readable.
-6. **Currencies.**
-   - Every line keeps its original amount and currency. Per-currency totals are always available.
-   - A single base-currency contribution is shown only when every counted line converts via a **recorded** rate:
-     the assumption-set FX, or the rate printed on a GSX dual-currency receipt, if that is verified on a sample.
-   - Otherwise the report says which lines block conversion.
+1. **Views.** Every line is `operating` or `cash`. Contribution, CASM and RASM use operating lines only. Cash lines
+   are informational.
+2. **Components.** One counted line per flight per operating component: **invoiced > manual > observed > planned >
+   estimated**. Covered lines are shown with `covered by …` and not counted. Two counted actuals for one component
+   are a **conflict** that blocks contribution until the user resolves it.
+3. **Fuel** enters the operating view only through `fuel.consumed` (§3.2). Purchases go to inventory. A manual
+   operating-fuel override replaces `fuel.consumed`, never adds to it.
+4. **Revisions and corrections** use S2-05 supersede/void. Runs read active rows only. Inventory events are
+   re-derived when a purchase is superseded or voided, and dependent runs become stale.
+5. **Reproducibility.** Each run stores its resolved inputs (including the inventory unit cost used), versions and
+   input hash. Later changes mark it stale, and "Recalculate" creates a new run. Old runs stay readable.
+6. **Currencies.** Original amounts are kept. Conversion to USD uses recorded rates only; if a line cannot be
+   converted, the report says so and shows per-currency totals instead.
 
 ## 6. Sequenced PR breakdown
 
-Priority: working end-to-end automation and correct numbers first.
-
 | # | PR | Contents | Depends on |
 |---|---|---|---|
-| 1 | **Receipt watcher** | Notify-based watcher plus reconciliation scans, stability gate, `receipt_files`, restart resume, vanished-file handling; uses the S2-05 import unchanged | — |
-| 2a | **Receipt evidence** | Parse issue time from the receipt number (only if D3 is confirmed), service group → side, `ReceiptEvidence` | 1 |
-| 2b | **Flight evidence** | `flight_airports` from plan snapshot and turnaround; from position if D1 is approved (bundled airport reference subset); fill `origin_icao`/`destination_icao` | — |
-| 2c | **Aircraft identity** (if D2) | Bridge reads the `ATC ID` SimVar as an optional, read-only identity message (contract + fixtures); `flight_aircraft_identity` | — |
-| 3 | **Matcher v1** | Pure policy, golden scenario tests, match runs, audit, Receipts page explanation, accept/reject/reassign, auto expense when countable; **AUTO off by default** | 2a, 2b (2c optional) |
-| 4 | **Economics core** | Assumption sets, aircraft profiles (OFP prefill: parse `max_passengers`, `max_tow`, `cargo`), component keys on expenses, resolver, runs and lines, cost-v1 formulas; pure, fully tested | — (parallel with 1–3) |
-| 5 | **Revenue v1** | Manifest, OFP pax, load factor, fares, ancillary, cargo, adjustments | 4 |
-| 6 | **Debrief financial report** | Revenue, costs by category with basis/confidence, reconciliation and missing-data flags, contribution, optional allocated result, CASM/RASM when valid, stale/recalculate; Settings editor for assumption sets and profiles | 4, 5 |
-| 7 | **Auto OUT on pushback 5** (#21) | Only from live valid pushback 5 with a recorded flight open; OUT written once; provenance `gsx_pushback`; needs owner verification of pushback raw 5 | — |
-| 8 | **History + receipt filters** (#22, #23) | Expandable service history; queue filter/search | — |
-| 9 | **Archived receipt deletion** (#24) | Controlled delete of stored bytes, audit, interaction with expenses and dedup | owner decision |
-| — | **Acceptance** (#25) | S2-05 pending rows; S2-06 checklist per PR | each PR |
+| 0 | **Receipt-number time parser** | Strict parser and consistency checks with tests from both real receipts. Not wired into matching | — |
+| 1 | **Receipt watcher** | Notifications + reconciliation scans, stability gate, `receipt_files`, restart resume, vanished files | — |
+| 2a | **Receipt evidence** | Uses PR 0; group → side; uplift kg | 0, 1 |
+| 2b | **Flight airports** | Airport reference subset (D1), observed departure/arrival from positions, plus plan/turnaround/user sources; fills `origin_icao`/`destination_icao` | — |
+| 2c | **ATC ID** | Bridge: optional read-only identity reading (contract, fixtures, .NET + desktop); `flight_aircraft_identity` | — |
+| 2d | **FOB around refuelling** | FOB samples bracketing GSX refuelling (for E6), recorded with the turnaround | — |
+| 3 | **Matcher v1** | Policy as §2, golden scenarios, runs + audit, explanations UI, accept/reject/reassign; produces SUGGESTED only (AUTO behind an owner switch, off) | 2a–2d |
+| 4 | **Economics core + fuel-v1** | Assumption sets, profiles (OFP prefill), `ledger_class` + `component`, reclassify S2-05 fuel expenses, fuel purchases and inventory, burn fallbacks, resolver, runs and lines | 2c (aircraft key), 2b |
+| 5 | **Revenue v1** | §4 | 4 |
+| 6 | **Debrief financials** | Operating view (costs by component with basis/confidence, contribution, optional allocated result, CASM/RASM), cash view, fuel inventory panel, missing-data flags, stale/recalculate; Settings editors | 4, 5 |
+| 7 | **Auto OUT (D13)** | §7 | 2c optional |
+| 8 | **History + receipt filters** | #22, #23 | — |
+| 9 | **Archived receipt deletion** | #24 | owner decision |
+| — | **Acceptance** | #25 plus an S2-06 checklist per PR; real-session measurement of the receipt-number time offset | each |
 
-Cumulative airline economics (totals across flights, per aircraft or route) comes after PR 6, once per-flight runs
-are trusted.
+The golden scenario suite for PR 3 includes:
+- two flights from one airport on the same day;
+- a delayed receipt written on quit;
+- a restart between the service and the file appearing;
+- planned-registration-only evidence (must not be AUTO);
+- an observed registration conflict;
+- a missing or inconsistent receipt-number time;
+- arrival plus next departure at the same airport;
+- uplift not matching the FOB increase;
+- GSX deleting files;
+- several candidate flights spread over 24 h.
 
-## 7. Owner decisions needed before implementation
+## 7. Auto OUT from GSX pushback state 5 (D13 approved)
 
-| # | Decision | Recommendation |
+- **Armed** only when all of the following hold:
+  - a recorded flight is open;
+  - the aircraft is on the ground;
+  - no OUT is recorded;
+  - the GSX feed is live.
+- **Triggers once**, on the first **observed transition** into pushback `being_performed` (raw 5) from another
+  valid state.
+  - If 5 is the first value seen (for example after a restart), there is no automatic write; the panel offers a
+    one-click "Record OUT now".
+- **Writes** OUT at the bridge observation time, with provenance `gsx_pushback_state_5` and the observed raw value,
+  then disarms. It never overwrites an existing OUT.
+- **Correction:** the user can correct or remove an auto OUT. The original stays, and a `milestone_corrections` row
+  records the corrected time, actor and reason. Reports use the corrected value and show the correction.
+- Owner-verified raw values for pushback are still pending (#25). The feature ships behind a setting until a real
+  session confirms raw 5.
+
+## 8. Owner decisions (status)
+
+| # | Decision | Status |
 |---|---|---|
-| D1 | Bundle a public-domain airport reference subset (e.g. OurAirports: ICAO, lat/lon, country; ≈1 MB) to derive **observed** departure/arrival airports from positions | Yes. Without it, airports are planned or manual only, and AUTO needs E4 corroboration |
-| D2 | Add the aircraft **ATC ID** (registration) as an optional, read-only bridge reading (contract change) | Yes. It is the strongest matching evidence |
-| D3 | Confirm that GSX receipt numbers embed the UTC issue time (`GSX-YYYYMMDDTHHMMSSZ-ICAO`). Send the redacted receipt number of the second real receipt (USD 2,912.46) | Needed for E2 |
-| D4 | Approve policy `match-v1` (§2) and its windows; AUTO stays off until the golden tests and one real session pass | Approve, then enable after acceptance |
-| D5 | Auto-create the invoiced expense when an AUTO/accepted match is countable | Yes |
-| D6 | Optional automated currency policy, **separate, opt-in, off by default** (§8) | Review later |
-| D7 | Base reporting currency, and FX source: manual fixed rates per assumption set, plus GSX printed dual-currency rates once a sample is verified | USD base, manual rates |
-| D8 | Defaults: illustrative assumption set (§3.2, §4) vs. empty | Illustrative, clearly labelled |
-| D9 | Fuel cost basis: **uplift invoiced** at departure (cash view) vs. **burn** | Uplift when invoiced; burn estimate as reference only |
-| D10 | May SimBrief planned pax/cargo feed revenue (labelled "planned (OFP)")? | Yes |
-| D11 | Provide redacted Catering, Handling and PassengerBus receipts so their parsers can be verified | Needed before those groups count automatically |
-| D12 | Ownership/lease and overhead included by default? | Off; shown as "allocated result" only when enabled |
-| D13 | Auto OUT: confirm pushback raw 5 on real GSX, and choose automatic write vs. a one-click suggestion | Automatic, provenance shown, once verified |
+| D1 | Bundle a public-domain airport reference subset | **Approved** |
+| D2 | Observed ATC ID reading | **Approved** |
+| D3 | Receipt-number UTC time `GSX-YYYYMMDDTHHMMSSZ-ICAO` | **Provisionally validated against two real Fuel receipts.** Not assumed for other groups; meaning (issue vs service time) unvalidated |
+| D4 | match-v1 | **Approved, strengthened (§2); AUTO disabled** until the scenario suite + a real acceptance run + owner switch |
+| D5 | Auto-create expense on accepted/AUTO match when countable | **Approved.** Fuel receipts create **purchases** |
+| D6 | Automated currency policy | **Deferred**; per-receipt confirmation stays the default |
+| D7 | Base currency | **USD approved**; FX by recorded rates only |
+| D8 | Defaults | **Approved:** illustrative, editable, labelled |
+| D9 | Fuel basis | **Redesigned:** purchases (cash/inventory) vs consumed fuel (operating, WAC) with burn fallbacks (§3.2). **Review requested** |
+| D10 | OFP planned pax/cargo in revenue | **Approved**, labelled planned |
+| D11 | Catering/Handling/PassengerBus samples | **Pending real redacted samples** |
+| D12 | Ownership/overhead off by default | **Approved** |
+| D13 | Auto OUT from pushback 5 | **Approved** with arming, once-only and correction rules (§7) |
 
-## 8. Proposed opt-in automated currency policy (for later approval; not enabled)
+**New questions for review:**
+- **D14.** Approve weighted-average cost per airframe for consumed fuel, with opening and unbilled fuel valued at
+  the assumption price.
+- **D15.** Approve the reconciliation tolerance (±1 % or ±50 kg) and the E6 fuel-quantity tolerance (±3 % or
+  ±150 kg).
+- **D16.** Approve reclassifying existing S2-05 GSX fuel expenses to `fuel_purchase`. No amount changes; audited.
 
-The S2-05 default stays: **explicit per-receipt user confirmation** for symbol-only receipts.
+## 9. Opt-in automated currency policy (deferred, D6)
 
-Proposed `currency-auto-v1`:
-- **Scope:** off by default. Enabled per installation by the owner. It applies only when **all** of the following
-  hold:
-  - The receipt airport's country is resolved from the airport reference data (D1).
-  - GSX's documented local-currency behaviour assigns that country one currency. For example, US airports (ICAO
-    `K`, `PA`, `PH`) give USD.
-  - The printed symbol is compatible with that currency under the existing `confirm_currency` contract.
-  - The receipt has no other issues.
-- **Effect:** it records a confirmation with actor `policy:currency-auto-v1` (not `local`), shown as
-  "Auto-confirmed by policy", revocable per receipt. Corrections use the same supersede history.
-- **Never:** guesses where a symbol is shared within one country, or overrides arithmetic, conflict or format
-  errors.
-- **Starting coverage:** US airports only; extended per country by explicit owner approval.
+This is unchanged from revision 1 and not enabled: a separate, opt-in, per-installation policy (initially US
+airports with "$" → USD). It records actor `policy:currency-auto-v1`, can be revoked per receipt, and never
+overrides other receipt problems.
