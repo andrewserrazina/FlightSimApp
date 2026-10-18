@@ -128,7 +128,8 @@ describe("Live Flight route monitoring", () => {
     const { svc } = await serviceWith("ofp-v2-navlog.json");
     await renderApp({ dispatch: svc, page: "live" });
     const panel = screen.getByRole("region", { name: "Route monitoring" });
-    expect(within(panel).getByText("Preview · not attached to a flight")).toBeInTheDocument();
+    expect(within(panel).getByText("Imported · preview")).toBeInTheDocument();
+    expect(panel).toHaveTextContent("Imported plan preview — not attached to flight.");
     expect(within(panel).getByRole("status")).toHaveTextContent("Route progress unavailable. No telemetry received.");
     expect(panel).toHaveTextContent(/not read from the aircraft FMS/);
   });
@@ -201,7 +202,8 @@ describe("Live Flight route monitoring", () => {
     await later.importLatest("username", "test_pilot");
     await renderApp({ dispatch: later, page: "live", recorder: rec });
     const panel = screen.getByRole("region", { name: "Route monitoring" });
-    expect(within(panel).getByText("Attached plan KBOS → KORD")).toBeInTheDocument();
+    expect(within(panel).getByText("Legacy attachment · no release")).toBeInTheDocument();
+    expect(panel).toHaveTextContent(/KBOS → KORD/);
     expect(within(panel).queryByText(/Preview/)).toBeNull();
     expect(rec.getView().writeError).toBeNull();
     // Still open (the test transport has no bridge, so the recorder may mark it interrupted); never closed.

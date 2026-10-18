@@ -16,9 +16,19 @@ import { FlightControls } from "./FlightControls";
 import { FlightPlanBaseline } from "../dispatch/PlanWidgets";
 import { RouteMonitor } from "../route/RouteWidgets";
 import { LiveOperations } from "../dispatch/OperationsWidgets";
-import { useDispatchView } from "../dispatch/DispatchContext";
+import { useDispatch, useDispatchView } from "../dispatch/DispatchContext";
+import { planBasisForFlight, type PlanBasisKind } from "../dispatch/planBasis";
 import { routeTitle } from "../dispatch/presentation";
 import { PHASE_LABEL, SIMULATOR_SHORT } from "./labels";
+
+const ROUTE_SUFFIX: Record<PlanBasisKind, string> = {
+  imported_preview: "imported plan, preview",
+  release_open: "released plan, not yet attached",
+  release_attached_current: "attached released plan",
+  release_attached_recorded: "attached released plan",
+  release_cancelled: "cancelled release",
+  legacy_attached: "attached plan",
+};
 
 export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
   const state = useBridgeState();
@@ -32,7 +42,9 @@ export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
   const flightOpen = rec.status === "active" || rec.status === "interrupted";
   const dispatchView = useDispatchView();
   const flightSnap = flightOpen && rec.flightId ? dispatchView.snapshots[rec.flightId] : undefined;
-  const routeText = flightSnap?.kind === "ready" ? `${routeTitle(flightSnap.snapshot.plan)} (attached plan)` : dispatchView.plan.kind === "ready" ? `${routeTitle(dispatchView.plan.plan)} (imported plan)` : null;
+  const openRelease = useDispatch().openRelease;
+  const basis = planBasisForFlight({ snapshot: flightSnap?.kind === "ready" ? flightSnap.snapshot : null, flightOpen: flightOpen ? true : null, openRelease, importedPlan: dispatchView.plan.kind === "ready" ? dispatchView.plan.plan : null });
+  const routeText = basis ? `${routeTitle(basis.plan)} (${ROUTE_SUFFIX[basis.kind]})` : null;
   const phaseText = !flightOpen ? null : rec.status === "interrupted" ? "Interrupted" : rec.phase === "NOT_STARTED" ? null : (PHASE_LABEL[rec.phase] ?? rec.phase);
 
   const flightStrip = (

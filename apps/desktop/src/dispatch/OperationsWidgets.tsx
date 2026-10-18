@@ -15,6 +15,8 @@ import { useDispatch, useDispatchView } from "./DispatchContext";
 import type { FlightOpsState, ReleaseEntry } from "./DispatchService";
 import type { ImportedFlightPlan } from "./model";
 import { flightTitle, fmtUtcTime, routeTitle, UNAVAILABLE } from "./presentation";
+import { planBasisForFlight, planBasisForRelease } from "./planBasis";
+import { PlanBasisNote, PlanBasisTag } from "./PlanBasisWidgets";
 import { releaseLabel, releaseStateLabel, type DispatchRelease } from "./release";
 import { operationalStatus, type OperationalStatus } from "./status";
 import { buildMilestones, manualEligibility, NO_MANUAL, PROVENANCE_TEXT, type ManualMilestones, type MilestoneRow } from "./timeline";
@@ -153,9 +155,10 @@ export function LiveOperations({ navigate }: { navigate: NavigateFn }) {
   const ops = flightId ? view.flightOps[flightId] : undefined;
   const snap = flightId ? view.snapshots[flightId] : undefined;
   const open = dispatch.openRelease;
-  const attachedPlan: ImportedFlightPlan | null = snap?.kind === "ready" ? snap.snapshot.plan : null;
-  const plan = attachedPlan ?? open?.record.plan ?? null;
-  const planNote = attachedPlan ? "attached plan" : open ? `open release ${releaseLabel(open.record.releaseId)}, not yet attached` : null;
+  const basis = planBasisForFlight({ snapshot: snap?.kind === "ready" ? snap.snapshot : null, flightOpen: flightOpen ? true : null, openRelease: open, importedPlan: view.plan.kind === "ready" ? view.plan.plan : null });
+  // Scheduled times come from an attached plan or an open release; an unreleased import is only a preview.
+  const plan: ImportedFlightPlan | null = basis && basis.kind !== "imported_preview" ? basis.plan : null;
+  const planNote = !basis || basis.kind === "imported_preview" ? null : basis.kind === "release_open" ? `released plan ${basis.release}, not yet attached` : basis.release ? `attached released plan ${basis.release}` : "legacy attached plan";
   const manual = manualOf(ops);
   const status = operationalStatus({ planImported: view.plan.kind === "ready", openRelease: open !== null, lifecycle: lc });
   const rows = buildMilestones({ plan, takeoffAtUtc: lc.takeoffAt, landingAtUtc: lc.landingAt, startedAirborne: lc.startedAirborne, manual, flightOpen, hasFlight: flightOpen });
@@ -167,15 +170,7 @@ export function LiveOperations({ navigate }: { navigate: NavigateFn }) {
     <Panel
       title="Operations"
       className="span-all"
-      actions={
-        rel?.kind === "ok" ? (
-          <Tag tone="accent">Release {releaseLabel(rel.release.record.releaseId)}</Tag>
-        ) : flightOpen ? (
-          <Tag tone="neutral">No release attached</Tag>
-        ) : open ? (
-          <Tag tone="accent">Release {releaseLabel(open.record.releaseId)} open</Tag>
-        ) : undefined
-      }
+      actions={basis ? <PlanBasisTag basis={basis} /> : flightOpen ? <Tag tone="neutral">No plan attached</Tag> : undefined}
     >
       <StatusPill status={status} />
       {ops?.kind === "error" && (
@@ -259,28 +254,28 @@ export function DebriefOperations({ detail }: { detail: FlightDetail }) {
   const open = s.status === "active" || s.status === "interrupted";
   const rows = buildMilestones({ plan, takeoffAtUtc: s.takeoffAtUtc, landingAtUtc: s.landingAtUtc, startedAirborne: s.startedAirborne, manual: manualOf(ops), flightOpen: open });
   const rel = releaseOf(ops);
+  const basis = planBasisForFlight({ snapshot: snap?.kind === "ready" ? snap.snapshot : null, flightOpen: open, openRelease: null, importedPlan: null });
 
   return (
     <>
       <Panel
         title="Dispatch release"
         className="span-all"
-        actions={rel?.kind === "ok" ? <Tag tone="accent">{releaseLabel(rel.release.record.releaseId)}</Tag> : <Tag tone="neutral">{ops?.kind === "ready" ? "No release" : "—"}</Tag>}
+        actions={basis ? <PlanBasisTag basis={basis} /> : <Tag tone="neutral">{ops?.kind === "ready" ? "No plan attached" : "—"}</Tag>}
       >
+        {basis && <PlanBasisNote basis={basis} />}
         {(!ops || ops.kind === "loading") && (
           <p className="muted" role="status">
             Loading operational records…
           </p>
         )}
         {ops?.kind === "error" && <p className="unavailable-text">Operational records could not be read: {ops.message}</p>}
-        {ops?.kind === "ready" && rel === null && (
-          <p className="unavailable-text">{plan ? "This flight has a flight plan attached without a dispatch release." : "No dispatch release is attached to this flight."}</p>
-        )}
+        {ops?.kind === "ready" && rel === null && !plan && <p className="unavailable-text">No dispatch release is attached to this flight.</p>}
         {rel?.kind === "damaged" && <p className="unavailable-text">The dispatch release attached to this flight is damaged and cannot be shown.</p>}
         {rel?.kind === "ok" && <ReleaseSummary release={rel.release} />}
       </Panel>
       <Panel title="Milestones (OUT · OFF · ON · IN)" className="span-all">
-        <MilestoneTimeline rows={rows} planNote={plan ? (snap?.kind === "ready" && snap.snapshot.releaseId ? "released plan" : "attached plan") : null} />
+        <MilestoneTimeline rows={rows} planNote={basis ? (basis.release ? `attached released plan ${basis.release}` : "legacy attached plan") : null} />
         {detail.interruptions.length > 0 && <p className="muted">The recording was interrupted {detail.interruptions.length === 1 ? "once" : `${detail.interruptions.length} times`}. Events during a gap cannot be detected.</p>}
       </Panel>
     </>
@@ -290,6 +285,8 @@ export function DebriefOperations({ detail }: { detail: FlightDetail }) {
 /** Dispatch: every release issued on this computer, newest first. */
 export function ReleaseLog({ navigate }: { navigate: NavigateFn }) {
   const view = useDispatchView();
+  const lc = useRecorderView().lifecycle;
+  const currentFlightId = (lc.status === "active" || lc.status === "interrupted") && lc.flightId ? lc.flightId : null;
   const r = view.releases;
   return (
     <Panel title="Release log" className="span-all">
@@ -328,7 +325,7 @@ export function ReleaseLog({ navigate }: { navigate: NavigateFn }) {
                     </td>
                     <td className="num">{fmtUtcTime(e.release.record.releasedAtUtc)}</td>
                     <td>
-                      {releaseStateLabel(e.release)}
+                      <PlanBasisTag basis={planBasisForRelease(e.release, currentFlightId)} />
                       {e.release.state === "cancelled" && <span className="muted"> — {e.release.cancelReason}</span>}
                     </td>
                     <td>
