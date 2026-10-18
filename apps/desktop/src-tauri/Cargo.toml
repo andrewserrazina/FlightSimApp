@@ -24,6 +24,10 @@ base64 = "0.22"
 rusqlite = { version = "0.32", features = ["bundled"] }
 # OS secure credential storage (Windows Credential Manager, macOS Keychain, Linux kernel keyring).
 keyring = { version = "3", features = ["windows-native", "apple-native", "linux-native"] }
+# GSX receipt parsing (S2-05): a non-executing HTML tree (html5ever) and the duplicate-content hash.
+# Both are already in the lock file through Tauri; no new third-party code.
+dom_query = "0.28"
+sha2 = "0.10"
 
 [profile.release]
 strip = true
