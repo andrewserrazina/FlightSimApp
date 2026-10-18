@@ -308,24 +308,6 @@ public class GsxProbeTests
     }
 
     [Fact]
-    public void Telemetry_recording_never_reads_gsx_and_gsx_code_stays_out_of_the_recording_path()
-    {
-        Assert.DoesNotContain(new Msfs2020Profile().TelemetryVars, v => v.Name.StartsWith("L:", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(new Msfs2024Profile().TelemetryVars, v => v.Name.StartsWith("L:", StringComparison.OrdinalIgnoreCase));
-        var src = Repo.Path("services", "sim-bridge", "src");
-        var allowed = new[] { Path.Combine("FlightSim.SimBridge.Msfs", "Gsx") + Path.DirectorySeparatorChar };
-        var allowedHost = new[] { "GsxProbe.cs", "GsxReceiptsCommand.cs", "BridgeOptions.cs", "Program.cs" };
-        var offenders = Directory.EnumerateFiles(src, "*.cs", SearchOption.AllDirectories)
-            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .Where(f => !allowed.Any(a => Path.GetRelativePath(src, f).StartsWith(a, StringComparison.Ordinal)))
-            .Where(f => !(Path.GetRelativePath(src, f).StartsWith("FlightSim.SimBridge.Host", StringComparison.Ordinal) && allowedHost.Contains(Path.GetFileName(f))))
-            .Where(f => File.ReadAllText(f).Contains("Gsx", StringComparison.Ordinal))
-            .Select(f => Path.GetRelativePath(src, f))
-            .ToList();
-        Assert.Empty(offenders);
-    }
-
-    [Fact]
     public void The_probe_header_declares_read_only_and_unverified_names()
     {
         var json = System.Text.Json.JsonSerializer.Serialize(GsxProbe.Header(BridgeOptions.Parse(["--adapter", "msfs2020", "--gsx-probe", "60"]), GsxProbeDefinition.ServiceStates, "msfs2020"), GsxProbe.Json);

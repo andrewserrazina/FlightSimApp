@@ -1,6 +1,7 @@
 import type { Reason, SimulatorId, Uuid } from "./common.js";
 import type { ConnectionStateV1 } from "./connection.js";
 import type { FlightEventV1 } from "./events.js";
+import type { GsxStateV1 } from "./gsx.js";
 import type { BridgeHealthV1 } from "./health.js";
 import type { TelemetryFrameV1 } from "./telemetry.js";
 
@@ -21,6 +22,7 @@ export type BridgeServerMessageV1 =
   | Envelope<"telemetry.frame", TelemetryFrameV1>
   | Envelope<"flight.event", FlightEventV1>
   | Envelope<"bridge.health", BridgeHealthV1>
+  | Envelope<"gsx.state", GsxStateV1>
   | Envelope<"error", Reason>;
 
 /**

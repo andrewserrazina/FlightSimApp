@@ -158,6 +158,8 @@ internal sealed class FakeSimConnectFactory : ISimConnectClientFactory
     public bool Refuse { get; set; }
     /// <summary>What the fake reports for system state <c>Sim</c> right after OPEN (null: never answers).</summary>
     public bool? InitialInFlight { get; set; } = true;
+    /// <summary>Applied to every new client before the adapter registers its data definitions.</summary>
+    public Action<FakeSimConnectClient>? Configure { get; set; }
 
     public ISimConnectClient Open(string applicationName, ISimConnectCallbacks callbacks)
     {
@@ -165,6 +167,7 @@ internal sealed class FakeSimConnectFactory : ISimConnectClientFactory
         Interlocked.Increment(ref Opens);
         if (Refuse) throw new SimulatorUnavailableException(Reason.Codes.SimulatorNotRunning, "not running");
         Current = new FakeSimConnectClient(callbacks, CallThreads) { InitialInFlight = InitialInFlight };
+        Configure?.Invoke(Current);
         return Current;
     }
 }
@@ -181,6 +184,30 @@ internal sealed class FakeSimConnectClient(ISimConnectCallbacks callbacks, Concu
     public WaitHandle MessageReady => _ready;
 
     public void RegisterTelemetry(IMsfsCompatibilityProfile profile) => threads.Add(Environment.CurrentManagedThreadId);
+
+    /// <summary>GSX values the fake "simulator" returns per request (null: GSX block never answered).</summary>
+    public Func<double[]?>? GsxValues { get; set; }
+    public HashSet<int> GsxRejectedAtRegistration { get; } = [];
+    public bool GsxRegisterThrows { get; set; }
+    public int GsxRequests;
+
+    public void RegisterGsx(IReadOnlyList<FlightSim.SimBridge.Msfs.Gsx.GsxProbeVar> vars)
+    {
+        threads.Add(Environment.CurrentManagedThreadId);
+        if (GsxRegisterThrows) throw new InvalidOperationException("SimConnect AddToDataDefinition failed");
+        foreach (var i in GsxRejectedAtRegistration) _pending.Enqueue(() => callbacks.OnGsxRejected(i));
+    }
+
+    public void RequestGsx()
+    {
+        threads.Add(Environment.CurrentManagedThreadId);
+        Interlocked.Increment(ref GsxRequests);
+        if (GsxValues?.Invoke() is not { } values) return;
+        var block = new byte[values.Length * 8];
+        for (var i = 0; i < values.Length; i++) System.Buffers.Binary.BinaryPrimitives.WriteDoubleLittleEndian(block.AsSpan(i * 8), values[i]);
+        _pending.Enqueue(() => callbacks.OnGsxBlock(block));
+        _ready.Set();
+    }
 
     public void RequestSample()
     {

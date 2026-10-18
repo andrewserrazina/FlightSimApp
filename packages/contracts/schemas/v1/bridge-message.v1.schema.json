@@ -10,7 +10,7 @@
     "protocol": { "const": "flightsim.bridge" },
     "protocol_version": { "const": 1 },
     "type": {
-      "enum": ["hello", "hello.ok", "connection.state", "telemetry.frame", "flight.event", "bridge.health", "health.request", "adapter.reconnect", "error"]
+      "enum": ["hello", "hello.ok", "connection.state", "telemetry.frame", "flight.event", "bridge.health", "gsx.state", "health.request", "adapter.reconnect", "error"]
     },
     "data": { "type": "object" }
   },
@@ -21,6 +21,7 @@
     { "if": { "properties": { "type": { "const": "telemetry.frame" } } }, "then": { "properties": { "data": { "$ref": "telemetry-frame.v1.schema.json" } } } },
     { "if": { "properties": { "type": { "const": "flight.event" } } }, "then": { "properties": { "data": { "$ref": "flight-event.v1.schema.json" } } } },
     { "if": { "properties": { "type": { "const": "bridge.health" } } }, "then": { "properties": { "data": { "$ref": "bridge-health.v1.schema.json" } } } },
+    { "if": { "properties": { "type": { "const": "gsx.state" } } }, "then": { "properties": { "data": { "$ref": "gsx-state.v1.schema.json" } } } },
     { "if": { "properties": { "type": { "enum": ["health.request", "adapter.reconnect"] } } }, "then": { "properties": { "data": { "type": "object", "maxProperties": 0 } } } },
     { "if": { "properties": { "type": { "const": "error" } } }, "then": { "properties": { "data": { "$ref": "common.schema.json#/$defs/reason" } } } }
   ],

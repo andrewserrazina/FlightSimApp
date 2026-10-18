@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using FlightSim.SimBridge.Adapters;
 using FlightSim.SimBridge.Contracts;
 using FlightSim.SimBridge.Msfs.Native;
@@ -128,7 +127,7 @@ public sealed class GsxProbeClient : IDisposable
                     InFlight = s.Integer != 0;
                     break;
                 case SimConnectSimObjectData { RequestId: RequestGsx, DefineId: DefineGsx } d:
-                    if (TryDecode(d.Data)) LastDataAt = _time.GetUtcNow();
+                    if (GsxBlock.TryDecode(d.Data, _vars.Count, _rejected, _values)) LastDataAt = _time.GetUtcNow();
                     break;
                 default:
                     break; // unknown, malformed or unrelated messages are ignored
@@ -141,30 +140,6 @@ public sealed class GsxProbeClient : IDisposable
     {
         var ctx = new GsxProbeContext(Connected, InFlight, LastDataAt, _time.GetUtcNow());
         return [.. _vars.Select((v, i) => GsxStateMapper.Map(v, LastDataAt is null ? null : _values[i], _rejected.Contains(i), ctx))];
-    }
-
-    /// <summary>
-    /// A packed block of FLOAT64 values in registration order. A rejected datum may be absent or present
-    /// (undocumented), so both sizes are accepted; any other size is dropped, never misparsed.
-    /// </summary>
-    private bool TryDecode(ReadOnlySpan<byte> data)
-    {
-        var full = _vars.Count * 8;
-        var reduced = (_vars.Count - _rejected.Count) * 8;
-        bool rejectedPresent;
-        if (data.Length == reduced) rejectedPresent = false;
-        else if (data.Length >= full) rejectedPresent = true;
-        else return false;
-        var offset = 0;
-        for (var i = 0; i < _vars.Count; i++)
-        {
-            var isRejected = _rejected.Contains(i);
-            if (isRejected && !rejectedPresent) continue;
-            var x = BinaryPrimitives.ReadDoubleLittleEndian(data.Slice(offset, 8));
-            offset += 8;
-            _values[i] = isRejected ? double.NaN : x;
-        }
-        return true;
     }
 
     public void Dispose()

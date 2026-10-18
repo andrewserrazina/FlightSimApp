@@ -1,0 +1,63 @@
+{
+  "protocol": "flightsim.bridge",
+  "protocol_version": 1,
+  "type": "gsx.state",
+  "data": {
+    "schema_version": 1,
+    "session_id": "4f2539a5-bc7b-46f3-a6c6-cddb9ec741a3",
+    "observed_at": "2026-10-17T16:40:05.000Z",
+    "source": "simconnect-lvar",
+    "feed": "live",
+    "last_data_at": "2026-10-17T16:40:04.500Z",
+    "services": [
+      {
+        "service": "boarding",
+        "lvar": "L:FSDT_GSX_BOARDING_STATE",
+        "quality": "valid",
+        "raw": 1,
+        "state": "can_be_called",
+        "detail": "1 = can be called"
+      },
+      {
+        "service": "deboarding",
+        "lvar": "L:FSDT_GSX_DEBOARDING_STATE",
+        "quality": "valid",
+        "raw": 5,
+        "state": "being_performed",
+        "detail": "5 = being performed"
+      },
+      {
+        "service": "catering",
+        "lvar": "L:FSDT_GSX_CATERING_STATE",
+        "quality": "valid",
+        "raw": 6,
+        "state": "completed",
+        "detail": "6 = completed"
+      },
+      {
+        "service": "refueling",
+        "lvar": "L:FSDT_GSX_REFUELING_STATE",
+        "quality": "valid",
+        "raw": 4,
+        "state": "requested",
+        "detail": "4 = requested"
+      },
+      {
+        "service": "pushback",
+        "lvar": "L:FSDT_GSX_DEPARTURE_STATE",
+        "quality": "valid",
+        "raw": 1,
+        "state": "can_be_called",
+        "detail": "1 = can be called"
+      },
+      {
+        "service": "deice",
+        "lvar": "L:FSDT_GSX_DEICE_STATE",
+        "quality": "valid",
+        "raw": 2,
+        "state": "not_available",
+        "detail": "2 = not available"
+      }
+    ]
+  }
+}

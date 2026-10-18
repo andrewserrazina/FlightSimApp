@@ -80,6 +80,7 @@ public static class MessageTypes
     public const string TelemetryFrame = "telemetry.frame";
     public const string FlightEvent = "flight.event";
     public const string BridgeHealth = "bridge.health";
+    public const string GsxState = "gsx.state";
     public const string HealthRequest = "health.request";
     public const string AdapterReconnect = "adapter.reconnect";
     public const string Error = "error";

@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using FlightSim.SimBridge.Adapters;
 using FlightSim.SimBridge.Contracts;
+using FlightSim.SimBridge.Msfs.Gsx;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -18,8 +19,11 @@ namespace FlightSim.SimBridge.Msfs;
 /// <see cref="ISimConnectClient"/> and the native API (<see cref="Native.ISimConnectApi"/>).
 /// NOT verified against a real MSFS 2020 or 2024 install — see docs/compatibility/msfs-telemetry.md.
 /// </remarks>
-public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
+public sealed class MsfsSimConnectAdapter : ISimulatorAdapter, IGsxFeedSource
 {
+    /// <summary>GSX blocks are requested (and the feed evaluated) about this often.</summary>
+    public static readonly TimeSpan GsxInterval = TimeSpan.FromSeconds(1);
+
     private const string ApplicationName = "Turnline (FlightSimApp)";
     private readonly IMsfsCompatibilityProfile _profile;
     private readonly ISimConnectClientFactory _factory;
@@ -32,6 +36,10 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
 
     private ISimConnectClient? _client;
     private Connection? _connection;
+    private GsxFeed? _gsx;
+
+    /// <summary>Read-only GSX observations (S2-05); see <see cref="IGsxFeedSource"/>.</summary>
+    public event Action<GsxObservation>? GsxObserved;
 
     /// <summary>
     /// Optional diagnostics sink (probe mode): raw samples and simulator state changes, raised on the
@@ -81,13 +89,24 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
     public async Task<AdapterConnection> ConnectAsync(CancellationToken cancellationToken)
     {
         await DisconnectAsync(cancellationToken).ConfigureAwait(false);
-        var connection = new Connection(_log, d => Diagnostics?.Invoke(d with { At = _time.GetUtcNow() }), _time, _simStateGrace);
+        var gsx = new GsxFeed(GsxProbeDefinition.ServiceStates);
+        var connection = new Connection(_log, d => Diagnostics?.Invoke(d with { At = _time.GetUtcNow() }), _time, _simStateGrace, gsx);
         await _owner.InvokeAsync(() =>
         {
             var client = _factory.Open(ApplicationName, connection);
             try
             {
                 client.RegisterTelemetry(_profile);
+                try
+                {
+                    client.RegisterGsx(gsx.Vars);
+                }
+#pragma warning disable CA1031 // GSX is optional: a failure here must never cost telemetry.
+                catch (Exception ex)
+#pragma warning restore CA1031
+                {
+                    _log.LogWarning("GSX variables could not be registered ({Error}); GSX is reported as not detected.", ex.GetType().Name);
+                }
                 _owner.SetMessagePump(client.MessageReady, client.ReceiveMessages);
             }
             catch
@@ -98,6 +117,7 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
             _client = client;
         }).ConfigureAwait(false);
         _connection = connection;
+        _gsx = gsx;
 
         try
         {
@@ -140,8 +160,11 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
     private async Task PollAsync(CancellationToken cancellationToken)
     {
         using var timer = new PeriodicTimer(_sampleInterval, _time);
+        var gsxEvery = Math.Max(1, (int)Math.Round(GsxInterval / _sampleInterval));
+        var tick = 0;
         do
         {
+            var gsxTick = tick++ % gsxEvery == 0;
             try
             {
                 await _owner.InvokeAsync(() => _client?.RequestSample()).ConfigureAwait(false);
@@ -153,12 +176,33 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
                 _connection?.Fail(new SimulatorUnavailableException(Reason.Codes.ConnectionLost, $"SimConnect request failed ({ex.GetType().Name}).", inner: ex));
                 return;
             }
+            if (gsxTick) await PollGsxAsync().ConfigureAwait(false);
         }
         while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false));
     }
 
+    /// <summary>Request one GSX block and publish the feed's state. GSX failures never end the telemetry stream.</summary>
+    private async Task PollGsxAsync()
+    {
+        var feed = _gsx;
+        if (feed is null) return;
+        try
+        {
+            await _owner.InvokeAsync(() => _client?.RequestGsx()).ConfigureAwait(false);
+        }
+#pragma warning disable CA1031 // Optional feed: report as stale/not detected instead of failing the connection.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            _log.LogDebug("GSX request failed: {Error}", ex.GetType().Name);
+        }
+        var observation = feed.Evaluate(_time.GetUtcNow());
+        if (observation is not null) GsxObserved?.Invoke(observation);
+    }
+
     public async Task DisconnectAsync(CancellationToken cancellationToken)
     {
+        _gsx = null;
         _connection?.Fail(null);
         _connection = null;
         if (_client is null) return;
@@ -189,7 +233,7 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
     }
 
     /// <summary>Per-connection callback sink. Callbacks arrive on the owner thread.</summary>
-    private sealed class Connection(ILogger log, Action<MsfsDiagnostic> diagnostics, TimeProvider time, TimeSpan simStateGrace) : ISimConnectCallbacks
+    private sealed class Connection(ILogger log, Action<MsfsDiagnostic> diagnostics, TimeProvider time, TimeSpan simStateGrace, GsxFeed gsx) : ISimConnectCallbacks
     {
         // Null until MSFS reports it. While unknown, samples are held for at most simStateGrace (the
         // Sim state answer normally arrives within one dispatch); after that they flow, so a simulator
@@ -227,7 +271,10 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
             diagnostics(new MsfsDiagnostic("simulator_state", default, State: change));
             switch (change.Kind)
             {
-                case SimulatorStateKind.InFlight when change.Active is { } active && active != _inFlight:
+                case SimulatorStateKind.InFlight when change.Active is { } flying:
+                    gsx.OnInFlight(flying);
+                    if (flying == _inFlight) break;
+                    var active = flying;
                     _inFlight = active;
                     log.LogInformation(active ? "MSFS reports a flight in progress; telemetry resumed." : "MSFS reports no flight in progress (menu/loading); telemetry withheld.");
                     break;
@@ -246,6 +293,14 @@ public sealed class MsfsSimConnectAdapter : ISimulatorAdapter
                 default:
                     break;
             }
+        }
+
+        public void OnGsxBlock(byte[] data) => gsx.OnBlock(data, time.GetUtcNow());
+
+        public void OnGsxRejected(int index)
+        {
+            gsx.OnRejected(index);
+            log.LogInformation("MSFS rejected GSX variable #{Index}; it is reported as unsupported.", index);
         }
 
         public void OnException(uint exceptionCode)

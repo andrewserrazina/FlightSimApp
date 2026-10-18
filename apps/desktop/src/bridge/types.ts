@@ -1,4 +1,4 @@
-import type { BridgeHealthV1, ConnectionStateName, ConnectionStateV1, SimulatorId, TelemetryFrameV1, Uuid } from "@flightsim/contracts";
+import type { BridgeHealthV1, ConnectionStateName, ConnectionStateV1, GsxStateV1, SimulatorId, TelemetryFrameV1, Uuid } from "@flightsim/contracts";
 
 /**
  * Status of the bridge *process* as seen by the native shell (distinct from the bridge's own
@@ -37,6 +37,10 @@ export interface BridgeViewState {
   /** Local epoch ms at which `lastFrame` was received; drives freshness. */
   lastFrameReceivedAt: number | null;
   health: BridgeHealthV1 | null;
+  /** Latest read-only GSX observation of this bridge session (S2-05); separate from telemetry. */
+  gsx: GsxStateV1 | null;
+  /** Local epoch ms at which `gsx` was received. */
+  gsxReceivedAt: number | null;
   gapCount: number;
   /** Times a live simulator connection was lost (CONNECTED/STALE -> RECONNECTING). */
   reconnectCount: number;
