@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FUEL DELIVERY RECEIPT - Lukoil</title>
+<style>
+:root { color-scheme: light; }
+/* Pull the MSFS-bundled Roboto Mono so the in-panel iframe and
+   the standalone browser both render the receipt in the same
+   monospace face. The "/Fonts/..." path is Coherent's standard
+   font location — every stock MSFS instrument panel (A320 ATC,
+   CDU, etc.) declares @font-face this way, and the iframe
+   inherits the panel's coui:// origin so the path resolves
+   inside the receipt document too. The standalone browser sees
+   an unreachable absolute path and falls back to the next entry
+   in font-family ("Courier New" -> system monospace), which
+   matches the panel's character grid closely enough that the two
+   surfaces look essentially identical. */
+@font-face {
+  font-family: "GSX Receipt Mono";
+  src: url("/Fonts/RobotoMono-Medium.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+}
+@font-face {
+  font-family: "GSX Receipt Mono";
+  src: url("/Fonts/RobotoMono-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+}
+body {
+  font-family: "GSX Receipt Mono", "Courier New", "Consolas", monospace;
+  background: #f3f3f3;
+  color: #1a1a1a;
+  margin: 0;
+  padding: 32px 16px;
+}
+.invoice {
+  max-width: 720px;
+  margin: 0 auto;
+  background: #ffffff;
+  border: 1px solid #d6d6d6;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+}
+.head {
+  background: #ffffff;
+  border-bottom: 1px solid #e5e5e5;
+  padding: 24px 32px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.head img.logo {
+  height: 80px;
+  width: auto;
+  object-fit: contain;
+}
+.head .title {
+  flex: 1;
+  text-align: right;
+}
+.head .title h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  color: #1a1a1a;
+}
+.head .title .receipt-id {
+  margin-top: 6px;
+  font-family: "GSX Receipt Mono", "Courier New", "Consolas", "SF Mono", "Lucida Console", monospace;
+  font-size: 12px;
+  color: #555;
+}
+/* Gap between the "Receipt #:" label and the number when they
+   render inline on the wide layout. The narrow-viewport @media
+   below drops this to 0 because the number wraps onto its own
+   line and a stray leading space would just shift it right. */
+.head .title .receipt-id-num {
+  margin-left: 0.4em;
+}
+.body {
+  padding: 24px 32px;
+}
+
+/* NATA-style section labels — small, all-caps, on a dark bar. We
+   use a medium grey rather than NATA's pure black so the document
+   still reads as light/modern overall. */
+.section-label {
+  background: #4a4a4a;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 4px 10px;
+  margin: 0 0 10px 0;
+}
+.section {
+  margin-top: 22px;
+}
+.section:first-of-type {
+  margin-top: 0;
+}
+
+/* Section A / B — Provider | Receiver, side-by-side two-column. */
+.parties {
+  display: flex;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+.party {
+  flex: 1;
+  border: 1px solid #d6d6d6;
+  padding: 0 0 8px 0;
+}
+.party .section-label {
+  margin-bottom: 6px;
+}
+.party .name {
+  padding: 0 12px;
+  font-size: 14px;
+  color: #1a1a1a;
+}
+.party .name .primary {
+  font-weight: 600;
+  color: #1a1a1a;
+}
+.party .name .secondary {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #5a5a5a;
+  font-family: "GSX Receipt Mono", "Courier New", "Consolas", "SF Mono", "Lucida Console", monospace;
+}
+
+/* Service info section — two-column label/value, right-aligned label
+   like NATA, monospace for the value column. */
+table.product-info {
+  width: 100%;
+  border-collapse: collapse;
+}
+table.product-info td.info-label {
+  color: #5a5a5a;
+  padding: 4px 12px 4px 12px;
+  white-space: nowrap;
+  width: 38%;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+table.product-info td.info-value {
+  color: #1a1a1a;
+  padding: 4px 12px 4px 0;
+  font-family: "GSX Receipt Mono", "Courier New", "Consolas", "SF Mono", "Lucida Console", monospace;
+  font-size: 13px;
+}
+
+/* Items table — monospace for the typewriter / fuel-slip retro
+   look. Right-aligned numeric columns, solid separator under
+   header and above total, all-caps small-cap headers. */
+table.items {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "GSX Receipt Mono", "Courier New", "Consolas", "SF Mono", "Lucida Console", monospace;
+  font-size: 13px;
+}
+table.items thead th {
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  font-weight: 700;
+  color: #2a2a2a;
+  text-align: right;
+  padding: 8px 8px 8px 0;
+  border-bottom: 2px solid #888;
+}
+table.items thead th.item {
+  text-align: left;
+  padding-left: 0;
+}
+table.items td {
+  padding: 12px 8px 12px 0;
+  text-align: right;
+  vertical-align: top;
+  font-variant-numeric: tabular-nums;
+  color: #1a1a1a;
+}
+table.items td.item {
+  text-align: left;
+  padding-left: 0;
+}
+table.items td.qty .primary {
+  display: block;
+}
+table.items td.qty .secondary {
+  display: block;
+  font-size: 12px;
+  color: #767676;
+  margin-top: 1px;
+}
+/* Amount cell stacked rendering, used when the invoice was locked
+   to a local currency at issue time. Primary line is the local-
+   currency figure (the one the customer was billed in); secondary
+   is the USD reference. Same primary/secondary convention as the
+   qty column above for visual familiarity.  `font-weight: normal`
+   resets the tr.total bold so the USD reference doesn't fight with
+   the local-currency total above it. */
+table.items td.amount .primary {
+  display: block;
+}
+table.items td.amount .secondary {
+  display: block;
+  font-size: 12px;
+  color: #767676;
+  margin-top: 1px;
+  font-weight: normal;
+}
+/* Unit-price cell stacked rendering, matching the amount column.
+   Same primary/secondary convention -- primary in the invoice's
+   active currency, secondary in USD as the reference -- so the
+   reader sees consistent currency layout across qty / unit-price /
+   amount when the invoice is dual-currency. */
+table.items td.unit-price .primary {
+  display: block;
+}
+table.items td.unit-price .secondary {
+  display: block;
+  font-size: 12px;
+  color: #767676;
+  margin-top: 1px;
+}
+/* Tax line items — one per itemised tax. Reason annotation appears
+   below the label as a smaller italic so the customer can see at a
+   glance why a 0% tax is being shown. */
+table.items tr.tax-item td {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+table.items tr.tax-item td.item {
+  color: #5a5a5a;
+}
+table.items tr.tax-item td.amount {
+  color: #5a5a5a;
+}
+table.items td.item .tax-reason {
+  display: block;
+  font-style: italic;
+  font-size: 11px;
+  color: #888;
+  margin-top: 1px;
+  letter-spacing: 0;
+}
+
+/* Summary rows (subtotal / total) use the colspan-3 label pattern.
+   Each gets a slightly different visual weight so the eye walks
+   naturally to the grand total at the bottom. */
+table.items tr.subtotal td {
+  border-top: 1px solid #aaa;
+  padding-top: 10px;
+}
+table.items tr.total td {
+  border-top: 2px solid #888;
+  padding-top: 14px;
+  font-weight: 700;
+}
+table.items td.summary-label {
+  text-align: right;
+  padding-right: 8px;
+}
+table.items tr.total td.summary-label {
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+}
+table.items tr.total td.amount {
+  font-size: 16px;
+}
+.foot {
+  /* Bottom padding intentionally tight because a .disclaimer block
+     now sits directly under this row — the old 20 px gave it a
+     trailing margin appropriate for being the last element, which
+     it isn't any more. */
+  padding: 12px 32px 4px;
+  font-size: 11px;
+  color: #888;
+  text-align: center;
+  border-top: 1px solid #f0f0f0;
+}
+/* FX-snapshot disclosure, shown only for dual-currency invoices.
+   Same dimmer-than-body footnote treatment as the disclaimer below
+   so the eye reads it as auditing metadata, not body content. */
+.fx-disclosure {
+  padding: 6px 32px 0;
+  font-size: 11px;
+  color: #888;
+  text-align: center;
+  font-style: italic;
+}
+/* Legal / fictitious-document disclaimer, rendered below the
+   "Generated by GSX" foot row. Dimmer + smaller so it reads as a
+   footnote rather than a body element. */
+.disclaimer {
+  padding: 0 32px 16px;
+  font-size: 10px;
+  color: #aaa;
+  text-align: left;
+  line-height: 1.4;
+}
+/* Tax-info table on the price list: 2-column label / rate, no
+   numeric amount column (informational only). Reuses the items
+   table's monospace + right-aligned numerics so the page reads
+   consistently with the rates table above. */
+table.tax-info {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "GSX Receipt Mono", "Courier New", "Consolas", "SF Mono", "Lucida Console", monospace;
+  font-size: 13px;
+}
+table.tax-info thead th {
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  font-weight: 700;
+  color: #2a2a2a;
+  text-align: right;
+  padding: 8px 8px 8px 0;
+  border-bottom: 2px solid #888;
+}
+table.tax-info thead th.item { text-align: left; padding-left: 0; }
+table.tax-info { table-layout: fixed; }
+table.tax-info th.item, table.tax-info td.item { width: 75%; }
+table.tax-info th.rate, table.tax-info td.rate { width: 25%; }
+table.tax-info td {
+  padding: 10px 8px 10px 0;
+  text-align: right;
+  vertical-align: top;
+  color: #1a1a1a;
+}
+table.tax-info td.item {
+  text-align: left;
+  padding-left: 0;
+}
+table.tax-info td.item .tax-reason {
+  display: block;
+  font-style: italic;
+  font-size: 11px;
+  color: #888;
+  margin-top: 1px;
+  letter-spacing: 0;
+}
+@media print {
+  body { background: #ffffff; padding: 0; }
+  .invoice { border: 0; box-shadow: none; max-width: none; }
+}
+/* Narrow-viewport adjustments for the GSX panel's inline iframe
+   viewer (typical panel width ~580px, user-resizable down to
+   ~380px). Triggered at 720px so it covers the entire panel
+   width range while leaving the standalone browser view at
+   anything wider unchanged. Provider | Receiver columns stack
+   vertically, header logo + title also stack, every padding
+   tightens so the four-column charges table can fit its
+   monospace numerics without column collapse. */
+@media (max-width: 720px) {
+  body { padding: 8px 6px; }
+  .invoice { border-radius: 4px; box-shadow: none; }
+  /* Keep the wide-layout row direction — at this panel logo size
+     the title still fits next to it on a 380 px viewport. Title
+     text-align inherits the wide-layout right-alignment so it
+     hugs the right edge (with the 12 px padding gutter) rather
+     than crowding the logo. */
+  .head { padding: 10px 12px; gap: 10px; }
+  .head img.logo { height: 64px; }
+  .head .title h1 { font-size: 16px; letter-spacing: 0.06em; }
+  .head .title .receipt-id { font-size: 11px; margin-top: 3px; }
+  /* Narrow viewport: the logo+title block already stacks
+     vertically (flex-direction column on .head above); push the
+     receipt number onto its own line under the "Receipt #:"
+     label too, since the typical 32-char monospace ID gets tight
+     next to its label at panel widths down to ~380 px. */
+  .head .title .receipt-id-num { display: block; margin-left: 0; }
+  .body { padding: 10px 12px; }
+  .section { margin-top: 14px; }
+  .section-label { font-size: 10px; padding: 3px 8px; margin-bottom: 6px; letter-spacing: 0.08em; }
+  .parties { flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .party .name { padding: 0 10px; font-size: 13px; }
+  .party .name .secondary { font-size: 11px; }
+  table.product-info td.info-label { font-size: 11px; padding: 3px 8px 3px 10px; width: 42%; }
+  table.product-info td.info-value { font-size: 12px; padding: 3px 10px 3px 0; }
+  /* Items table: drop one font-size step and tighten cell
+     padding so all four columns survive at panel width. Unit-
+     price was already tightened on the data side ("$4.85/gal"
+     instead of "$ 4.8500 / gal") so the per-cell padding can
+     stay generous; the item description gets a fixed width
+     and is allowed to wrap so a long "Jet-A1 fuel - Truck 1"
+     doesn't push the numeric columns into collapse. The qty
+     stacked units (gal / lb / kg) drop to 11px for secondaries. */
+  table.items { font-size: 11px; table-layout: fixed; width: 100%; }
+  table.items thead th { padding: 6px 4px 6px 0; letter-spacing: 0.06em; }
+  table.items td { padding: 8px 4px 8px 0; }
+  table.items th.item, table.items td.item { width: 36%; white-space: normal; word-break: break-word; }
+  table.items th.qty, table.items td.qty { width: 18%; }
+  table.items th.unit-price, table.items td.unit-price { width: 18%; }
+  table.items th.amount, table.items td.amount { width: 28%; }
+  /* Price-list layout: two columns (Service / Price). Service
+     combines sub-service name and the rate's knob label upstream
+     (see priceList._combineServiceLabel), so it can take the bulk
+     of the width; the Price column only ever holds an amount with
+     optional unit suffix like "$25.00" or "$5.32/gal" — well under
+     ~10 chars at the typical panel size. */
+  body.price-list table.items th.item, body.price-list table.items td.item { width: 80%; white-space: normal; word-break: break-word; }
+  body.price-list table.items th.amount, body.price-list table.items td.amount { width: 20%; }
+  table.items td.qty .secondary { font-size: 10px; }
+  table.items tr.subtotal td { padding-top: 7px; }
+  table.items tr.total td { padding-top: 10px; }
+  table.items tr.total td.amount { font-size: 13px; }
+  table.tax-info { font-size: 11px; }
+  table.tax-info thead th { padding: 6px 4px 6px 0; letter-spacing: 0.06em; }
+  table.tax-info td { padding: 7px 4px 7px 0; }
+  table.tax-info th.item, table.tax-info td.item { width: 72%; white-space: normal; word-break: break-word; }
+  table.tax-info th.rate, table.tax-info td.rate { width: 28%; }
+  table.tax-info td.item .tax-reason { font-size: 10px; }
+  .foot { padding: 8px 12px 12px; font-size: 10px; }
+  .disclaimer { padding: 0 12px 10px; font-size: 9px; line-height: 1.35; }
+}
+</style>
+</head>
+<body class="">
+<div class="invoice">
+  <div class="head">
+    <img class="logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==" alt="Lukoil logo">
+    <div class="title">
+      <h1>FUEL DELIVERY RECEIPT</h1>
+      <div class="receipt-id">Receipt #:<span class="receipt-id-num">GSX-20261017T164423Z-KBOS</span></div>
+    </div>
+  </div>
+  <div class="body">
+    <div class="parties">
+      <div class="party">
+        <div class="section-label">A. PROVIDER:</div>
+        <div class="name">Lukoil</div>
+      </div>
+      <div class="party">
+        <div class="section-label">B. RECEIVER:</div>
+        <div class="name"><div class="primary">Example Airline Inc.</div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">C. PRODUCT INFORMATION:</div>
+      <table class="product-info">
+        <tr><td class="info-label">PRODUCT TYPE:</td><td class="info-value">Jet-A1 @ 0.80 kg/L (6.70 lb/gal)</td></tr><tr><td class="info-label">TOTAL VOLUME:</td><td class="info-value">5147 Gallons</td></tr><tr><td class="info-label">UPLIFT DATE:</td><td class="info-value">17-Oct-2026</td></tr><tr><td class="info-label">UPLIFT LOCATION:</td><td class="info-value">KBOS - Logan Intl</td></tr><tr><td class="info-label">METHOD OF TRANSFER:</td><td class="info-value">Uplift</td></tr><tr><td class="info-label">AIRCRAFT:</td><td class="info-value">N000TL - A321</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-label">D. CHARGES:</div>
+      <table class="items">
+        <thead>
+          <tr><th class="item">Item</th><th class="qty">Qty</th><th class="unit-price">Unit Price</th><th class="amount">Amount</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="item">Jet-A1 fuel</td><td class="qty"><span class="primary">5,147 gal</span><span class="secondary">34,488 lb</span><span class="secondary">15,643 kg</span></td><td class="unit-price">$4.92/gal</td><td class="amount">$ 25,317.89</td></tr><tr class="subtotal"><td colspan="3" class="summary-label">Subtotal</td><td class="amount">$ 25,317.89</td></tr><tr class="tax-item"><td class="item">Federal Fuel Tax<span class="tax-reason">US LUST + Federal excise</span></td><td class="qty"></td><td class="unit-price">$0.22/gal</td><td class="amount">$ 1,122.14</td></tr><tr class="tax-item"><td class="item">MA State Sales Tax 6.25%<span class="tax-reason">Statewide sales tax</span></td><td class="qty"></td><td class="unit-price">6.25%</td><td class="amount">$ 1,582.37</td></tr><tr class="total"><td colspan="3" class="summary-label">Total</td><td class="amount">$ 28,022.40</td></tr>
+        </tbody>
+      </table>
+    </div>
+    
+  </div>
+  
+  <div class="foot">Generated by GSX</div>
+  <div class="disclaimer">This invoice is fictitious and generated for flight simulation purposes only. Operator names, logos, and trademarks are used for visual realism and remain the exclusive property of their respective owners. No commercial relationship is implied.</div>
+</div>
+<script>
+/* Auto-SHRINK the operator-logo letterhead when the rendered content
+   doesn't fit vertically. In the GSX panel's inline iframe the
+   available height is fixed at ~410 px (set by _applyMenuDocument
+   based on the active menu's button count), so a long invoice
+   (multi-truck refuel, full tax breakdown) overflows; shrinking the
+   80 px logo to a 24 px inline mark reclaims most of the header
+   height while keeping the letterhead visible — an earlier version
+   HID the logo outright, which (per user feedback, twice) read as a
+   missing asset rather than a layout adaptation. In the standalone
+   browser view (the "Open in browser" target) the viewport is
+   always taller than the content, the overflow check is False, and
+   the logo stays full size. Re-runs on resize so the decision
+   tracks the actual layout, not the initial measurement only.
+
+   The FSX/P3D "View in Panel" viewer (common.SimpleEdgeViewerFrame,
+   wx + WebView2) appends ``#keepLogo`` to the file:// URL so the
+   logo stays full size there — that viewer has real scrollbars and
+   the user can resize the window, so shrinking on overflow is
+   unnecessary. */
+(function () {
+  if (window.location.hash === '#keepLogo') return;
+  function adjust() {
+    var html = document.documentElement;
+    var body = document.body;
+    if (!body) return;
+    var logo = document.querySelector('.head img.logo');
+    if (!logo) return;
+    // Reset to natural size first so we measure the document height
+    // with the full logo present — otherwise once shrunk we can
+    // never decide to grow it back if the window gets taller.
+    logo.style.height = '';
+    var viewportHeight = window.innerHeight || html.clientHeight;
+    var docHeight = Math.max(html.scrollHeight, body.scrollHeight);
+    if (docHeight > viewportHeight) {
+      logo.style.height = '24px';
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', adjust);
+  } else {
+    adjust();
+  }
+  window.addEventListener('resize', adjust);
+})();
+</script>
+</body>
+</html>

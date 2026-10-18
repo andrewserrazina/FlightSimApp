@@ -822,11 +822,13 @@ name = "flightsim-desktop"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "dom_query",
  "getrandom 0.2.17",
  "keyring",
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tokio",
