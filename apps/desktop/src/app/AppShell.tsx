@@ -4,6 +4,8 @@ import { presentConnection } from "../domain/connectionPresentation";
 import { describeFreshness, telemetryFreshness } from "../domain/freshness";
 import { DebriefPage } from "../pages/DebriefPage";
 import { DispatchPage } from "../pages/DispatchPage";
+import { ExpensesPage } from "../pages/ExpensesPage";
+import { GsxTurnaroundSync } from "../ops/OpsContext";
 import { FlightHistoryPage } from "../pages/FlightHistoryPage";
 import { LiveFlightPage } from "../pages/LiveFlightPage";
 import { SettingsPage } from "../pages/SettingsPage";
@@ -86,6 +88,9 @@ export function AppShell({ initialPage = "welcome" }: { initialPage?: Navigation
 
   return (
     <div className="shell">
+      <ErrorBoundary label="GSX turnaround recording">
+        <GsxTurnaroundSync />
+      </ErrorBoundary>
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
@@ -143,6 +148,7 @@ export function AppShell({ initialPage = "welcome" }: { initialPage?: Navigation
           {nav.page === "live" && <LiveFlightPage navigate={navigate} />}
           {nav.page === "history" && <FlightHistoryPage navigate={navigate} />}
           {nav.page === "debrief" && <DebriefPage flightId={nav.debriefFlightId} navigate={navigate} />}
+          {nav.page === "expenses" && <ExpensesPage navigate={navigate} />}
           {nav.page === "settings" && <SettingsPage />}
         </ErrorBoundary>
       </main>
