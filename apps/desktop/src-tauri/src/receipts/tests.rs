@@ -374,3 +374,108 @@ fn sha256_is_of_the_exact_bytes() {
     assert_eq!(sha256_hex(b"abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
     assert_eq!(parse(KBOS).sha256, sha256_hex(KBOS.as_bytes()));
 }
+
+// ---------- receipt-number timestamp (S2-06 D3, provisionally validated on two real Fuel receipts) ----------
+
+use super::receipt_id::*;
+
+/// Receipt numbers of the two real GSX Fuel receipts (KBOS, MSFS 2020 + GSX Pro, owner sessions).
+const REAL_ID_1: &str = "GSX-20261017T164423Z-KBOS";
+const REAL_ID_2: &str = "GSX-20261018T162650Z-KBOS";
+
+#[test]
+fn both_real_receipt_numbers_parse_to_exact_utc() {
+    let p = parse_receipt_id(REAL_ID_1).unwrap();
+    assert_eq!((p.utc.as_str(), p.airport.as_str(), p.year, p.month, p.day), ("2026-10-17T16:44:23Z", "KBOS", 2026, 10, 17));
+    let p = parse_receipt_id(REAL_ID_2).unwrap();
+    assert_eq!((p.utc.as_str(), p.airport.as_str()), ("2026-10-18T16:26:50Z", "KBOS"));
+}
+
+#[test]
+fn malformed_receipt_numbers_are_rejected() {
+    for bad in [
+        "",
+        "GSX-20261017T164423Z",
+        "GSX-20261017T164423Z-",
+        "gsx-20261017T164423Z-KBOS",
+        "GSX-20261017t164423Z-KBOS",
+        "GSX-20261017T164423-KBOS",
+        "GSX-20261017T164423z-KBOS",
+        "GSX-2026101T164423Z-KBOS",
+        "GSX-20261017T1644Z-KBOS",
+        "GSX-20261017T164423Z-kbos",
+        "GSX-20261017T164423Z-KBOSX",
+        "GSX-20261017T164423Z-1234",
+        "GSX-20261017T164423Z-KB",
+        " GSX-20261017T164423Z-KBOS",
+        "GSX-20261017T164423Z-KBOS ",
+        "GSX-20261017T164423Z-KBOS\n",
+        "GSX-2026-10-17T16:44:23Z-KBOS",
+        "XSG-20261017T164423Z-KBOS",
+        "GSX-20261017T164423Z-KB\u{2009}S",
+        "GSX-2026101７T164423Z-KBOS",
+        "GSX-+0261017T164423Z-KBOS",
+    ] {
+        assert_eq!(parse_receipt_id(bad), Err(ReceiptIdError::Malformed), "{bad:?}");
+    }
+}
+
+#[test]
+fn impossible_dates_and_times_are_rejected() {
+    for bad in [
+        "GSX-20260230T120000Z-KBOS",
+        "GSX-20260229T120000Z-KBOS",
+        "GSX-20261301T120000Z-KBOS",
+        "GSX-20261000T120000Z-KBOS",
+        "GSX-20261031T240000Z-KBOS",
+        "GSX-20261031T236000Z-KBOS",
+        "GSX-20261031T235960Z-KBOS",
+        "GSX-19991231T235959Z-KBOS",
+        "GSX-21000229T000000Z-KBOS",
+    ] {
+        assert_eq!(parse_receipt_id(bad), Err(ReceiptIdError::InvalidDateTime), "{bad}");
+    }
+    assert!(parse_receipt_id("GSX-20280229T000000Z-KBOS").is_ok(), "leap day");
+    assert!(parse_receipt_id("GSX-20001231T235959Z-K1A2").is_ok(), "alphanumeric airport");
+    assert!(parse_receipt_id("GSX-20261017T000000Z-1N7A").is_ok());
+    assert!(parse_receipt_id("GSX-20261017T000000Z-S30").is_ok(), "3-character airport");
+}
+
+#[test]
+fn printed_uplift_date_is_parsed_strictly() {
+    assert_eq!(parse_printed_date("17-Oct-2026"), Some((2026, 10, 17)));
+    assert_eq!(parse_printed_date(" 18-Oct-2026 "), Some((2026, 10, 18)));
+    for bad in ["17-OCT-2026", "7-Oct-2026", "17-Oct-26", "31-Sep-2026", "17 Oct 2026", "2026-10-17", "17-Oct-2026-1", ""] {
+        assert_eq!(parse_printed_date(bad), None, "{bad}");
+    }
+}
+
+#[test]
+fn the_real_kbos_receipt_number_agrees_with_its_printed_airport_and_uplift_date() {
+    let r = parse(KBOS);
+    match receipt_id_time("Fuel", &r) {
+        ReceiptIdTime::Consistent { parts } => assert_eq!(parts.utc, "2026-10-17T16:44:23Z"),
+        other => panic!("expected consistent, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_receipt_that_disagrees_with_its_own_number_is_never_usable_evidence() {
+    let r = parse(&variant("GSX-20261017T164423Z-KBOS", "GSX-20261017T164423Z-KJFK"));
+    assert!(matches!(receipt_id_time("Fuel", &r), ReceiptIdTime::Inconsistent { problems, .. } if problems == vec![IdProblem::AirportMismatch { printed: "KBOS".into() }]));
+    let r = parse(&variant("GSX-20261017T164423Z-KBOS", "GSX-20261018T001500Z-KBOS"));
+    assert!(matches!(receipt_id_time("Fuel", &r), ReceiptIdTime::Inconsistent { problems, .. } if problems == vec![IdProblem::DateMismatch { printed: "17-Oct-2026".into() }]));
+    let r = parse(&variant("GSX-20261017T164423Z-KBOS", "GSX-20261017T254423Z-KBOS"));
+    assert_eq!(receipt_id_time("Fuel", &r), ReceiptIdTime::Rejected(ReceiptIdError::InvalidDateTime));
+    let r = parse(&variant("GSX-20261017T164423Z-KBOS", "INV-0001"));
+    assert_eq!(receipt_id_time("Fuel", &r), ReceiptIdTime::Rejected(ReceiptIdError::Malformed));
+}
+
+#[test]
+fn the_pattern_is_not_assumed_for_unverified_receipt_groups_or_layouts() {
+    let r = parse(KBOS);
+    for group in ["Handling", "Catering", "PassengerBus", "Other"] {
+        assert_eq!(receipt_id_time(group, &r), ReceiptIdTime::NotApplicable, "{group}");
+    }
+    assert_eq!(receipt_id_time("Fuel", &parse(SYNTHETIC)), ReceiptIdTime::NotApplicable, "unsupported layout");
+}
