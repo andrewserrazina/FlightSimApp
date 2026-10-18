@@ -547,8 +547,14 @@ fn plans_with_a_long_navlog_fit_and_oversized_plans_are_still_refused() {
 
 use super::release::MilestoneOutcome;
 
-/// Removes everything migration 4 added (to build genuine older databases in tests).
-const DROP_V4: &str = "DELETE FROM schema_migrations WHERE version = 5; DROP TRIGGER flight_manual_milestones_immutable; DROP TABLE flight_manual_milestones; \
+/// Removes everything migration 6 added (dropping a table drops its indexes and triggers).
+const DROP_V6: &str = "DROP TABLE expense_audit; DROP TABLE expenses; DROP TABLE receipt_currency_confirmations; DROP TABLE gsx_receipts; \
+    DROP TABLE turnaround_feed_log; DROP TABLE turnaround_service_events; DROP TABLE turnarounds; DELETE FROM schema_migrations WHERE version = 6;";
+
+/// Removes everything migrations 4 to 6 added (to build genuine older databases in tests).
+const DROP_V4: &str = "DROP TABLE expense_audit; DROP TABLE expenses; DROP TABLE receipt_currency_confirmations; DROP TABLE gsx_receipts; \
+    DROP TABLE turnaround_feed_log; DROP TABLE turnaround_service_events; DROP TABLE turnarounds; DELETE FROM schema_migrations WHERE version = 6; \
+    DELETE FROM schema_migrations WHERE version = 5; DROP TRIGGER flight_manual_milestones_immutable; DROP TABLE flight_manual_milestones; \
     DROP TRIGGER dispatch_releases_no_delete; DROP TRIGGER dispatch_releases_link_once; DROP TRIGGER dispatch_releases_state_transition; \
     DROP TRIGGER dispatch_releases_immutable_record; DROP INDEX dispatch_releases_by_time; DROP TABLE dispatch_releases; \
     DELETE FROM schema_migrations WHERE version = 4;";
@@ -778,7 +784,8 @@ fn upgrading_a_populated_v4_database_labels_existing_manual_milestones_real_worl
         s.create_release(&release_json("rel-1", "100")).unwrap();
         s.attach_release("rel-1", "f-1", "2026-10-16T12:40:00Z").unwrap();
         s.record_milestone("f-1", "out", "2026-10-16T12:45:00Z", "real_world_utc").unwrap();
-        // Turn it into a genuine v4 database (no clock_source column).
+        // Turn it into a genuine v4 database (no clock_source column, no v6 tables).
+        s.conn.execute_batch(DROP_V6).unwrap();
         s.conn.execute_batch("DROP TRIGGER flight_manual_milestones_immutable; ALTER TABLE flight_manual_milestones DROP COLUMN clock_source; \
             CREATE TRIGGER flight_manual_milestones_immutable BEFORE UPDATE ON flight_manual_milestones BEGIN SELECT RAISE(ABORT, 'recorded milestones are immutable'); END; \
             DELETE FROM schema_migrations WHERE version = 5;").unwrap();
@@ -796,3 +803,7 @@ fn upgrading_a_populated_v4_database_labels_existing_manual_milestones_real_worl
     assert!(s.conn.execute("UPDATE flight_manual_milestones SET occurred_at_utc = '2026-10-16T11:00:00Z'", []).is_err());
     s.record_milestone("f-1", "in", "2026-10-16T15:00:00Z", "real_world_utc").unwrap();
 }
+
+// ---------- GSX turnarounds, receipts and the expense ledger (schema v6) ----------
+
+mod s205;

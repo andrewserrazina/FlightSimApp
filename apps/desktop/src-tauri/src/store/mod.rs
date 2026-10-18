@@ -10,8 +10,10 @@
 pub mod actor;
 pub mod commands;
 pub mod dispatch;
+pub mod ledger;
 pub mod release;
 pub mod sync;
+pub mod turnaround;
 
 use std::path::{Path, PathBuf};
 
@@ -27,6 +29,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (3, include_str!("../../migrations/0003_dispatch.sql")),
     (4, include_str!("../../migrations/0004_dispatch_release.sql")),
     (5, include_str!("../../migrations/0005_manual_milestone_clock.sql")),
+    (6, include_str!("../../migrations/0006_turnaround_ledger.sql")),
 ];
 
 pub fn latest_schema_version() -> i64 {
@@ -337,6 +340,23 @@ pub(crate) fn now_utc() -> String {
     // Seconds precision is enough for bookkeeping columns.
     let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
     format_unix_utc(secs)
+}
+
+/// Real-world UTC with millisecond precision, generated natively (never taken from the webview).
+pub(crate) fn now_utc_ms() -> String {
+    let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0);
+    let base = format_unix_utc(ms.div_euclid(1000));
+    format!("{}.{:03}Z", &base[..base.len() - 1], ms.rem_euclid(1000))
+}
+
+/// A random (v4) UUID generated natively.
+pub(crate) fn new_uuid() -> Result<String, StoreError> {
+    let mut b = [0u8; 16];
+    getrandom::getrandom(&mut b).map_err(|e| StoreError::new(StoreErrorKind::Io, format!("No randomness available: {e}")))?;
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
+    Ok(format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32]))
 }
 
 /// Format seconds since the epoch as `YYYY-MM-DDTHH:MM:SSZ` (civil-from-days, no chrono needed).

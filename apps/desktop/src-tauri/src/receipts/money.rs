@@ -65,6 +65,11 @@ const CURRENCIES: &[(&str, u32)] = &[
     ("MYR", 2), ("IDR", 2), ("PHP", 2), ("ILS", 2), ("AED", 2),
 ];
 
+/// Every ISO 4217 code this parser recognises.
+pub fn known_currencies() -> impl Iterator<Item = &'static str> {
+    CURRENCIES.iter().map(|(c, _)| *c)
+}
+
 pub fn minor_exponent(code: &str) -> Option<u32> {
     CURRENCIES.iter().find(|(c, _)| *c == code).map(|(_, e)| *e)
 }
