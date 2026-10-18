@@ -349,3 +349,5 @@ details > summary { cursor: pointer; color: var(--text-muted); font-size: var(--
 .nowrap { white-space: nowrap; }
 .button-row--inline { flex-wrap: nowrap; margin: 0; gap: var(--space-2); }
 .dialog .table { margin: var(--space-2) 0; }
+.watch-status { border-bottom: 1px solid var(--border-subtle); padding-bottom: var(--space-3); margin-bottom: var(--space-3); }
+.watch-status__row { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }

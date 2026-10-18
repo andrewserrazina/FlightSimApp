@@ -15,7 +15,7 @@ use crate::store::format_unix_utc;
 
 /// Files read per scan, at most.
 pub const MAX_FILES_PER_SCAN: usize = 2_000;
-const MAX_DEPTH: usize = 2;
+pub(crate) const MAX_DEPTH: usize = 2;
 
 #[derive(Debug, Clone)]
 pub struct ScannedFile {
@@ -59,7 +59,7 @@ pub fn default_root() -> Option<PathBuf> {
     Some(PathBuf::from(appdata).join("Virtuali").join("GSX").join("Receipts"))
 }
 
-fn is_link(meta: &fs::Metadata) -> bool {
+pub(crate) fn is_link(meta: &fs::Metadata) -> bool {
     meta.file_type().is_symlink() || is_reparse_point(meta)
 }
 
@@ -80,7 +80,7 @@ fn modified_utc(meta: &fs::Metadata) -> Option<String> {
     Some(format_unix_utc(secs))
 }
 
-fn has_html_extension(p: &Path) -> bool {
+pub(crate) fn has_html_extension(p: &Path) -> bool {
     p.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("html") || e.eq_ignore_ascii_case("htm"))
 }
 
