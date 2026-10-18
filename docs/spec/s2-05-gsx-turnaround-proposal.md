@@ -34,6 +34,9 @@ Status: **vertical slice implemented and awaiting owner acceptance on MSFS 2020 
   - A state is present **only** when the quality is `valid`. The schema enforces this.
   - The bridge publishes on change, plus a 10 s heartbeat. Data older than 5 s is `stale`.
 - **Desktop.**
+  - GSX observations are persisted in the order seen. The "already stored" caches advance only after the store
+    confirms a write, so a failed write is retried with its original observation time. The store's unchanged-state
+    dedup keeps a retry from doubling a row.
   - The reducer keeps the latest `gsx.state` for the current session only.
   - `gsxFeedView` derives the UI status:
     - `sim_not_connected`, `unsupported_adapter` (mock), `waiting`, `live`, `stale` (a missed heartbeat: no update for
@@ -116,7 +119,9 @@ Triggers enforce immutability, no deletion, link-once and final states.
 
 ### A.6 Open items for the owner
 
-1. Owner decision 4 (user-controlled deletion of archived receipts) is **not built**. Receipts and their original bytes
+1. **INCOMPLETE: owner decision 4 (user-controlled deletion of archived receipts) is not built.** It needs its own
+   slice (deletion UI, deletion of the stored bytes, and an audit record). Until then, S2-05 does not satisfy
+   decision 4. Receipts and their original bytes
    are kept and cannot be deleted from the UI.
 2. GSX values other than deboarding 1/4/5/6 still need observation on real GSX (see the acceptance checklist).
 3. Only GSX Fuel receipts are parsed. Catering, handling and bus receipts need real redacted samples.

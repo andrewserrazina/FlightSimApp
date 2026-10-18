@@ -15,6 +15,11 @@ This checklist verifies the S2-05 vertical slice (#17, #18, #19) on a real Windo
 
 All amounts are **simulated operating costs** from flight simulation, not real money.
 
+**Known incomplete (not tested here, tracked in the [spec §A.6](../spec/s2-05-gsx-turnaround-proposal.md#a6-open-items-for-the-owner)):**
+- **Receipt archive deletion (owner decision 4) is NOT BUILT.** Imported receipts and their original bytes are kept
+  in Turnline's database and cannot be deleted from the UI. Do not sign off decision 4 from this checklist.
+- Only GSX Fuel receipts are parsed. Other groups appear as "Unsupported format".
+
 ## 0. Setup
 
 1. Get the tester kit (CI → job `windows-installer` → artifact `turnline-tester-kit`). Verify `SHA256SUMS.txt` and
@@ -132,4 +137,5 @@ Compare-Object (Import-Csv "$env:USERPROFILE\Desktop\receipts-before.csv") (Impo
 | All sections pass? | |
 | GSX values newly observed (service: raw sequence) | |
 | Issues found | |
+| Receipt archive deletion (decision 4) | **Not built: still open** |
 | Owner approval to merge #17, #18, #19 | |
