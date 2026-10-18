@@ -172,6 +172,9 @@ GSX (S2-05, read-only diagnostics; full steps in [gsx-probe-msfs2020.md](../test
 & $bridge --gsx-receipts
 ```
 
+GSX turnaround and expense ledger in the desktop app (S2-05 slice): follow
+[s2-05-gsx-turnaround-acceptance.md](../testing/s2-05-gsx-turnaround-acceptance.md). It needs no command line.
+
 ## 7. What to send back
 
 For every test session, send:

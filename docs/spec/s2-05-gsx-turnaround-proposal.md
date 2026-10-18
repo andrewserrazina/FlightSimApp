@@ -1,13 +1,127 @@
-# S2-05 Phase A: GSX-connected turnaround and ground-expense ledger (proposal)
+# S2-05: GSX-connected turnaround and ground-expense ledger
 
-Status: **Phase A approved by the owner with refinements (§0.1).**
-- **Authorized so far:** only the first slice, a read-only GSX L: variable probe plus read-only receipts discovery
-  (see [gsx-probe-msfs2020.md](../testing/gsx-probe-msfs2020.md)).
-- **Not yet authorized:** the turnaround migration, UI, ledger and invoice parser. They wait for a successful real-GSX
-  probe and inspection of real, redacted invoice samples.
-- **Testing:** nothing has been tested against GSX or a simulator.
+Status: **vertical slice implemented and awaiting owner acceptance on MSFS 2020 + GSX Pro.**
+- **Delivered in focused PRs:**
+  - #17: live GSX feed;
+  - #18: SQLite store and Tauri commands;
+  - #19: UI;
+  - plus this document and the [owner acceptance checklist](../testing/s2-05-gsx-turnaround-acceptance.md).
+- **Section A** describes the architecture *as built*. Sections 1–10 are the original Phase A proposal, kept for its
+  evidence and reasoning. **Where they differ, section A is authoritative.**
+- **Testing:**
+  - Automated tests cover contracts, the bridge (fake SimConnect), the store, the parser on the sanitized real KBOS
+    receipt, and the UI with in-memory stores.
+  - Live MSFS 2020 + GSX Pro integration has **not** been demonstrated by automated tests. Owner-verified GSX values so
+    far: deboarding 1 → 4 → 5 → 6 only.
 
-## 0.1 Owner decisions and required refinements
+## A. As built (S2-05 vertical slice)
+
+### A.1 GSX feed (bridge → desktop), read-only
+
+- **Same SimConnect client as telemetry, separate data definition.**
+  - The MSFS adapter registers a second data definition (`DefineGsx = 2`, request `3`) on its existing native client.
+    There is no additional SimConnect consumer.
+  - It is polled once a second.
+  - The six documented state LVars (`L:FSDT_GSX_{BOARDING,DEBOARDING,CATERING,REFUELING,PUSHBACK,DEICE}_STATE`) are read
+    as numbers. Turnline never writes a GSX variable or sends a GSX command.
+- **Isolation from telemetry.** Registering GSX is wrapped so that a failure only marks GSX unavailable. A rejected LVar
+  becomes `unavailable` for that service only. `TelemetryLayout`, the normalizer, the profile and the frame validator are
+  untouched (tested).
+- **Wire message `gsx.state` (schema v1)**, separate from `telemetry.frame` and published through
+  `IGsxFeedSource`.
+  - Fields: `observed_at`, `last_data_at`, `feed` (`live` / `stale` / `not_detected`), and per service `lvar`,
+    `quality` (`valid` / `unavailable` / `invalid` / `stale` / `unsupported`), `raw`, `state`, `detail`.
+  - A state is present **only** when the quality is `valid`. The schema enforces this.
+  - The bridge publishes on change, plus a 10 s heartbeat. Data older than 5 s is `stale`.
+- **Desktop.**
+  - The reducer keeps the latest `gsx.state` for the current session only.
+  - `gsxFeedView` derives the UI status:
+    - `sim_not_connected`, `unsupported_adapter` (mock), `waiting`, `live`, `stale` (a missed heartbeat: no update for
+      15 s) or `not_detected`;
+    - a service state is shown only while the feed is live and the reading valid.
+  - The recorder ignores `gsx.state` entirely (tested byte-for-byte).
+- **Verification labels.** Values not yet observed by the owner on real GSX carry an "unverified value" tag in the UI.
+
+### A.2 Local store (migration 0006, additive, local only)
+
+| Table | Purpose and key rules |
+|---|---|
+| `turnarounds` | Departure or arrival; status `open` / `interrupted` / `closed` / `abandoned`; at most one unfinished (`open_slot`). `flight_link`: `unlinked`, `recording_at_open` (the only automatic link: the flight being recorded when the turnaround opened) or `user_confirmed`. Linked once. Airport with source (`plan` / `user`), gate with source (`user`). Closed/abandoned is final; abandoning needs a reason. |
+| `turnaround_service_events` | Append-only. `gsx` rows hold a GSX enum state whose raw value must equal its documented value (1–6); unchanged states are not stored twice; only while open. `manual` rows hold `started` / `completed` / `not_required` and a required note. They never mix. Times are real-world UTC. |
+| `turnaround_feed_log` | Feed availability while unfinished: `live`, `stale`, `not_detected`, `sim_not_connected`, `app_restarted`. Gaps are recorded, never filled. |
+| `gsx_receipts` | One row per SHA-256. Original bytes kept in `raw_source` (never rendered), the parser's result in `parsed_json`, a same-number-different-content flag in `possible_revision_of`. User-only association; dismissal. Content immutable, never deleted. |
+| `receipt_currency_confirmations` | The person's confirmation of a symbol-only receipt's currency: receipt id and SHA-256, currency, actor (`local`), natively generated UTC time, optional note. Never edited; a correction inserts a new row and supersedes the old (`superseded_by`), keeping the history. |
+| `expenses` | `gsx_invoiced` (from a verified or currency-confirmed receipt only) or `manual`. Category, description, `amount_minor` and currency (immutable), `currency_source` (`receipt_explicit` / `user_confirmed` / `user_entered`), `printed_total`, receipt and confirmation links, flight/turnaround, status `active` / `superseded` / `voided`, `cost_kind = 'simulated'`. **One active expense per receipt** (partial unique index). `estimated` is not accepted. |
+| `expense_audit` | Append-only history: created, associated, superseded, voided, with actor, UTC time and detail. |
+
+Triggers enforce immutability, no deletion, link-once and final states.
+
+### A.3 Receipt import and currency confirmation
+
+- **Scan:** `%APPDATA%\Virtuali\GSX\Receipts` only. The UI cannot pass a path.
+  - Read-only, `.html`/`.htm` only, 2 MB cap enforced on the bytes actually read, depth ≤ 2, at most 2,000 files per
+    scan.
+  - Symbolic links and reparse points are skipped and reported.
+- **Parse:** the merged GSX Fuel parser (#16) runs on the bytes. Unsupported layouts are kept as `unsupported` and
+  never counted. Other groups are unsupported until real samples are verified.
+- **Confirmation (owner decision A):**
+  - The store re-parses the *stored* bytes, checks the SHA-256 and calls `receipts::review::confirm_currency`.
+  - The UI offers exactly the codes that contract accepts (for `$`: AUD, CAD, HKD, MXN, NZD, SGD, USD …). Nothing is
+    preselected, and the user must click "Confirm ⟨code⟩".
+  - Arithmetic, conflict, volume, unknown-row and unsupported-layout errors are never bypassed.
+  - **KBOS:** confirming USD gives 2,802,240 USD minor units ($28,022.40). This is tested end to end, including restart
+    and re-import.
+- **Revisions:** counting a receipt flagged as a possible revision of an already-counted one requires an explicit choice:
+  `supersedes ⟨expense⟩` or `notARevision`. A confirmation correction supersedes the dependent expense automatically,
+  with an audit entry.
+- **No automatic matching.** Turnline never links a receipt by airport, registration or time. This is stricter than the
+  §4 proposal. Unassigned receipts and expenses are allowed and counted in the unassigned total.
+
+### A.4 Turnaround lifecycle (as built)
+
+- **Opening:** the user opens a turnaround from the Live Flight panel. A departure can open before recording. It is
+  linked automatically only to the flight being recorded at that moment; otherwise the user links it.
+- **GSX observations:** the desktop writes them into the open turnaround about once a second, but only from a live feed
+  with a valid reading, once per state change, in the order seen. Feed availability changes are logged while the
+  turnaround is unfinished.
+- **Status changes:**
+  - pause → `interrupted`, then resume;
+  - close (final);
+  - abandon with a reason (final);
+  - **an app start marks an open turnaround `interrupted`** and logs `app_restarted`. The user resumes, closes or
+    abandons it.
+- **Not built in this slice:** automatic open on landing, automatic close on takeoff, GSX gate/progress/cargo LVars, and
+  a "reset by GSX" label. A 5 → 1 drop is recorded as the observed state, never as completed.
+- **Servicing readiness** is advisory only:
+  - departure: boarding, catering and refueling; arrival: deboarding;
+  - done = GSX `completed` or `bypassed`, or manual `completed` or `not_required`;
+  - pushback is excluded, and the UI says Turnline never decides when to push back.
+
+### A.5 UI
+
+- **Live Flight → Turnaround:**
+  - GSX status and the live service table, with "unverified value" tags;
+  - start form, manual entries, readiness, pause/resume/close/abandon, link to the current flight;
+  - the turnaround's simulated totals.
+- **Receipts & Expenses (Alt+7):**
+  - scan report and review queue (printed fields, lines and issues as text);
+  - currency confirmation and correction history, revision resolution, association, dismissal;
+  - ledger with per-currency totals, superseded and voided entries, void with reason, audit trail;
+  - manual expenses (exact minor units).
+- **Debrief:**
+  - turnaround timelines (GSX vs manual, plus feed gaps);
+  - itemised expenses with confirmed per-currency totals;
+  - pending associated receipts listed separately.
+- Everything is labelled **simulated**.
+
+### A.6 Open items for the owner
+
+1. Owner decision 4 (user-controlled deletion of archived receipts) is **not built**. Receipts and their original bytes
+   are kept and cannot be deleted from the UI.
+2. GSX values other than deboarding 1/4/5/6 still need observation on real GSX (see the acceptance checklist).
+3. Only GSX Fuel receipts are parsed. Catering, handling and bus receipts need real redacted samples.
+
+## 0.1 Owner decisions and required refinements (Phase A; see section A for what was built)
 
 **Decisions:**
 1. Bridge: the existing .NET SimConnect bridge, used strictly read-only, for an initial GSX L: probe (§3, option 1).
