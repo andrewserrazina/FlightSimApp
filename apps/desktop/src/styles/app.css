@@ -331,3 +331,18 @@ code.mono { font-size: var(--text-sm); overflow-wrap: anywhere; }
 .review-list__missing span[aria-hidden] { color: var(--status-warn); font-weight: 700; }
 .review-warnings { margin: var(--space-3) 0; display: grid; gap: var(--space-2); }
 .ops-release { border-color: var(--color-gold); }
+
+/* S2-05: turnaround, receipts and simulated expenses */
+.grid--expenses { grid-template-columns: 1fr; }
+.form-row { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: flex-end; }
+.form-row > .field { flex: 1 1 180px; }
+.field__static { margin: 0; min-height: var(--control-height); display: flex; align-items: center; gap: var(--space-2); }
+.turnaround__head { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; margin-bottom: var(--space-3); }
+.receipt { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-2); padding: var(--space-4); margin-bottom: var(--space-4); }
+.receipt__head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin-bottom: var(--space-3); }
+.receipt__title { margin: 0; font-size: var(--text-md); font-weight: 600; color: var(--text-primary); }
+.receipt__issues { color: var(--status-warn); }
+.radio-group { border: 0; padding: 0; margin: var(--space-3) 0; display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.radio { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--text-primary); }
+.is-inactive { opacity: 0.7; }
+details > summary { cursor: pointer; color: var(--text-muted); font-size: var(--text-sm); }

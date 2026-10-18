@@ -28,14 +28,14 @@ const send = async (t: FakeTransport, ...payloads: unknown[]) => {
 };
 
 describe("navigation", () => {
-  it("offers all six pages and marks the current one", async () => {
+  it("offers all seven pages and marks the current one", async () => {
     await renderApp();
     const nav = screen.getByRole("navigation", { name: "Primary" });
     const items = within(nav).getAllByRole("button");
-    expect(items.map((b) => b.textContent?.replace(/Alt\+\d/, ""))).toEqual(["Connection", "Dispatch", "Live Flight", "Flight History", "Debrief", "Settings"]);
+    expect(items.map((b) => b.textContent?.replace(/Alt\+\d/, ""))).toEqual(["Connection", "Dispatch", "Live Flight", "Flight History", "Debrief", "Receipts & Expenses", "Settings"]);
     expect(within(nav).getByRole("button", { name: /Connection/ })).toHaveAttribute("aria-current", "page");
 
-    for (const [label, heading] of [["Dispatch", "Dispatch"], ["Live Flight", "Live flight"], ["Flight History", "Flight history"], ["Debrief", "Flight debrief"], ["Settings", "Settings & diagnostics"], ["Connection", "Welcome & connection"]] as const) {
+    for (const [label, heading] of [["Dispatch", "Dispatch"], ["Live Flight", "Live flight"], ["Flight History", "Flight history"], ["Debrief", "Flight debrief"], ["Receipts & Expenses", "Receipts & simulated expenses"], ["Settings", "Settings & diagnostics"], ["Connection", "Welcome & connection"]] as const) {
       fireEvent.click(within(nav).getByRole("button", { name: new RegExp(label) }));
       const h1 = screen.getByRole("heading", { level: 1 });
       expect(h1).toHaveTextContent(heading);

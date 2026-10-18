@@ -20,6 +20,7 @@ import { useDispatch, useDispatchView } from "../dispatch/DispatchContext";
 import { planBasisForFlight, type PlanBasisKind } from "../dispatch/planBasis";
 import { routeTitle } from "../dispatch/presentation";
 import { PHASE_LABEL, SIMULATOR_SHORT } from "./labels";
+import { TurnaroundPanel } from "../ops/TurnaroundPanel";
 
 const ROUTE_SUFFIX: Record<PlanBasisKind, string> = {
   imported_preview: "imported plan, preview",
@@ -77,6 +78,7 @@ export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
       <div className="page">
         {flightStrip}
         <FlightControls navigate={navigate} />
+        <TurnaroundPanel navigate={navigate} />
         <LiveOperations navigate={navigate} />
         <FlightPlanBaseline flightId={flightOpen ? rec.flightId : null} navigate={navigate} />
       <RouteMonitor navigate={navigate} />
@@ -93,6 +95,7 @@ export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
     <div className="page">
       {flightStrip}
       <FlightControls navigate={navigate} />
+      <TurnaroundPanel navigate={navigate} />
       <LiveOperations navigate={navigate} />
       <FlightPlanBaseline flightId={flightOpen ? rec.flightId : null} navigate={navigate} />
       <RouteMonitor navigate={navigate} />

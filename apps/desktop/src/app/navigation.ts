@@ -5,6 +5,7 @@ export const PAGES = [
   { id: "live", label: "Live Flight", title: "Live flight", shortcut: "2" },
   { id: "history", label: "Flight History", title: "Flight history", shortcut: "3" },
   { id: "debrief", label: "Debrief", title: "Flight debrief", shortcut: "4" },
+  { id: "expenses", label: "Receipts & Expenses", title: "Receipts & simulated expenses", shortcut: "7" },
   { id: "settings", label: "Settings", title: "Settings & diagnostics", shortcut: "5" },
 ] as const;
 
