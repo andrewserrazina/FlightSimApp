@@ -270,7 +270,11 @@ function CurrencyDialog({ receipt: r, correcting, onClose }: { receipt: ReceiptD
   const [code, setCode] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const f = r.parsed?.fields ?? {};
-  const amounts = [...(f.lines ?? []).map((l) => l.amount?.text).filter(Boolean), f.subtotal?.text, f.total?.text].filter(Boolean) as string[];
+  const amounts: Array<[string, string]> = [
+    ...(f.lines ?? []).flatMap((l): Array<[string, string]> => (l.amount?.text ? [[l.description ?? "Line", l.amount.text]] : [])),
+    ...(f.subtotal?.text ? [["Subtotal", f.subtotal.text] as [string, string]] : []),
+    ...(f.total?.text ? [["Total", f.total.text] as [string, string]] : []),
+  ];
   const symbol = r.parsed?.currency?.symbol ?? "$";
   const name = useId();
   return (
@@ -291,7 +295,16 @@ function CurrencyDialog({ receipt: r, correcting, onClose }: { receipt: ReceiptD
         the time.
       </p>
       {correcting && current && <p>Currently confirmed: {current.currency}. The old confirmation is kept in the history, and a counted expense is replaced by one in the new currency.</p>}
-      <p className="muted">Amounts as printed: {amounts.join(" · ")}</p>
+      <table className="table table--compact" aria-label="Amounts as printed">
+        <tbody>
+          {amounts.map(([label, text], i) => (
+            <tr key={i}>
+              <td>{label}</td>
+              <td className="num nowrap">{text}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
       <fieldset className="radio-group">
         <legend className="field__label">Currency</legend>
         {options.map((c) => (
@@ -503,7 +516,7 @@ function ExpenseRow({ e, receipt, flights, turnarounds }: { e: ExpenseDto; recei
         </td>
         <td>
           {e.status === "active" && (
-            <div className="button-row">
+            <div className="button-row button-row--inline">
               <Button variant="quiet" onClick={() => setDialog("associate")} aria-label={`Associate ${e.description}`}>
                 Associate…
               </Button>

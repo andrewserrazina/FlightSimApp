@@ -103,7 +103,9 @@ describe("Receipts & Expenses", () => {
     await click(within(card).getByRole("button", { name: "Confirm currency…" }));
     const dialog = screen.getByRole("dialog", { name: "Confirm the receipt's currency" });
     expect(dialog).toHaveTextContent("several currencies use that symbol");
-    expect(dialog).toHaveTextContent("$ 25,317.89 · $ 1,582.37 · $ 1,122.14");
+    const printed = within(dialog).getByRole("table", { name: "Amounts as printed" });
+    expect(printed).toHaveTextContent("Jet-A1 uplift$ 25,317.89");
+    expect(printed).toHaveTextContent("Total$ 28,022.40");
     const radios = within(dialog).getAllByRole("radio") as HTMLInputElement[];
     expect(radios.map((r) => r.value)).toEqual(["AUD", "CAD", "HKD", "MXN", "NZD", "SGD", "USD"]);
     expect(radios.some((r) => r.checked)).toBe(false);

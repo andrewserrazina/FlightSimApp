@@ -33,15 +33,30 @@ export type ActionResult = { ok: true } | { ok: false; message: string };
 const UNAVAILABLE = "Turnarounds and expenses are stored by the Turnline desktop app. They are not available in this environment.";
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+/** Bound on queued observations during a long store outage (distinct changes only; ~5 min at 1 Hz). */
+export const MAX_PENDING_OBSERVATIONS = 300;
+
+interface PendingObservation {
+  turnaroundId: string;
+  feed: FeedLogKind | null;
+  states: Array<{ service: GsxService; state: GsxServiceState; raw: number }>;
+  observedAt: string | null;
+}
+
 const FEED_LOG: Partial<Record<GsxFeedViewStatus, FeedLogKind>> = { live: "live", stale: "stale", not_detected: "not_detected", sim_not_connected: "sim_not_connected" };
 
 export class OpsService {
   private view: OpsView;
   private listeners = new Set<() => void>();
   private chain: Promise<unknown> = Promise.resolve();
-  /** Last state sent per turnaround+service, and last feed per turnaround (avoids repeating IPC calls). */
+  /** Last state / feed the store CONFIRMED per turnaround(+service); advanced only after a successful write. */
   private sentState = new Map<string, GsxServiceState>();
   private sentFeed = new Map<string, FeedLogKind>();
+  /** Distinct observations waiting to be stored, oldest first. */
+  private pending: PendingObservation[] = [];
+  private lastSignature: string | null = null;
+  private flushing = false;
+  private droppedObservations = 0;
 
   constructor(private readonly store: OpsStore | null) {
     const unavailable = { kind: "unavailable", message: UNAVAILABLE } as const;
@@ -152,39 +167,78 @@ export class OpsService {
   /**
    * Called with the derived feed view (about once a second). Records feed availability changes while a
    * turnaround is unfinished, and valid live GSX state changes while it is open. Nothing else.
+   *
+   * Each distinct observation is queued and persisted in the order seen. The "already stored" caches
+   * advance only after the store confirms a write, so a failed write stays at the head of the queue and
+   * is retried (with its original observation time) on the next call; later observations wait behind it.
+   * The store also ignores an unchanged state, so a retry after an ambiguous failure is never doubled.
    */
   observeGsx(feed: GsxFeedView) {
-    const store = this.store;
     const t = this.view.turnaround.kind === "ready" ? this.view.turnaround.value : null;
-    if (!store || !t || (t.status !== "open" && t.status !== "interrupted")) return;
-    const writes: Array<() => Promise<boolean>> = [];
-    const kind = FEED_LOG[feed.status];
-    if (kind && this.sentFeed.get(t.id) !== kind) {
-      this.sentFeed.set(t.id, kind);
-      writes.push(() => store.recordFeed(t.id, kind));
-    }
-    if (t.status === "open" && feed.status === "live" && feed.observedAt) {
-      for (const s of feed.services) {
-        if (s.state === null || s.raw === null || s.quality !== "valid") continue;
-        const key = `${t.id}:${s.service}`;
-        if (this.sentState.get(key) === s.state) continue;
-        this.sentState.set(key, s.state);
-        const { service, state, raw } = s;
-        const at = feed.observedAt;
-        writes.push(() => store.recordGsx(t.id, service, state, raw, at));
+    if (this.store && t && (t.status === "open" || t.status === "interrupted")) {
+      const kind = FEED_LOG[feed.status] ?? null;
+      const states =
+        t.status === "open" && feed.status === "live" && feed.observedAt
+          ? feed.services.flatMap((s) => (s.state !== null && s.raw !== null && s.quality === "valid" ? [{ service: s.service, state: s.state, raw: s.raw }] : []))
+          : [];
+      const signature = JSON.stringify([t.id, t.status, kind, states.map((s) => [s.service, s.state])]);
+      if (signature !== this.lastSignature) {
+        this.lastSignature = signature;
+        this.pending.push({ turnaroundId: t.id, feed: kind, states, observedAt: feed.observedAt });
+        if (this.pending.length > MAX_PENDING_OBSERVATIONS) {
+          this.pending.shift();
+          this.droppedObservations++;
+        }
       }
     }
-    if (writes.length === 0) return;
-    void this.queue(async () => {
-      let changed = false;
-      try {
-        for (const w of writes) changed = (await w()) || changed;
-        if (this.view.gsxRecordError) this.set({ gsxRecordError: null });
-      } catch (e) {
-        this.set({ gsxRecordError: errText(e) });
-      }
-      return changed;
-    }).then((changed) => (changed ? this.reloadTurnaround() : undefined));
+    if (this.pending.length > 0 && !this.flushing) void this.flushObservations();
+  }
+
+  /** Observations not yet confirmed by the store (tests and diagnostics). */
+  get pendingObservations(): number {
+    return this.pending.length;
+  }
+
+  private async flushObservations() {
+    this.flushing = true;
+    let changed = false;
+    try {
+      await this.queue(async () => {
+        while (this.pending.length > 0) {
+          changed = (await this.persistObservation(this.pending[0]!)) || changed;
+          this.pending.shift();
+        }
+      });
+      if (this.view.gsxRecordError) this.set({ gsxRecordError: null });
+      this.droppedObservations = 0;
+    } catch (e) {
+      const dropped = this.droppedObservations ? ` ${this.droppedObservations} older observation(s) could not be kept.` : "";
+      this.set({ gsxRecordError: `${errText(e)} (${this.pending.length} observation(s) waiting to be saved; retrying).${dropped}` });
+    } finally {
+      this.flushing = false;
+    }
+    if (changed) await this.reloadTurnaround();
+  }
+
+  /** Writes one observation; throws (leaving it queued) if the store fails. Returns whether rows were added. */
+  private async persistObservation(o: PendingObservation): Promise<boolean> {
+    const store = this.store!;
+    const t = this.view.turnaround.kind === "ready" ? this.view.turnaround.value : null;
+    // The turnaround was finished or replaced meanwhile: the store would refuse these writes forever.
+    if (!t || t.id !== o.turnaroundId || (t.status !== "open" && t.status !== "interrupted")) return false;
+    let changed = false;
+    if (o.feed && this.sentFeed.get(o.turnaroundId) !== o.feed) {
+      changed = (await store.recordFeed(o.turnaroundId, o.feed)) || changed;
+      this.sentFeed.set(o.turnaroundId, o.feed);
+    }
+    if (t.status !== "open" || !o.observedAt) return changed;
+    for (const s of o.states) {
+      const key = `${o.turnaroundId}:${s.service}`;
+      if (this.sentState.get(key) === s.state) continue;
+      changed = (await store.recordGsx(o.turnaroundId, s.service, s.state, s.raw, o.observedAt)) || changed;
+      this.sentState.set(key, s.state);
+    }
+    return changed;
   }
 
   // ---------- receipts and expenses ----------
