@@ -19,6 +19,8 @@ public sealed class NativeSimConnectClient : ISimConnectClient
     internal const uint EventSim = 1;
     internal const uint EventPause = 2;
     internal const uint EventAircraftLoaded = 3;
+    internal const uint DefineGsx = 2;
+    internal const uint RequestGsxData = 3;
     private const int MaxMessagesPerPump = 256;
 
     private readonly ISimConnectApi _api;
@@ -26,6 +28,8 @@ public sealed class NativeSimConnectClient : ISimConnectClient
     private readonly EventWaitHandle _messageReady;
     private readonly ISimConnectCallbacks _callbacks;
     private readonly Dictionary<uint, int> _datumBySendId = [];
+    private readonly Dictionary<uint, int> _gsxBySendId = [];
+    private bool _gsxRegistered;
     private TelemetryLayout? _layout;
     private int _maxEngines = 4;
     private bool _layoutMismatchReported;
@@ -86,6 +90,28 @@ public sealed class NativeSimConnectClient : ISimConnectClient
         Check(_api.RequestSystemState(_handle, RequestSimState, "Sim"), "RequestSystemState(Sim)");
     }
 
+    public void RegisterGsx(IReadOnlyList<Gsx.GsxProbeVar> vars)
+    {
+        ArgumentNullException.ThrowIfNull(vars);
+        for (var i = 0; i < vars.Count; i++)
+        {
+            var hr = _api.AddToDataDefinition(_handle, DefineGsx, vars[i].Name, Gsx.GsxProbeDefinition.Unit, SimConnectDataType.Float64);
+            if (!HResult.Succeeded(hr))
+            {
+                _callbacks.OnGsxRejected(i); // not even queued: the feed keeps the block layout aligned
+                continue;
+            }
+            if (HResult.Succeeded(_api.GetLastSentPacketId(_handle, out var sendId))) _gsxBySendId[sendId] = i;
+        }
+        _gsxRegistered = true;
+    }
+
+    public void RequestGsx()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_gsxRegistered) Check(_api.RequestDataOnSimObjectOnce(_handle, RequestGsxData, DefineGsx), "RequestDataOnSimObject(GSX)");
+    }
+
     public void RequestSample()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -114,6 +140,10 @@ public sealed class NativeSimConnectClient : ISimConnectClient
             case SimConnectQuit:
                 _callbacks.OnQuit();
                 break;
+            case SimConnectException e when _gsxBySendId.TryGetValue(e.SendId, out var gsxIndex):
+                _callbacks.OnGsxRejected(gsxIndex);
+                _callbacks.OnException(e.Code);
+                break;
             case SimConnectException e:
                 if (_datumBySendId.TryGetValue(e.SendId, out var datum) && _layout is not null && _layout.Reject(datum))
                 {
@@ -133,6 +163,9 @@ public sealed class NativeSimConnectClient : ISimConnectClient
                 break;
             case SimConnectSystemState { RequestId: RequestSimState } s:
                 _callbacks.OnSimulatorState(new SimulatorStateChange(SimulatorStateKind.InFlight, s.Integer != 0, "system state"));
+                break;
+            case SimConnectSimObjectData { RequestId: RequestGsxData, DefineId: DefineGsx } g:
+                _callbacks.OnGsxBlock(g.Data);
                 break;
             case SimConnectSimObjectData { RequestId: RequestTelemetry } d when _layout is not null:
                 if (_layout.TryDecode(d.Data, _maxEngines, out var sample) == LayoutDecodeResult.Ok && sample is not null)

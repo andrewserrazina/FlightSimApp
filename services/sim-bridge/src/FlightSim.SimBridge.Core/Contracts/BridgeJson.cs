@@ -29,6 +29,9 @@ public static class BridgeJson
         options.Converters.Add(new JsonStringEnumConverter<SourceKind>(JsonNamingPolicy.SnakeCaseLower, allowIntegerValues: false));
         options.Converters.Add(new JsonStringEnumConverter<EventConfidence>(JsonNamingPolicy.SnakeCaseLower, allowIntegerValues: false));
         options.Converters.Add(new JsonStringEnumConverter<SimConnectSdkStatus>(JsonNamingPolicy.SnakeCaseLower, allowIntegerValues: false));
+        options.Converters.Add(new JsonStringEnumConverter<GsxFeedStatus>(JsonNamingPolicy.SnakeCaseLower, allowIntegerValues: false));
+        options.Converters.Add(new JsonStringEnumConverter<GsxReadingQuality>(JsonNamingPolicy.SnakeCaseLower, allowIntegerValues: false));
+        options.Converters.Add(new JsonStringEnumConverter<GsxServiceStateName>(JsonNamingPolicy.SnakeCaseLower, allowIntegerValues: false));
         options.MakeReadOnly(populateMissingResolver: true);
         return options;
     }

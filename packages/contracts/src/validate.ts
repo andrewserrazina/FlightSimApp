@@ -1,6 +1,7 @@
 import type { BridgeMessageV1 } from "./bridge.js";
 import type { ConnectionStateV1 } from "./connection.js";
 import type { FlightEventV1 } from "./events.js";
+import type { GsxStateV1 } from "./gsx.js";
 import type { BridgeHealthV1 } from "./health.js";
 import type { TelemetryFrameV1 } from "./telemetry.js";
 import {
@@ -8,6 +9,7 @@ import {
   validateBridgeMessageV1,
   validateConnectionStateV1,
   validateFlightEventV1,
+  validateGsxStateV1,
   validateTelemetryFrameV1,
   type GeneratedValidator,
 } from "./generated/validators.js";
@@ -32,6 +34,8 @@ export const parseFlightEventV1 = (data: unknown) =>
   run<FlightEventV1>(validateFlightEventV1, data);
 export const parseBridgeHealthV1 = (data: unknown) =>
   run<BridgeHealthV1>(validateBridgeHealthV1, data);
+export const parseGsxStateV1 = (data: unknown) =>
+  run<GsxStateV1>(validateGsxStateV1, data);
 export const parseBridgeMessageV1 = (data: unknown) =>
   run<BridgeMessageV1>(validateBridgeMessageV1, data);
 

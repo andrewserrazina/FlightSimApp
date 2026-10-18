@@ -25,6 +25,7 @@ const exportsMap = {
   validateConnectionStateV1: `${BASE}connection-state.v1.schema.json`,
   validateFlightEventV1: `${BASE}flight-event.v1.schema.json`,
   validateBridgeHealthV1: `${BASE}bridge-health.v1.schema.json`,
+  validateGsxStateV1: `${BASE}gsx-state.v1.schema.json`,
   validateBridgeMessageV1: `${BASE}bridge-message.v1.schema.json`,
 };
 

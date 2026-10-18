@@ -53,7 +53,7 @@ pub struct Snapshot {
     messages: Vec<Value>,
 }
 
-const STICKY_TYPES: [&str; 3] = ["hello.ok", "connection.state", "bridge.health"];
+const STICKY_TYPES: [&str; 4] = ["hello.ok", "connection.state", "bridge.health", "gsx.state"];
 
 /// Current shell status and sticky bridge messages. The webview calls this once after it has
 /// registered its event listeners, because events emitted before that are not delivered.

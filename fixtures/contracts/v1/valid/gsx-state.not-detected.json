@@ -1,0 +1,63 @@
+{
+  "protocol": "flightsim.bridge",
+  "protocol_version": 1,
+  "type": "gsx.state",
+  "data": {
+    "schema_version": 1,
+    "session_id": "4f2539a5-bc7b-46f3-a6c6-cddb9ec741a3",
+    "observed_at": "2026-10-17T16:40:05.000Z",
+    "source": "simconnect-lvar",
+    "feed": "not_detected",
+    "last_data_at": "2026-10-17T16:40:04.500Z",
+    "services": [
+      {
+        "service": "boarding",
+        "lvar": "L:FSDT_GSX_BOARDING_STATE",
+        "quality": "unavailable",
+        "raw": 0,
+        "state": null,
+        "detail": "0: GSX not reporting (GSX not running, not loaded yet, or variable undefined)"
+      },
+      {
+        "service": "deboarding",
+        "lvar": "L:FSDT_GSX_DEBOARDING_STATE",
+        "quality": "unavailable",
+        "raw": 0,
+        "state": null,
+        "detail": "0: GSX not reporting (GSX not running, not loaded yet, or variable undefined)"
+      },
+      {
+        "service": "catering",
+        "lvar": "L:FSDT_GSX_CATERING_STATE",
+        "quality": "unavailable",
+        "raw": 0,
+        "state": null,
+        "detail": "0: GSX not reporting (GSX not running, not loaded yet, or variable undefined)"
+      },
+      {
+        "service": "refueling",
+        "lvar": "L:FSDT_GSX_REFUELING_STATE",
+        "quality": "unavailable",
+        "raw": 0,
+        "state": null,
+        "detail": "0: GSX not reporting (GSX not running, not loaded yet, or variable undefined)"
+      },
+      {
+        "service": "pushback",
+        "lvar": "L:FSDT_GSX_DEPARTURE_STATE",
+        "quality": "unavailable",
+        "raw": 0,
+        "state": null,
+        "detail": "0: GSX not reporting (GSX not running, not loaded yet, or variable undefined)"
+      },
+      {
+        "service": "deice",
+        "lvar": "L:FSDT_GSX_DEICE_STATE",
+        "quality": "unavailable",
+        "raw": 0,
+        "state": null,
+        "detail": "0: GSX not reporting (GSX not running, not loaded yet, or variable undefined)"
+      }
+    ]
+  }
+}
