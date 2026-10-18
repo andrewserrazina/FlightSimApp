@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.flightsimapp.invalid/v1/gsx-state.v1.schema.json",
+  "title": "GsxStateV1",
+  "description": "Read-only observation of GSX Pro's documented service-state L: variables (S2-05). Separate from telemetry and never a command. Only a 'valid' reading carries a service state; missing, zero, out-of-range, old or rejected values never do.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "session_id", "observed_at", "source", "feed", "last_data_at", "services"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "session_id": { "$ref": "common.schema.json#/$defs/uuid" },
+    "observed_at": { "$ref": "common.schema.json#/$defs/utc_timestamp" },
+    "source": { "const": "simconnect-lvar" },
+    "feed": {
+      "description": "live: fresh data with at least one valid reading. not_detected: no valid reading (GSX absent, not loaded, or variables unsupported). stale: valid readings were seen on this connection but no fresh data arrives, or the simulator is not in a flight.",
+      "enum": ["live", "stale", "not_detected"]
+    },
+    "last_data_at": { "oneOf": [{ "$ref": "common.schema.json#/$defs/utc_timestamp" }, { "type": "null" }] },
+    "services": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/service" } }
+  },
+  "$defs": {
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service", "lvar", "quality", "raw", "state", "detail"],
+      "properties": {
+        "service": { "enum": ["boarding", "deboarding", "catering", "refueling", "pushback", "deice"] },
+        "lvar": { "type": "string", "pattern": "^L:[A-Za-z0-9_]{1,64}$" },
+        "quality": { "enum": ["valid", "unavailable", "invalid", "stale", "unsupported"] },
+        "raw": { "oneOf": [{ "type": "number" }, { "type": "null" }] },
+        "state": { "oneOf": [{ "enum": ["can_be_called", "not_available", "bypassed", "requested", "being_performed", "completed"] }, { "type": "null" }] },
+        "detail": { "type": "string", "maxLength": 200 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "quality": { "const": "valid" } } },
+          "then": { "properties": { "state": { "type": "string" }, "raw": { "type": "number" } } },
+          "else": { "properties": { "state": { "type": "null" } } }
+        }
+      ]
+    }
+  }
+}

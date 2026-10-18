@@ -63,6 +63,8 @@ public sealed class BridgeSession
         _log = logger ?? NullLogger<BridgeSession>.Instance;
         _state = new ConnectionStateMachine(adapter.Capabilities.Simulator, _time);
         _state.Changed += s => _output.Publish(new BridgeEnvelope(MessageTypes.ConnectionState, s));
+        // GSX (S2-05): forwarded as its own message, outside the frame sequence and the validator.
+        if (adapter is IGsxFeedSource gsx) gsx.GsxObserved += o => _output.Publish(new BridgeEnvelope(MessageTypes.GsxState, GsxStateV1.From(SessionId, o)));
         _validator = new FrameValidator(_time);
         _startedAt = _time.GetUtcNow();
         _source = adapter.Capabilities.Simulator == SimulatorId.Mock

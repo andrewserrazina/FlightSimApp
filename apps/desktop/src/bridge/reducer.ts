@@ -18,6 +18,8 @@ export const initialBridgeState: BridgeViewState = {
   lastFrame: null,
   lastFrameReceivedAt: null,
   health: null,
+  gsx: null,
+  gsxReceivedAt: null,
   gapCount: 0,
   reconnectCount: 0,
   invalidMessages: 0,
@@ -77,6 +79,8 @@ function applyMessage(state: BridgeViewState, msg: BridgeServerMessageV1, receiv
         // A new bridge session invalidates the previous session's frame.
         lastFrame: sameSession ? state.lastFrame : null,
         lastFrameReceivedAt: sameSession ? state.lastFrameReceivedAt : null,
+        gsx: sameSession ? state.gsx : null,
+        gsxReceivedAt: sameSession ? state.gsxReceivedAt : null,
       };
     }
     case "connection.state": {
@@ -103,6 +107,9 @@ function applyMessage(state: BridgeViewState, msg: BridgeServerMessageV1, receiv
       return { ...state, lastFrame: msg.data, lastFrameReceivedAt: receivedAt };
     case "bridge.health":
       return { ...state, health: msg.data };
+    case "gsx.state":
+      if (state.sessionId !== null && msg.data.session_id !== state.sessionId) return state;
+      return { ...state, gsx: msg.data, gsxReceivedAt: receivedAt };
     case "flight.event":
       return msg.data.quality.gap ? { ...state, gapCount: state.gapCount + 1 } : state;
     case "error":

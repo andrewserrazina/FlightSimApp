@@ -80,6 +80,7 @@ internal sealed class CollectingOutput : IBridgeOutput
     public IReadOnlyList<ConnectionStateV1> States => Snapshot().Select(m => m.Data).OfType<ConnectionStateV1>().ToList();
     public IReadOnlyList<TelemetryFrameV1> Frames => Snapshot().Select(m => m.Data).OfType<TelemetryFrameV1>().ToList();
     public IReadOnlyList<FlightEventV1> Events => Snapshot().Select(m => m.Data).OfType<FlightEventV1>().ToList();
+    public IReadOnlyList<GsxStateV1> Gsx => Snapshot().Select(m => m.Data).OfType<GsxStateV1>().ToList();
 
     public async Task WaitUntilAsync(Func<CollectingOutput, bool> condition, TimeSpan? timeout = null, [CallerArgumentExpression(nameof(condition))] string? what = null)
     {

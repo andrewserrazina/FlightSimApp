@@ -48,6 +48,12 @@ public interface ISimConnectCallbacks
     void OnSample(RawMsfsSample sample);
     void OnException(uint exceptionCode);
     void OnSimulatorState(SimulatorStateChange change);
+
+    /// <summary>A data block for the optional GSX definition (S2-05); raw bytes, decoded by the GSX feed.</summary>
+    void OnGsxBlock(byte[] data) { }
+
+    /// <summary>SimConnect rejected GSX variable <paramref name="index"/>; telemetry is unaffected.</summary>
+    void OnGsxRejected(int index) { }
 }
 
 /// <summary>
@@ -65,6 +71,15 @@ public interface ISimConnectClient : IDisposable
 
     /// <summary>Request one telemetry sample for the user aircraft (answer arrives via OnSample).</summary>
     void RequestSample();
+
+    /// <summary>
+    /// Define the optional, read-only GSX data set (S2-05) as a second data definition on this same
+    /// connection: no extra SimConnect client, and a rejected GSX variable never affects telemetry.
+    /// </summary>
+    void RegisterGsx(IReadOnlyList<Gsx.GsxProbeVar> vars) { }
+
+    /// <summary>Request one GSX block (answer arrives via OnGsxBlock).</summary>
+    void RequestGsx() { }
 
     /// <summary>Dispatch all pending SDK messages, raising callbacks on the current (owner) thread.</summary>
     void ReceiveMessages();
