@@ -375,3 +375,15 @@ fn expenses_can_be_associated_with_a_turnaround_but_not_across_flights() {
     assert!(s.receipt_associate(&id, Some("f-2"), Some(&t.id)).is_err());
     assert!(s.receipt_associate(&id, None, None).is_err());
 }
+
+#[test]
+fn ui_payloads_deserialize_with_camel_case_fields() {
+    let r: RevisionResolution = serde_json::from_value(serde_json::json!({ "kind": "supersedes", "expenseId": "e-1" })).unwrap();
+    assert_eq!(r, RevisionResolution::Supersedes { expense_id: "e-1".into() });
+    let r: RevisionResolution = serde_json::from_value(serde_json::json!({ "kind": "notARevision" })).unwrap();
+    assert_eq!(r, RevisionResolution::NotARevision);
+    let m: ManualExpense = serde_json::from_value(serde_json::json!({ "category": "fuel", "description": "x", "amountMinor": 1, "currency": "USD", "flightId": null, "turnaroundId": null, "note": null })).unwrap();
+    assert_eq!(m.amount_minor, 1);
+    let t: TurnaroundOpen = serde_json::from_value(serde_json::json!({ "side": "arrival", "airportIcao": "KBOS", "airportSource": "plan", "gateText": null })).unwrap();
+    assert_eq!(t.airport_icao.as_deref(), Some("KBOS"));
+}
