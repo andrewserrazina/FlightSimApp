@@ -133,7 +133,11 @@ pub fn parse_amount(text: &str) -> Option<PrintedAmount> {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CurrencyRecognition {
     Explicit { code: String },
-    Ambiguous { reason: String },
+    /// Only shared symbols (e.g. `$`) and no code. The one kind of ambiguity a person may resolve
+    /// by confirming the currency for this receipt (owner decision, option A).
+    SymbolOnly { symbols: Vec<String> },
+    /// Several codes, or a symbol that contradicts the code. Never resolvable by confirmation.
+    Conflicting { reason: String },
     Missing,
 }
 
@@ -156,16 +160,18 @@ pub fn recognize_currency<'a>(amounts: impl IntoIterator<Item = &'a PrintedAmoun
             if conflicting.is_empty() {
                 CurrencyRecognition::Explicit { code: code.clone() }
             } else {
-                CurrencyRecognition::Ambiguous { reason: format!("{code} printed, but also {}", conflicting.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")) }
+                CurrencyRecognition::Conflicting { reason: format!("{code} printed, but also {}", conflicting.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")) }
             }
         }
         [] if symbols.is_empty() => CurrencyRecognition::Missing,
-        [] => CurrencyRecognition::Ambiguous { reason: format!("only the symbol(s) {} printed, no currency code", symbols.join(", ")) },
-        many => CurrencyRecognition::Ambiguous { reason: format!("several currency codes printed: {}", many.join(", ")) },
+        [] if symbols.len() == 1 => CurrencyRecognition::SymbolOnly { symbols },
+        [] => CurrencyRecognition::Conflicting { reason: format!("different currency symbols printed: {}", symbols.join(", ")) },
+        many => CurrencyRecognition::Conflicting { reason: format!("several currency codes printed: {}", many.join(", ")) },
     }
 }
 
-fn symbol_fits(symbol: &str, code: &str) -> bool {
+/// Whether a printed symbol can denote `code` (e.g. `$` can be USD or CAD, never EUR).
+pub fn symbol_fits(symbol: &str, code: &str) -> bool {
     matches!((symbol, code), ("$" | "US$", "USD") | ("C$" | "$", "CAD") | ("A$" | "$", "AUD") | ("$", "NZD" | "SGD" | "HKD" | "MXN") | ("€", "EUR") | ("£", "GBP") | ("¥", "JPY" | "CNY"))
 }
 

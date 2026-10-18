@@ -20,6 +20,9 @@ pub const COST_KIND: &str = "simulated_gsx_cost";
 
 pub const PARSER_VERSION: &str = "fuel-0.1";
 
+/// The only issue a user's currency confirmation can resolve (see `review.rs`).
+pub const CURRENCY_SYMBOL_ONLY: &str = "currency_symbol_only";
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LineKind {
@@ -211,8 +214,12 @@ pub fn evaluate(fields: FuelReceiptFields, sha256: &str, mut issues: Vec<Issue>)
     let currency = recognize_currency(billed.iter().copied());
     let explicit = match &currency {
         CurrencyRecognition::Explicit { code } => Some(code.clone()),
-        CurrencyRecognition::Ambiguous { reason } => {
-            issues.push(issue("currency_ambiguous", format!("currency not explicit: {reason}")));
+        CurrencyRecognition::SymbolOnly { symbols } => {
+            issues.push(issue(CURRENCY_SYMBOL_ONLY, format!("only {} printed, no currency code; the currency needs to be confirmed for this receipt", symbols.join(", "))));
+            None
+        }
+        CurrencyRecognition::Conflicting { reason } => {
+            issues.push(issue("currency_conflict", format!("conflicting currency information: {reason}")));
             None
         }
         CurrencyRecognition::Missing => {
@@ -231,24 +238,28 @@ pub fn evaluate(fields: FuelReceiptFields, sha256: &str, mut issues: Vec<Issue>)
     let mut reconciliation = None;
     match &fields.total {
         None => issues.push(issue("no_total", "no printed total")),
-        Some(total) if !fields.lines.is_empty() => {
-            let r = reconcile(&fields.lines, total, explicit.as_deref());
-            if r.difference_units != 0 {
-                issues.push(issue("total_mismatch", format!("lines and taxes sum to {} but the printed total is {} (units of 10^-{})", r.lines_units, r.total_units, r.scale)));
+        Some(total) if !fields.lines.is_empty() => match reconcile(&fields.lines, total, explicit.as_deref()) {
+            Ok(r) => {
+                if r.difference_units != 0 {
+                    issues.push(issue("total_mismatch", format!("lines and taxes sum to {} but the printed total is {} (units of 10^-{})", r.lines_units, r.total_units, r.scale)));
+                }
+                if let (Some(code), None) = (&explicit, r.total_minor) {
+                    issues.push(issue("precision", format!("the total has more decimals than {code} allows")));
+                }
+                reconciliation = Some(r);
             }
-            if let (Some(code), None) = (&explicit, r.total_minor) {
-                issues.push(issue("precision", format!("the total has more decimals than {code} allows")));
-            }
-            reconciliation = Some(r);
-        }
+            Err(e) => issues.push(issue("arithmetic", e)),
+        },
         Some(_) => {}
     }
     if let Some(sub) = &fields.subtotal {
         let charges: Vec<&ReceiptLine> = fields.lines.iter().filter(|l| l.kind != LineKind::Tax).collect();
         let scale = charges.iter().map(|l| l.amount.value.scale).chain([sub.value.scale]).max().unwrap_or(0);
-        let sum: Option<i128> = charges.iter().map(|l| signed_units(l, scale)).sum();
-        if sum != rescale(&sub.value, scale) {
-            issues.push(issue("subtotal_mismatch", "the printed subtotal does not equal the sum of the charge lines"));
+        let sum = charges.iter().try_fold(0i128, |acc, l| acc.checked_add(signed_units(l, scale)?));
+        match (sum, rescale(&sub.value, scale)) {
+            (Some(a), Some(b)) if a == b => {}
+            (Some(_), Some(_)) => issues.push(issue("subtotal_mismatch", "the printed subtotal does not equal the sum of the charge lines")),
+            _ => issues.push(issue("arithmetic", "the subtotal could not be checked (value out of range)")),
         }
     }
     for line in &fields.lines {
@@ -272,23 +283,28 @@ pub fn evaluate(fields: FuelReceiptFields, sha256: &str, mut issues: Vec<Issue>)
 
 /// Exact integer check at the finest printed precision: charges + taxes + surcharges − discounts must
 /// equal the total. Needs no currency; minor units are added only when `currency` is explicit.
-pub fn reconcile(lines: &[ReceiptLine], total: &PrintedAmount, currency: Option<&str>) -> Reconciliation {
+/// Fails, rather than counting anything as zero, when a value cannot be scaled or the sum overflows.
+pub fn reconcile(lines: &[ReceiptLine], total: &PrintedAmount, currency: Option<&str>) -> Result<Reconciliation, String> {
     let scale = lines.iter().map(|l| l.amount.value.scale).chain([total.value.scale]).max().unwrap_or(0);
-    let lines_units: i128 = lines.iter().map(|l| signed_units(l, scale).unwrap_or(0)).sum();
-    let total_units = rescale(&total.value, scale).unwrap_or(0);
-    Reconciliation {
+    let mut lines_units: i128 = 0;
+    for l in lines {
+        let v = signed_units(l, scale).ok_or_else(|| format!("amount '{}' is out of range", l.amount.text))?;
+        lines_units = lines_units.checked_add(v).ok_or("the sum of the lines is out of range")?;
+    }
+    let total_units = rescale(&total.value, scale).ok_or_else(|| format!("total '{}' is out of range", total.text))?;
+    Ok(Reconciliation {
         scale,
         lines_units,
         total_units,
-        difference_units: total_units - lines_units,
+        difference_units: total_units.checked_sub(lines_units).ok_or("the difference is out of range")?,
         currency: currency.map(str::to_string),
         total_minor: currency.and_then(|c| to_minor_units(&total.value, c)),
-    }
+    })
 }
 
-fn signed_units(line: &ReceiptLine, scale: u32) -> Option<i128> {
+pub(crate) fn signed_units(line: &ReceiptLine, scale: u32) -> Option<i128> {
     let v = rescale(&line.amount.value, scale)?;
-    Some(if line.kind == LineKind::Discount { -v.abs() } else { v })
+    if line.kind == LineKind::Discount { v.checked_abs().map(|a| -a) } else { Some(v) }
 }
 
 fn rescale(d: &PrintedDecimal, scale: u32) -> Option<i128> {

@@ -8,6 +8,7 @@ use super::fuel::*;
 use super::gsx_fuel;
 use super::import::*;
 use super::money::*;
+use super::review::*;
 
 const KBOS: &str = include_str!("../../../../../fixtures/gsx/receipts/fuel-kbos-sanitized.html");
 
@@ -86,8 +87,8 @@ fn real_receipt_reconciles_exactly_to_28_022_40() {
 fn real_receipt_needs_review_only_because_it_prints_dollar_signs_not_a_currency_code() {
     let r = parse(KBOS);
     assert_eq!(r.status, ParseStatus::NeedsReview);
-    assert_eq!(codes(&r), vec!["currency_ambiguous"], "the only open question is the currency: {:?}", r.issues);
-    assert!(matches!(r.currency, CurrencyRecognition::Ambiguous { .. }));
+    assert_eq!(codes(&r), vec!["currency_symbol_only"], "the only open question is the currency: {:?}", r.issues);
+    assert_eq!(r.currency, CurrencyRecognition::SymbolOnly { symbols: vec!["$".into()] });
     let rec = r.reconciliation.unwrap();
     assert_eq!((rec.currency, rec.total_minor), (None, None), "no minor units without an explicit currency");
     assert_eq!(r.cost_kind, "simulated_gsx_cost");
@@ -124,7 +125,8 @@ fn variant_mismatched_subtotal_needs_review() {
 fn variant_conflicting_currency_marks_stay_ambiguous() {
     let r = parse(&variant("$ 1,122.14", "€ 1,122.14"));
     assert_eq!(r.status, ParseStatus::NeedsReview);
-    assert!(matches!(&r.currency, CurrencyRecognition::Ambiguous { reason } if reason.contains('€')));
+    assert!(matches!(&r.currency, CurrencyRecognition::Conflicting { reason } if reason.contains('€')));
+    assert!(codes(&r).contains(&"currency_conflict"));
 }
 
 #[test]
@@ -224,9 +226,10 @@ fn minor_units_are_integers_and_never_rounded() {
 fn currency_is_explicit_only_from_a_printed_code() {
     let a = [amt("USD 25,317.89"), amt("USD 1,122.14"), amt("$28,022.40")];
     assert_eq!(recognize_currency(a.iter()), CurrencyRecognition::Explicit { code: "USD".into() });
-    assert!(matches!(recognize_currency([amt("$1.00")].iter()), CurrencyRecognition::Ambiguous { .. }));
-    assert!(matches!(recognize_currency([amt("USD 10.00"), amt("EUR 9.20")].iter()), CurrencyRecognition::Ambiguous { .. }));
-    assert!(matches!(recognize_currency([amt("USD 10.00"), amt("€9.20")].iter()), CurrencyRecognition::Ambiguous { .. }));
+    assert_eq!(recognize_currency([amt("$1.00"), amt("$2.00")].iter()), CurrencyRecognition::SymbolOnly { symbols: vec!["$".into()] });
+    assert!(matches!(recognize_currency([amt("$1.00"), amt("€2.00")].iter()), CurrencyRecognition::Conflicting { .. }));
+    assert!(matches!(recognize_currency([amt("USD 10.00"), amt("EUR 9.20")].iter()), CurrencyRecognition::Conflicting { .. }));
+    assert!(matches!(recognize_currency([amt("USD 10.00"), amt("€9.20")].iter()), CurrencyRecognition::Conflicting { .. }));
     assert_eq!(recognize_currency([amt("10.00")].iter()), CurrencyRecognition::Missing);
 }
 
@@ -269,7 +272,82 @@ fn missing_total_identifier_or_lines_need_review() {
 #[test]
 fn surcharges_add_and_discounts_subtract() {
     let lines = vec![line(LineKind::Charge, "x", "USD 100.00"), line(LineKind::Surcharge, "s", "USD 5.00"), line(LineKind::Discount, "d", "USD 10.00")];
-    assert_eq!(reconcile(&lines, &amt("USD 95.00"), Some("USD")).difference_units, 0);
+    assert_eq!(reconcile(&lines, &amt("USD 95.00"), Some("USD")).unwrap().difference_units, 0);
+}
+
+#[test]
+fn out_of_range_arithmetic_is_an_error_never_zero() {
+    // A value that cannot be scaled to the common precision must not silently count as 0.
+    let huge = format!("USD {}.5", "9".repeat(37)); // parses (one decimal), overflows at two
+    let lines = vec![line(LineKind::Charge, "x", &huge), line(LineKind::Tax, "t", "USD 0.25")];
+    assert!(reconcile(&lines, &amt("USD 0.25"), Some("USD")).is_err());
+    let mut f = explicit_kbos_fields();
+    f.lines.push(line(LineKind::Charge, "huge", &huge));
+    let r = evaluate(f, "h", vec![]);
+    assert_eq!(r.status, ParseStatus::NeedsReview);
+    assert!(codes(&r).contains(&"arithmetic"), "{:?}", r.issues);
+    assert!(r.reconciliation.is_none(), "no reconciliation is reported when it could not be computed");
+}
+
+// ---------- currency confirmation (owner decision S2-05, option A) ----------
+
+fn usd_confirmation(r: &ParsedFuelReceipt) -> CurrencyConfirmation {
+    CurrencyConfirmation { receipt_sha256: r.sha256.clone(), currency: "USD".into(), confirmed_by: "local".into(), confirmed_at_utc: "2026-10-18T02:30:00Z".into(), note: Some("KBOS fuel receipt".into()) }
+}
+
+#[test]
+fn confirming_usd_for_the_real_kbos_receipt_resolves_only_its_currency() {
+    let r = parse(KBOS);
+    let c = confirm_currency(&r, usd_confirmation(&r)).expect("symbol-only receipt with nothing else wrong");
+    assert_eq!(c.currency_source, "user_confirmed");
+    assert_eq!(c.total_minor, 2_802_240);
+    assert_eq!(c.lines_minor, vec![2_531_789, 112_214, 158_237]);
+    assert_eq!(c.lines_minor.iter().sum::<i64>(), c.total_minor);
+    // The original parse is preserved exactly: still needs_review, still no currency from the receipt.
+    assert_eq!(c.parsed, r);
+    assert_eq!(c.parsed.status, ParseStatus::NeedsReview);
+    assert_eq!(c.parsed.currency, CurrencyRecognition::SymbolOnly { symbols: vec!["$".into()] });
+    assert_eq!(c.confirmation.confirmed_by, "local");
+}
+
+#[test]
+fn a_confirmation_is_bound_to_one_receipt_and_never_generalises() {
+    let r = parse(KBOS);
+    let other = parse(&variant("GSX-20261017T164423Z-KBOS", "GSX-20261018T090000Z-KBOS"));
+    assert_eq!(confirm_currency(&other, usd_confirmation(&r)), Err(ConfirmationRefusal::DifferentReceipt));
+    // The other receipt is still symbol-only on its own; it needs its own confirmation.
+    assert_eq!(other.currency, CurrencyRecognition::SymbolOnly { symbols: vec!["$".into()] });
+}
+
+#[test]
+fn a_confirmation_never_overrides_other_problems() {
+    // Failed reconciliation.
+    let bad_total = parse(&variant(r#"<td class="amount">$ 28,022.40</td>"#, r#"<td class="amount">$ 28,022.41</td>"#));
+    assert_eq!(confirm_currency(&bad_total, usd_confirmation(&bad_total)), Err(ConfirmationRefusal::OtherIssues { codes: vec!["total_mismatch".into()] }));
+    // Conflicting currency information.
+    let conflict = parse(&variant("$ 1,122.14", "€ 1,122.14"));
+    assert_eq!(confirm_currency(&conflict, usd_confirmation(&conflict)), Err(ConfirmationRefusal::NotSymbolOnly));
+    // Unsupported layout.
+    let unsupported = parse(&variant(r#"<table class="items">"#, r#"<table class="charges">"#));
+    assert_eq!(confirm_currency(&unsupported, usd_confirmation(&unsupported)), Err(ConfirmationRefusal::NotSymbolOnly));
+    // Other validation errors (volume disagreement, unknown row).
+    let volume = parse(&variant("5147 Gallons", "5148 Gallons"));
+    assert_eq!(confirm_currency(&volume, usd_confirmation(&volume)), Err(ConfirmationRefusal::OtherIssues { codes: vec!["volume_mismatch".into()] }));
+    // A receipt that already prints its currency needs no confirmation.
+    let explicit = parse(&KBOS.replace("<td class=\"amount\">$ ", "<td class=\"amount\">USD "));
+    assert_eq!(confirm_currency(&explicit, usd_confirmation(&explicit)), Err(ConfirmationRefusal::NotSymbolOnly));
+}
+
+#[test]
+fn the_confirmed_currency_must_fit_the_printed_symbol_and_precision() {
+    let r = parse(KBOS);
+    let with = |code: &str| CurrencyConfirmation { currency: code.into(), ..usd_confirmation(&r) };
+    assert_eq!(confirm_currency(&r, with("EUR")), Err(ConfirmationRefusal::SymbolMismatch { symbol: "$".into() }));
+    assert_eq!(confirm_currency(&r, with("XYZ")), Err(ConfirmationRefusal::UnknownCurrency));
+    assert!(confirm_currency(&r, with("CAD")).is_ok(), "$ can be CAD: the person decides, the parser does not");
+    // JPY has no minor unit, so $ 25,317.89 cannot be yen.
+    let yen = parse(&KBOS.replace("$ ", "¥ "));
+    assert!(matches!(confirm_currency(&yen, CurrencyConfirmation { receipt_sha256: yen.sha256.clone(), ..with("JPY") }), Err(ConfirmationRefusal::PrecisionMismatch { .. })));
 }
 
 // ---------- pipeline guards ----------

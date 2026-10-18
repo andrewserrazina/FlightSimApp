@@ -61,7 +61,8 @@ error.
   detection (proposal R3). It is never used to replace a receipt automatically.
 - **The receipt prints no currency code. Every amount is shown with `$` only.**
   - `$` is shared by several currencies, so under the "never infer currency" rule this receipt is
-    **currency-ambiguous** and cannot be `verified` automatically.
+    **symbol-only** (`currency_symbol_only`) and cannot be `verified` automatically. Owner decision §6: a person
+    confirms the currency per receipt.
   - Its reconciliation is still exact, because it is checked in printed units without assuming a currency.
   - See the limitations in §4.
 - Because the receipt carries **JavaScript**, it must never be opened in a WebView or browser by Turnline.
@@ -84,10 +85,16 @@ error.
 - **Money is `i64` minor units**, from the printed text. There is no floating point anywhere.
 - **Currency** comes only from the receipt's printed codes.
   - Exactly one code → explicit.
-  - Only symbols, several codes, or a symbol that conflicts with the code → **ambiguous**, which means `needs_review`.
+  - One shared symbol and no code (e.g. only `$`) → **symbol-only** (`currency_symbol_only`). This is the only case a
+    person may resolve (§6).
+  - Several codes, different symbols, or a symbol that conflicts with the code → **conflicting**
+    (`currency_conflict`). This can never be resolved by confirmation.
   - Nothing is inferred from the airport or aircraft.
 - **Reconciliation:** charges + taxes + surcharges − discounts must equal the printed total **exactly**. Otherwise
   the receipt is `needs_review`.
+  - All arithmetic is checked. A value that cannot be scaled, or a sum that overflows, gives the issue `arithmetic`
+    and no reconciliation.
+  - Nothing is ever counted as zero.
   - The check is done in integer units at the printed precision, so it needs no currency.
   - Minor units are attached only when the currency is explicit.
   - A printed subtotal must equal the charge lines.
@@ -145,13 +152,14 @@ approval.
 - reconciliation is exact (2,802,240 = 2,802,240 at two decimals);
 - the subtotal matches;
 - the unit-price rounding is within display precision;
-- **status is `needs_review` with a single issue, `currency_ambiguous`.**
+- **status is `needs_review` with a single issue, `currency_symbol_only`.** With a USD confirmation (§6) it becomes
+  a currency-confirmed receipt of 2,802,240 cents.
 
 **Negative cases** (derived in tests from the fixture with one exact text change each, so they track the real
 layout):
 - total +1 cent → `total_mismatch`;
 - subtotal changed → `subtotal_mismatch`;
-- `€` on one amount → ambiguous;
+- `€` on one amount → `currency_conflict` (confirmation refused);
 - unknown row class → `unknown_row`;
 - volume changed → `volume_mismatch`;
 - table class renamed, receipt-ID element renamed, title changed, footer changed, or an `.fx-disclosure` added →
@@ -160,14 +168,8 @@ layout):
 A test-only variant with `USD` on every amount reaches `verified`. It shows that the currency is the only blocker.
 
 **Limitations found in the real receipt:**
-1. **No currency code** (above). Turnline won't guess, so every USD-airport receipt of this layout lands in
-   `needs_review`. The owner needs to choose one of:
-   - (a) **per-receipt confirmation** in the future review UI: the user confirms "$ = USD", and that confirmation is
-     stored as user-provided provenance;
-   - (b) a **documented layout rule**: GSX bills in USD where it has no local-currency feed. This would be an
-     explicit, owner-approved exception to "no inference", applying only to this single-currency layout.
-
-   Neither is implemented.
+1. **No currency code** (above). Every receipt of this layout lands in `needs_review` with `currency_symbol_only`.
+   It is resolved per receipt by user confirmation (owner decision, §6). `$` is never interpreted as USD globally.
 2. **The date has no time of day.** The issue time exists only inside the receipt ID
    (`GSX-20261017T164423Z-KBOS` → 2026-10-17 16:44:23Z). It is not parsed yet, because the ID format isn't documented
    by GSX. Flight association must not rely on it without approval.
@@ -190,3 +192,40 @@ A test-only variant with `USD` on every amount reaches `verified`. It shows that
   2. merge the parser PR (any order works; there's no file overlap);
   3. add the proposal cross-reference.
 - The ledger and turnaround slice should be built on both, after owner approval.
+
+## 6. Owner decision: currency confirmation (option A, 2026-10-18)
+
+**Decision:**
+- A person explicitly confirms the currency of a receipt whose amounts print only a shared symbol.
+- USD is the example selection for the KBOS fuel receipt.
+- `$` is **not** interpreted as USD globally, and no airport-, layout- or operator-wide rule is learned from a
+  confirmation.
+
+**Domain contract (implemented and tested: `receipts/review.rs`, `confirm_currency`):**
+
+| Rule | Behaviour |
+|---|---|
+| Bound to one receipt | The confirmation carries the receipt's SHA-256. Any other bytes are refused (`different_receipt`), even the same receipt ID or airport. |
+| Resolves only symbol-only currency | Refused unless the receipt's currency is `symbol_only` (`not_symbol_only`). This covers conflicting or explicit currency, unsupported layouts and unreadable files. |
+| Never overrides other validation | Refused when any issue besides `currency_symbol_only` exists, or reconciliation is missing or non-zero (`other_issues` lists the codes). Examples: `total_mismatch`, `subtotal_mismatch`, `volume_mismatch`, `unknown_row`, `arithmetic`, missing fields. |
+| Must fit what is printed | The ISO code must be known (`unknown_currency`). The printed symbol must be able to denote it: `$` can be USD or CAD, never EUR (`symbol_mismatch`). Every amount must fit its minor unit: `$ 25,317.89` cannot be JPY (`precision_mismatch`). |
+| Preserves the original | The result carries the parsed receipt **unchanged**: still `needs_review`, still `symbol_only`, original text and amounts. It adds the confirmation, `currency_source: "user_confirmed"`, and per-line and total minor units. |
+| Auditable | The confirmation records the receipt hash, the currency, who (local profile), when (real-world UTC) and an optional note. |
+
+**Future invoice-review architecture (ledger slice; not implemented here):**
+- **Persistence:** a `receipt_currency_confirmations` table, append-only:
+  - receipt id and SHA-256, currency, confirmed by, confirmed at (UTC), note;
+  - a `superseded_by` column for a later correction. Rows are never edited or deleted, except when the flight and its
+    receipts are deleted.
+- **Ledger amounts:** a `gsx_invoiced` ledger entry may be created from a currency-confirmed receipt. Its currency
+  provenance is `user_confirmed`, kept distinct from `receipt_explicit`. The UI shows the source next to the amount.
+- **Correcting a confirmation:** add a new confirmation that supersedes the old one, and re-derive the ledger entry.
+  The history stays visible.
+- **Review UI:** shown only for `currency_symbol_only` receipts with no other issue. It displays:
+  - the extracted fields and the printed amounts exactly;
+  - the symbols found;
+  - a currency picker limited to codes the symbol can denote, with no default pre-selected;
+  - a required explicit confirm action.
+
+  Receipts with any other issue show the issues and offer no currency control.
+- **Raw HTML:** the original receipt is never rendered. Review uses extracted fields and escaped text only.

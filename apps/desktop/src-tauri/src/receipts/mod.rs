@@ -6,6 +6,7 @@ pub mod fuel;
 pub mod gsx_fuel;
 pub mod import;
 pub mod money;
+pub mod review;
 
 #[cfg(test)]
 mod tests;
