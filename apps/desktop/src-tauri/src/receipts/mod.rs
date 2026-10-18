@@ -3,6 +3,7 @@
 #![cfg_attr(not(test), allow(dead_code))]
 
 pub mod fuel;
+pub mod gsx_fuel;
 pub mod import;
 pub mod money;
 

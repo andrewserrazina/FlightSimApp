@@ -12,11 +12,13 @@ use serde::Serialize;
 
 use super::money::{recognize_currency, to_minor_units, CurrencyRecognition, PrintedAmount, PrintedDecimal};
 
-/// Receipts larger than this are not parsed (GSX receipts with an inline logo are tens of KB).
+/// Receipts larger than this are not parsed (a real GSX Fuel receipt is about 19 KB with a 1×1 logo).
 pub const MAX_RECEIPT_BYTES: usize = 2 * 1024 * 1024;
 
 /// Every amount produced here is a simulated cost from GSX Pro.
 pub const COST_KIND: &str = "simulated_gsx_cost";
+
+pub const PARSER_VERSION: &str = "fuel-0.1";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -31,8 +33,13 @@ pub enum LineKind {
 pub struct ReceiptLine {
     pub kind: LineKind,
     pub description: String,
+    /// A printed annotation, e.g. a tax's reason ("Statewide sales tax").
+    pub note: Option<String>,
     pub quantity: Option<PrintedDecimal>,
     pub unit: Option<String>,
+    /// The unit-price cell exactly as printed (e.g. `$4.92/gal`, `6.25%`).
+    pub unit_price_text: Option<String>,
+    /// The unit price as an amount when the cell is one (`$4.92/gal` → `$4.92`); `None` for a rate.
     pub unit_price: Option<PrintedAmount>,
     pub amount: PrintedAmount,
 }
@@ -52,14 +59,19 @@ pub struct FuelReceiptFields {
     pub receipt_id: Option<String>,
     pub provider: Option<String>,
     pub receiver: Option<String>,
+    /// The ICAO code when the location starts with one (`KBOS - Logan Intl` → `KBOS`).
     pub airport: Option<String>,
-    pub issued_text: Option<String>,
+    pub location_text: Option<String>,
+    /// As printed (e.g. `17-Oct-2026`); no time of day is printed on this layout.
+    pub date_text: Option<String>,
     pub aircraft_registration: Option<String>,
     pub aircraft_type: Option<String>,
+    pub aircraft_text: Option<String>,
     pub product: Option<String>,
     pub transfer_method: Option<String>,
     pub quantities: FuelQuantities,
     pub lines: Vec<ReceiptLine>,
+    pub subtotal: Option<PrintedAmount>,
     pub total: Option<PrintedAmount>,
 }
 
@@ -72,18 +84,34 @@ pub enum ParseStatus {
     Unreadable,
 }
 
+/// Why a receipt is not verified. The code is stable for the future review UI.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Issue {
+    pub code: &'static str,
+    pub message: String,
+}
+
+fn issue(code: &'static str, message: impl Into<String>) -> Issue {
+    Issue { code, message: message.into() }
+}
+
+/// Exact integer check at the printed precision; independent of the currency.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Reconciliation {
-    pub currency: String,
-    pub lines_minor: i64,
-    pub total_minor: i64,
-    pub difference_minor: i64,
+    /// Decimal places the units below are counted in (e.g. 2 → cents of whatever currency is printed).
+    pub scale: u32,
+    pub lines_units: i128,
+    pub total_units: i128,
+    pub difference_units: i128,
+    /// The total in minor units, only when the currency is explicit.
+    pub currency: Option<String>,
+    pub total_minor: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ParsedFuelReceipt {
     pub status: ParseStatus,
-    /// Identifier of the recognised layout (`None` when unsupported).
+    /// Identifier of the recognised layout (`None` when unsupported or unreadable).
     pub layout: Option<&'static str>,
     pub parser_version: &'static str,
     pub cost_kind: &'static str,
@@ -91,12 +119,10 @@ pub struct ParsedFuelReceipt {
     pub fields: FuelReceiptFields,
     pub currency: CurrencyRecognition,
     pub reconciliation: Option<Reconciliation>,
-    /// Why the receipt is not verified, and non-blocking notes (e.g. a rounded unit price).
-    pub issues: Vec<String>,
+    pub issues: Vec<Issue>,
+    /// Non-blocking observations (e.g. a unit price rounded beyond its display precision).
     pub notes: Vec<String>,
 }
-
-pub const PARSER_VERSION: &str = "fuel-0.1";
 
 /// The read-only document handed to layout extractors: a parsed tree, queried by CSS selectors.
 pub struct ReceiptDocument {
@@ -104,11 +130,15 @@ pub struct ReceiptDocument {
 }
 
 impl ReceiptDocument {
-    fn parse(html: &str) -> Self {
+    pub fn parse(html: &str) -> Self {
         let doc = dom_query::Document::from(html);
         // Scripts and styles are inert in this tree; removing them keeps their text out of every query.
         doc.select("script, style, noscript, template").remove();
         Self { doc }
+    }
+
+    pub fn select(&self, selector: &str) -> dom_query::Selection<'_> {
+        self.doc.select(selector)
     }
 
     /// Whitespace-normalised text of every element matching `selector`.
@@ -120,8 +150,8 @@ impl ReceiptDocument {
         self.texts(selector).into_iter().find(|t| !t.is_empty())
     }
 
-    pub fn exists(&self, selector: &str) -> bool {
-        !self.doc.select(selector).is_empty()
+    pub fn count(&self, selector: &str) -> usize {
+        self.doc.select(selector).length()
     }
 }
 
@@ -129,11 +159,12 @@ pub fn normalize(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// A known receipt layout: `matches` checks the layout's fingerprint; `extract` reads its fields.
+/// A known receipt layout: `matches` checks the layout's fingerprint; `extract` reads its fields and
+/// reports anything it could not read.
 pub struct FuelLayout {
     pub id: &'static str,
     pub matches: fn(&ReceiptDocument) -> bool,
-    pub extract: fn(&ReceiptDocument) -> FuelReceiptFields,
+    pub extract: fn(&ReceiptDocument) -> (FuelReceiptFields, Vec<Issue>),
 }
 
 /// Lowercase hex SHA-256 of the exact file bytes (the duplicate key).
@@ -145,7 +176,7 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 /// Parse one receipt file's bytes against the known layouts.
 pub fn parse_fuel_receipt(bytes: &[u8], layouts: &[FuelLayout]) -> ParsedFuelReceipt {
     let sha256 = sha256_hex(bytes);
-    let base = |status, issue: &str| ParsedFuelReceipt {
+    let rejected = |status, i: Issue| ParsedFuelReceipt {
         status,
         layout: None,
         parser_version: PARSER_VERSION,
@@ -154,52 +185,71 @@ pub fn parse_fuel_receipt(bytes: &[u8], layouts: &[FuelLayout]) -> ParsedFuelRec
         fields: FuelReceiptFields::default(),
         currency: CurrencyRecognition::Missing,
         reconciliation: None,
-        issues: vec![issue.to_string()],
+        issues: vec![i],
         notes: vec![],
     };
     if bytes.len() > MAX_RECEIPT_BYTES {
-        return base(ParseStatus::Unreadable, "file is larger than the receipt size limit");
+        return rejected(ParseStatus::Unreadable, issue("too_large", "file is larger than the receipt size limit"));
     }
     let Ok(html) = std::str::from_utf8(bytes) else {
-        return base(ParseStatus::Unreadable, "file is not UTF-8 text");
+        return rejected(ParseStatus::Unreadable, issue("not_utf8", "file is not UTF-8 text"));
     };
     let doc = ReceiptDocument::parse(html);
     let Some(layout) = layouts.iter().find(|l| (l.matches)(&doc)) else {
-        return base(ParseStatus::UnsupportedFormat, "layout not recognised; the receipt is kept for review and is not counted");
+        return rejected(ParseStatus::UnsupportedFormat, issue("unknown_layout", "layout not recognised; kept for review and not counted"));
     };
-    let fields = (layout.extract)(&doc);
-    let mut out = evaluate(fields, &sha256);
+    let (fields, extraction_issues) = (layout.extract)(&doc);
+    let mut out = evaluate(fields, &sha256, extraction_issues);
     out.layout = Some(layout.id);
     out
 }
 
 /// Currency, reconciliation and completeness checks for extracted fields.
-pub fn evaluate(fields: FuelReceiptFields, sha256: &str) -> ParsedFuelReceipt {
-    let mut issues = Vec::new();
+pub fn evaluate(fields: FuelReceiptFields, sha256: &str, mut issues: Vec<Issue>) -> ParsedFuelReceipt {
     let mut notes = Vec::new();
-    let billed: Vec<&PrintedAmount> = fields.lines.iter().map(|l| &l.amount).chain(fields.total.iter()).collect();
+    let billed: Vec<&PrintedAmount> = fields.lines.iter().map(|l| &l.amount).chain(fields.subtotal.iter()).chain(fields.total.iter()).collect();
     let currency = recognize_currency(billed.iter().copied());
-    let mut reconciliation = None;
+    let explicit = match &currency {
+        CurrencyRecognition::Explicit { code } => Some(code.clone()),
+        CurrencyRecognition::Ambiguous { reason } => {
+            issues.push(issue("currency_ambiguous", format!("currency not explicit: {reason}")));
+            None
+        }
+        CurrencyRecognition::Missing => {
+            issues.push(issue("currency_missing", "no currency printed"));
+            None
+        }
+    };
 
     if fields.receipt_id.is_none() {
-        issues.push("no receipt identifier printed".into());
+        issues.push(issue("no_receipt_id", "no receipt identifier printed"));
     }
     if fields.lines.is_empty() {
-        issues.push("no billed lines found".into());
+        issues.push(issue("no_lines", "no billed lines found"));
     }
-    match (&currency, &fields.total) {
-        (CurrencyRecognition::Explicit { code }, Some(total)) => match reconcile(&fields.lines, total, code) {
-            Ok(r) => {
-                if r.difference_minor != 0 {
-                    issues.push(format!("lines and taxes sum to {} but the printed total is {} (minor units of {code})", r.lines_minor, r.total_minor));
-                }
-                reconciliation = Some(r);
+
+    let mut reconciliation = None;
+    match &fields.total {
+        None => issues.push(issue("no_total", "no printed total")),
+        Some(total) if !fields.lines.is_empty() => {
+            let r = reconcile(&fields.lines, total, explicit.as_deref());
+            if r.difference_units != 0 {
+                issues.push(issue("total_mismatch", format!("lines and taxes sum to {} but the printed total is {} (units of 10^-{})", r.lines_units, r.total_units, r.scale)));
             }
-            Err(e) => issues.push(e),
-        },
-        (CurrencyRecognition::Explicit { .. }, None) => issues.push("no printed total".into()),
-        (CurrencyRecognition::Ambiguous { reason }, _) => issues.push(format!("currency ambiguous: {reason}")),
-        (CurrencyRecognition::Missing, _) => issues.push("no currency printed".into()),
+            if let (Some(code), None) = (&explicit, r.total_minor) {
+                issues.push(issue("precision", format!("the total has more decimals than {code} allows")));
+            }
+            reconciliation = Some(r);
+        }
+        Some(_) => {}
+    }
+    if let Some(sub) = &fields.subtotal {
+        let charges: Vec<&ReceiptLine> = fields.lines.iter().filter(|l| l.kind != LineKind::Tax).collect();
+        let scale = charges.iter().map(|l| l.amount.value.scale).chain([sub.value.scale]).max().unwrap_or(0);
+        let sum: Option<i128> = charges.iter().map(|l| signed_units(l, scale)).sum();
+        if sum != rescale(&sub.value, scale) {
+            issues.push(issue("subtotal_mismatch", "the printed subtotal does not equal the sum of the charge lines"));
+        }
     }
     for line in &fields.lines {
         if let Some(note) = unit_price_note(line) {
@@ -220,38 +270,25 @@ pub fn evaluate(fields: FuelReceiptFields, sha256: &str) -> ParsedFuelReceipt {
     }
 }
 
-/// Exact integer check: charges + taxes + surcharges − discounts = total, in minor units of `code`.
-/// Every amount must be in `code` (or carry no currency mark of its own) and fit its precision.
-pub fn reconcile(lines: &[ReceiptLine], total: &PrintedAmount, code: &str) -> Result<Reconciliation, String> {
-    let minor = |a: &PrintedAmount| -> Result<i64, String> {
-        to_minor_units(&a.value, code).ok_or_else(|| format!("amount '{}' does not fit {code} minor units", a.text))
-    };
-    let mut sum: i64 = 0;
-    for line in lines {
-        let v = minor(&line.amount)?;
-        let signed = if line.kind == LineKind::Discount { -v.abs() } else { v };
-        sum = sum.checked_add(signed).ok_or("sum overflow")?;
+/// Exact integer check at the finest printed precision: charges + taxes + surcharges − discounts must
+/// equal the total. Needs no currency; minor units are added only when `currency` is explicit.
+pub fn reconcile(lines: &[ReceiptLine], total: &PrintedAmount, currency: Option<&str>) -> Reconciliation {
+    let scale = lines.iter().map(|l| l.amount.value.scale).chain([total.value.scale]).max().unwrap_or(0);
+    let lines_units: i128 = lines.iter().map(|l| signed_units(l, scale).unwrap_or(0)).sum();
+    let total_units = rescale(&total.value, scale).unwrap_or(0);
+    Reconciliation {
+        scale,
+        lines_units,
+        total_units,
+        difference_units: total_units - lines_units,
+        currency: currency.map(str::to_string),
+        total_minor: currency.and_then(|c| to_minor_units(&total.value, c)),
     }
-    let t = minor(total)?;
-    Ok(Reconciliation { currency: code.to_string(), lines_minor: sum, total_minor: t, difference_minor: t - sum })
 }
 
-/// A printed unit price is usually rounded for display, so quantity × unit price need not equal the
-/// line amount. This never blocks verification; it only notes when the difference is larger than the
-/// unit price's display rounding can explain.
-fn unit_price_note(line: &ReceiptLine) -> Option<String> {
-    let (q, p) = (line.quantity.as_ref()?, line.unit_price.as_ref()?);
-    let amount = &line.amount.value;
-    // Compare at a common scale: q × p has scale q.scale + p.scale.
-    let product = q.units.checked_mul(p.value.units)?;
-    let scale = q.scale + p.value.scale;
-    let amount_scaled = rescale(amount, scale)?;
-    let diff = (product - amount_scaled).abs();
-    // In units of 10^-scale: half a unit of the price's last printed digit times the quantity
-    // (0.5 × q.units), plus half a unit of the amount's last printed digit.
-    let price_rounding = q.units.abs().checked_mul(5)? / 10;
-    let amount_rounding = if scale > amount.scale { 5 * 10i128.checked_pow(scale - amount.scale - 1)? } else { 0 };
-    (diff > price_rounding + amount_rounding).then(|| format!("'{}': {} × {} differs from {} by more than the unit price's display rounding", line.description, q.text, p.text, line.amount.text))
+fn signed_units(line: &ReceiptLine, scale: u32) -> Option<i128> {
+    let v = rescale(&line.amount.value, scale)?;
+    Some(if line.kind == LineKind::Discount { -v.abs() } else { v })
 }
 
 fn rescale(d: &PrintedDecimal, scale: u32) -> Option<i128> {
@@ -259,4 +296,22 @@ fn rescale(d: &PrintedDecimal, scale: u32) -> Option<i128> {
         return None;
     }
     d.units.checked_mul(10i128.checked_pow(scale - d.scale)?)
+}
+
+/// A printed unit price is usually rounded for display, so quantity × unit price need not equal the
+/// line amount. This never blocks verification; it only notes when the difference is larger than the
+/// display rounding of the price and the amount can explain.
+fn unit_price_note(line: &ReceiptLine) -> Option<String> {
+    let (q, p) = (line.quantity.as_ref()?, line.unit_price.as_ref()?);
+    let amount = &line.amount.value;
+    let scale = q.scale + p.value.scale;
+    let product = q.units.checked_mul(p.value.units)?;
+    let diff = (product - rescale(amount, scale)?).abs();
+    // In units of 10^-scale: half a unit of the price's last printed digit times the quantity
+    // (0.5 × q.units), plus half a unit of the amount's last printed digit.
+    let price_rounding = q.units.abs().checked_mul(5)? / 10;
+    let amount_rounding = if scale > amount.scale { 5 * 10i128.checked_pow(scale - amount.scale - 1)? } else { 0 };
+    (diff > price_rounding + amount_rounding).then(|| {
+        format!("'{}': {} × {} differs from {} by more than display rounding explains", line.description, q.text, p.text, line.amount.text)
+    })
 }
