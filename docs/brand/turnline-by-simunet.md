@@ -1,6 +1,10 @@
 # Turnline by SimuNet: brand integration proposal
 
-**Status:** documentation only, for owner review.
+**Status:** documentation only.
+
+- **The brand architecture is settled:** the owner approved it in principle on PR #36 (Oct 19, 2026).
+- **Still pending:** the legal wording in §7a stays as proposed until the five publication prerequisites in §7b are confirmed.
+- **Not deployed:** nothing in this document changes legal pages or public branding.
 
 - **Nothing here changes production branding,** the website, the desktop app, accounts or billing.
 - **Each phase in §8 is a separate, owner-approved change.**
@@ -314,12 +318,31 @@ The installer's publisher field is left as is (owner decision). The About text, 
 - **No "Inc."** Write "Apex Aviation Training Group LLC" in full on first use, "Apex" after that.
 - **Wording:** say "brands operated by". Avoid "subsidiary", "division" or "company" for either brand, because neither is a separate legal entity.
 
-### Confirmations needed before any legal page changes
-1. **Controller details:** that Apex is the data controller for both the Turnline waitlist and SimuNet accounts and telemetry. Also, which processors each brand uses: Turnline uses Supabase, Resend and Cloudflare; SimuNet uses Render, Stripe and its email provider.
-2. **Contact points:** whether each brand keeps its own privacy contact (support@turnlineops.com and support@simunet.co) or one Apex contact serves both. Note that turnlineops.com currently has no MX record (from the earlier site audit), so support@turnlineops.com may not receive mail.
-3. **Contracts:** that existing vendor accounts and agreements for both brands are in Apex's name, or which ones need updating.
-4. **Mailing address:** that the Springfield, MA address is correct for both brands.
-5. **Effective dates and change notice** for the revised privacy and terms pages.
+The wording above is **held as proposed** until every prerequisite in §7b is confirmed.
+
+---
+
+## 7b. Legal publication prerequisites (must be confirmed before any legal page changes)
+
+**Rules for this section:**
+- No item below has been answered by this document. Each one needs confirmation from the owner, with legal advice where appropriate.
+- The "What the repositories and DNS show today" column records only facts observed in code, published pages and public DNS on **Oct 19, 2026**. It is not a confirmation, and nothing is inferred beyond it.
+- Until all five are confirmed, §7a stays a proposal: no footer, privacy, terms, About or email text is published.
+
+| # | Prerequisite | What must be confirmed | What the repositories and DNS show today | Status |
+|---|---|---|---|---|
+| **1** | **Controller and processors** | (a) That Apex is the controller for each data set: the Turnline waitlist; Turnline optional cloud sync; SimuNet accounts, telemetry, billing and its early-access list. (b) The complete processor list for each, and that each privacy notice names them. | **Turnline waitlist notice** (`marketing/privacy.html`, effective Oct 14, 2026): names Apex as responsible for the waitlist. It lists Supabase (database and confirmation processing), Resend (email) and Cloudflare Turnstile. The site is hosted on Cloudflare Pages; the Oct 19 site audit found Cloudflare Web Analytics injected but not disclosed in the notice. **SimuNet privacy page** (`simunet-html/privacy`, effective May 5, 2025): names no entity and says data is shared with "vendors who help us run the platform (for example, email delivery providers)". The SimuNet code uses Render (hosting and PostgreSQL), Stripe (billing) and Brevo (`app/services/email.py`, transactional email); none is named on the page. **Turnline cloud sync** (Supabase project `itapyrwjijnvzdsatttp`) has no published notice. | **Unconfirmed** |
+| **2** | **Working privacy contacts** | Which address is the privacy contact for each brand (per brand, or one Apex contact), and that each one **receives mail** before it is published as a privacy contact. | **support@turnlineops.com** is published on the Turnline site, notice and welcome email. turnlineops.com has **no MX record** (Cloudflare DNS-over-HTTPS query, Oct 19, 2026), so this address cannot receive mail as configured. **support@simunet.co** is published on the SimuNet privacy and terms pages. **simunet.co, www.simunet.co and simunet.gg all returned NXDOMAIN** (status 3) in the same check: the domains do not resolve, so neither the SimuNet site nor that address is reachable as configured. The cause (registration, delegation or DNS setup) has not been determined. | **Unconfirmed** (both contacts currently not deliverable) |
+| **3** | **Vendor contracting entity** | Which legal entity holds each vendor account and agreement, and whether any must be moved to or re-papered in Apex's name, including any data processing agreements. Vendors: Supabase, Resend, Cloudflare, the domain registrars; Render, Stripe, Brevo; GitHub. | **Not determinable from the repositories.** Vendor account ownership and contracting entity are not recorded in either codebase. | **Unconfirmed** |
+| **4** | **Business mailing address** | The correct business mailing address for Apex to publish on both brands' notices and terms, and that it is appropriate for public legal notices. | The Turnline waitlist notice publishes "75 Tioga Street, Springfield, MA 01128". The SimuNet pages publish no address. Whether the published address is current and suitable has not been verified. | **Unconfirmed** |
+| **5** | **Effective dates** | The effective date for each revised notice and terms page, whether existing users or subscribers are notified in advance, and how (both notices mention updates). | Current dates: Turnline waitlist notice **Oct 14, 2026**; SimuNet privacy and terms **May 5, 2025**. Turnline has no terms yet. No revision dates are set. | **Unconfirmed** |
+
+**When all five are confirmed:**
+1. Update §7a with the confirmed details.
+2. Prepare P1b as preview-only changes in each repository.
+3. Submit the final text for explicit approval before any production publication.
+
+The two non-deliverable contacts in item 2 matter beyond branding. Both are published today as privacy and support routes. Fixing them is an infrastructure task (adding MX records or restoring the SimuNet domains) that needs owner authorization. This document doesn't change DNS.
 
 ---
 
@@ -346,17 +369,18 @@ The installer's publisher field is left as is (owner decision). The About text, 
 
 ## 9. Decisions requiring owner approval
 
-**Already decided** (PR #36 review):
-- Apex operates both brands.
-- SimuNet is the parent ecosystem brand, not a separate entity.
-- Turnline is SimuNet's aviation operations product.
-- The public statement is "Turnline and SimuNet are brands operated by Apex Aviation Training Group LLC".
-- The installer publisher, identifiers and data paths stay unchanged.
-- No waitlist sharing without consent.
-- Accounts and infrastructure stay separate for now.
+**Settled** (owner approval in principle on PR #36):
+- **Apex Aviation Training Group LLC** is the operating company.
+- **SimuNet** is an ecosystem brand operated by Apex. **Turnline by SimuNet** is SimuNet's aviation operations product.
+- **Public statement:** "Turnline and SimuNet are brands operated by Apex Aviation Training Group LLC".
+- **Kept separate:** accounts, infrastructure, billing and databases stay independent for now.
+- **Waitlist:** the Turnline waitlist stays separate from SimuNet marketing consent.
+- **Installer:** existing installer identifiers, publisher and local data paths are preserved. No installer migration.
+- **No account consolidation.**
+- **Operations Center:** stays free of SimuNet promotional clutter.
 
 **Still open:**
-1. **The §7a confirmations:** controller and processor details, contact points, vendor contracts, the mailing address and effective dates.
+1. **The five §7b legal publication prerequisites:** controller and processors, working privacy contacts, vendor contracting entity, business mailing address and effective dates.
 2. **The §7a wording** for footers, About, privacy, terms and emails, before it goes to any production page.
 3. **Trademark and domain clearance** for "Turnline", still outstanding per `turnline-working-brand.md`, and for the combined "Turnline by SimuNet" mark.
 4. **Endorsement placement in the app top bar** (recommended), or only in About and the installer (more minimal).
