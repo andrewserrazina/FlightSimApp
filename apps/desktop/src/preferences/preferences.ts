@@ -16,6 +16,8 @@ export interface Preferences {
   /** SimBrief lookup: Navigraph alias (preferred) or numeric Pilot ID. Public identifiers, not credentials. */
   simbriefIdKind: "username" | "pilot_id";
   simbriefId: string;
+  /** Opt-in preview of the Live Flight operations-center layout (Ops Center L4–L7). Off by default. */
+  opsCenterLayout: boolean;
 }
 
 export const STORAGE_KEY = "flightsim.preferences.v1";
@@ -33,6 +35,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   keepDetailedFlights: 100,
   simbriefIdKind: "username",
   simbriefId: "",
+  opsCenterLayout: false,
 };
 
 /** Same character rules as the SimBrief client; anything else is not stored. */
@@ -54,6 +57,7 @@ export function parsePreferences(raw: unknown): Preferences {
         ? o.keepDetailedFlights
         : DEFAULT_PREFERENCES.keepDetailedFlights,
     ...parseSimbrief(o),
+    opsCenterLayout: typeof o.opsCenterLayout === "boolean" ? o.opsCenterLayout : DEFAULT_PREFERENCES.opsCenterLayout,
   };
 }
 

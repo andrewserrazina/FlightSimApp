@@ -21,6 +21,7 @@ import { planBasisForFlight, type PlanBasisKind } from "../dispatch/planBasis";
 import { routeTitle } from "../dispatch/presentation";
 import { PHASE_LABEL, SIMULATOR_SHORT } from "./labels";
 import { TurnaroundPanel } from "../ops/TurnaroundPanel";
+import { OpsCenterPage } from "../live/OpsCenterPage";
 
 const ROUTE_SUFFIX: Record<PlanBasisKind, string> = {
   imported_preview: "imported plan, preview",
@@ -31,7 +32,13 @@ const ROUTE_SUFFIX: Record<PlanBasisKind, string> = {
   legacy_attached: "attached plan",
 };
 
+/** Live Flight: the classic page, or the operations-center preview when opted in (Settings → Telemetry & display). */
 export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
+  const { preferences } = usePreferences();
+  return preferences.opsCenterLayout ? <OpsCenterPage navigate={navigate} /> : <ClassicLiveFlightPage navigate={navigate} />;
+}
+
+function ClassicLiveFlightPage({ navigate }: { navigate: NavigateFn }) {
   const state = useBridgeState();
   const now = useNow(500);
   const { preferences } = usePreferences();
@@ -90,7 +97,6 @@ export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
     );
   }
 
-  const r = frame.readings;
   return (
     <div className="page">
       {flightStrip}
@@ -109,6 +115,22 @@ export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
           <Tag tone="accent">DEMO DATA</Tag> Values come from the mock simulator, not a real aircraft.
         </p>
       )}
+      <TelemetryPanels showTiming />
+    </div>
+  );
+}
+
+/** The live readings panels. The operations-center preview leaves out the Timing panel (it is in Advanced diagnostics). */
+export function TelemetryPanels({ showTiming }: { showTiming: boolean }) {
+  const state = useBridgeState();
+  const now = useNow(500);
+  const { preferences } = usePreferences();
+  const freshness = telemetryFreshness(state, now, preferences.staleWarningSeconds * 1000);
+  const frame = state.lastFrame;
+  if (!frame) return null;
+  const stale = freshness.kind === "stale";
+  const r = frame.readings;
+  return (
       <div className={`grid grid--live ${stale ? "is-stale" : ""}`}>
         <Panel title="Aircraft">
           <dl className="metrics metrics--1">
@@ -152,6 +174,7 @@ export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
           </dl>
           {r.total_fuel_kg.quality === "unavailable" && <p className="muted">This aircraft does not report fuel quantity. Fuel is never estimated.</p>}
         </Panel>
+        {showTiming && (
         <Panel title="Timing" className="panel--compact">
           <dl className="metrics metrics--2">
             <StaticMetric label="Observed (UTC)" value={utcDateTime(frame.observed_at)} />
@@ -162,7 +185,7 @@ export function LiveFlightPage({ navigate }: { navigate: NavigateFn }) {
             <StaticMetric label="Simulator" value={`${SIMULATOR_SHORT[frame.simulator]}${frame.simulator_version ? ` · ${frame.simulator_version}` : ""}`} />
           </dl>
         </Panel>
+        )}
       </div>
-    </div>
   );
 }

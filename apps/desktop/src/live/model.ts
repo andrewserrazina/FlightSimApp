@@ -290,7 +290,7 @@ export function planFuelAtLastFix(plan: ImportedFlightPlan | null, geometry: Rou
 
 // ---------------------------------------------------------------- actions
 
-export type FlightActionId = "start" | "resume" | "record_out" | "record_in" | "confirm_completion" | "end" | "discard" | "connect" | "open_debrief";
+export type FlightActionId = "start" | "resume" | "record_out" | "record_in" | "confirm_completion" | "end" | "discard" | "connect" | "open_debrief" | "attach_release" | "attach_plan";
 
 export interface ActionsModel {
   /** The one action to emphasise; null when nothing is expected right now. */
@@ -308,6 +308,8 @@ export interface ActionInputs {
   /** The flight's operational records (manual OUT/IN) have loaded; manual milestones need them. */
   opsReady: boolean;
   manual: ManualMilestones;
+  /** Plan basis for the open flight: an open release or an imported preview can be attached (same offers as the Flight plan panel). */
+  basisKind?: PlanBasisKind | null;
 }
 
 const AIRBORNE_PHASES = ["TAKEOFF", "CLIMB", "CRUISE", "DESCENT", "APPROACH"];
@@ -322,7 +324,9 @@ export function flightActions(a: ActionInputs): ActionsModel {
   const engine = availableActions(a.lc, a.telemetryLive);
   const elig = manualEligibility({ flightOpen: open && a.opsReady, takeoffAtUtc: a.lc.takeoffAt, landingAtUtc: a.lc.landingAt, airborne: AIRBORNE_PHASES.includes(a.lc.phase), manual: a.manual });
   const allowed: FlightActionId[] = [];
-  if (engine.resume) allowed.push("resume");
+  // An automatic interruption resumes by itself when data returns; Resume is then offered, not emphasised.
+  const autoResume = a.lc.status === "interrupted" && !a.lc.needsUserDecision;
+  if (engine.resume && !autoResume) allowed.push("resume");
   if (engine.start && a.storeReady) allowed.push("start");
   // IN before completion: once a flight is completed its IN can no longer be recorded.
   if (elig.in) allowed.push("record_in");
@@ -333,10 +337,13 @@ export function flightActions(a: ActionInputs): ActionsModel {
   if (!primary && !open && !a.telemetryLive) primary = "connect";
   if (!primary && closed) primary = "open_debrief";
   const secondary = allowed.filter((x) => x !== primary);
+  if (engine.resume && autoResume) secondary.unshift("resume");
+  if (open && a.basisKind === "release_open") secondary.push("attach_release");
+  if (open && a.basisKind === "imported_preview") secondary.push("attach_plan");
   if (engine.end) secondary.push("end");
   if (engine.discard) secondary.push("discard");
   if (closed && primary !== "open_debrief") secondary.push("open_debrief");
-  return { primary, secondary, idleNote: primary ? null : open ? "No action needed" : null };
+  return { primary, secondary, idleNote: primary ? null : autoResume ? "Recording resumes automatically when data returns" : open ? "No action needed" : null };
 }
 
 // ---------------------------------------------------------------- health and attention
@@ -373,6 +380,8 @@ export interface HealthInputs {
   gsxRecordError: string | null;
   turnaround: TurnaroundDto | null;
   opsError: string | null;
+  /** The open flight was restored from the database at startup (Turnline was closed during it). */
+  recovered?: boolean;
 }
 
 /**
@@ -416,7 +425,9 @@ export function health(h: HealthInputs): { items: HealthItem[]; attention: Atten
     attention.push({ id: "write", level: "action", title: "Recent flight data hasn't been saved yet.", detail: `${h.pendingItems} item${h.pendingItems === 1 ? " is" : "s are"} kept safely in memory and saving is retried automatically.`, actions: ["retry_flush"] });
   if (h.lc.status === "interrupted")
     attention.push(
-      h.lc.needsUserDecision
+      h.recovered
+        ? { id: "interrupted", level: "action", title: "Unfinished flight found.", detail: `A flight started ${h.lc.startedAt ? hmUtc(h.lc.startedAt) : "earlier"} was still open when Turnline closed. Resume to continue recording it (the phase is re-checked against live data), or end or discard it from More.`, actions: ["resume"] }
+        : h.lc.needsUserDecision
         ? { id: "interrupted", level: "action", title: "This flight was interrupted.", detail: "Resume to continue recording it, or end or discard it from More.", actions: ["resume"] }
         : { id: "interrupted", level: "warn", title: "Recording is paused: the simulator stopped sending data.", detail: "It resumes automatically when consistent data returns.", actions: [] },
     );
