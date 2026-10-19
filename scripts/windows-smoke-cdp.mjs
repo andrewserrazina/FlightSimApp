@@ -84,6 +84,11 @@ async function screenshot(name) {
   if (r.result?.data) writeFileSync(join(outDir, `${name}.png`), Buffer.from(r.result.data, "base64"));
 }
 const nav = (page) => click(page); // sidebar buttons: "Connection", "Live Flight", "Flight History", "Debrief", "Settings"
+// Settings keeps the diagnostic report and raw adapter status in a collapsed section; open it when it is closed.
+async function showDiagnostics() {
+  if (await evaluate(textIncludes("Show advanced diagnostics"))) await click("Show advanced diagnostics");
+  await waitFor("advanced diagnostics open", textIncludes("Hide advanced diagnostics"), 10_000);
+}
 
 const result = { step, ok: false, checks: {} };
 try {
@@ -97,6 +102,7 @@ try {
     await screenshot("01-connected");
   } else if (step === "settings") {
     await nav("Settings");
+    await showDiagnostics();
     await waitFor(`database ready (schema v${EXPECTED_SCHEMA})`, textIncludes(`Ready (schema v${EXPECTED_SCHEMA})`), 30_000);
     const text = await bodyText();
     result.checks.database_ready_schema = EXPECTED_SCHEMA;
@@ -125,6 +131,7 @@ try {
     await screenshot("05-history");
   } else if (step === "msfs") {
     await nav("Settings");
+    await showDiagnostics();
     await click("Mock mode (demo data)");
     await waitFor("MSFS adapter reports SimConnect unavailable", `${textIncludes("sdk_unavailable")} || ${textIncludes("SimConnect.dll")}`, 90_000);
     const text = await bodyText();
