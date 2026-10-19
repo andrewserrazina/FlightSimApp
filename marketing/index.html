@@ -6,14 +6,14 @@
 <!-- Launch posture: keep noindex,nofollow until the owner approves discoverability and brand clearance. -->
 <meta name="robots" content="noindex,nofollow">
 <title>Turnline | Airline operations for Microsoft Flight Simulator (in development)</title>
-<meta name="description" content="Turnline brings your SimBrief flight plan into Microsoft Flight Simulator, records your flight as it happens and compares plan with actual after landing. In development and tested internally with MSFS 2020; not publicly available yet.">
+<meta name="description" content="Turnline brings your SimBrief flight plan into Microsoft Flight Simulator, records your flight and its GSX Pro turnarounds, turns GSX fuel invoices into simulated expenses and compares plan with actual after landing. In development and tested internally with MSFS 2020; not publicly available yet.">
 <meta name="theme-color" content="#0b1f3a">
 <link rel="canonical" href="https://turnlineops.com/">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Turnline">
 <meta property="og:title" content="Turnline | Every flight. The whole operation.">
-<meta property="og:description" content="SimBrief flight-plan import, live flight recording and a planned-versus-actual debrief for Microsoft Flight Simulator. In development; join the early-access list for updates.">
+<meta property="og:description" content="SimBrief flight-plan import, live flight recording, GSX Pro turnaround monitoring and a flight debrief with simulated expenses, for Microsoft Flight Simulator. In development; join the early-access list for updates.">
 <meta property="og:url" content="https://turnlineops.com/">
 <meta property="og:image" content="https://turnlineops.com/assets/og-image.png">
 <meta property="og:image:width" content="1200">
@@ -21,7 +21,7 @@
 <meta property="og:image:alt" content="Turnline: Every flight. The whole operation. In development for Microsoft Flight Simulator.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Turnline | Every flight. The whole operation.">
-<meta name="twitter:description" content="SimBrief flight-plan import, live flight recording and a planned-versus-actual debrief for Microsoft Flight Simulator. In development.">
+<meta name="twitter:description" content="SimBrief flight-plan import, live flight recording, GSX Pro turnaround monitoring and a flight debrief with simulated expenses, for Microsoft Flight Simulator. In development.">
 <meta name="twitter:image" content="https://turnlineops.com/assets/og-image.png">
 <script>document.documentElement.classList.replace('no-js', 'js');</script>
 <link rel="stylesheet" href="assets/site.css">
@@ -81,13 +81,14 @@
     <div>
       <p class="eyebrow">In development for Microsoft Flight Simulator</p>
       <h1 id="hero-title">Your aircraft flies the route. <em>Turnline brings the airline operation to life.</em></h1>
-      <p class="hero-lead">Bring your SimBrief flight plan into Microsoft Flight Simulator, track your flight as it happens, and review the operation after landing. Turnline is building toward a connected airline operations experience, from dispatch through debrief.</p>
+      <p class="hero-lead">Bring your SimBrief flight plan into Microsoft Flight Simulator, track your flight and its GSX ground services as they happen, and review the operation after landing. Turnline is building toward a connected airline operations experience, from dispatch through debrief.</p>
       <div class="hero-actions">
         <a class="btn btn-primary" href="#early-access" data-focus-email>Join the Early Access List</a>
         <a class="btn btn-secondary" href="#working">See What’s Working</a>
       </div>
       <ul class="hero-facts" aria-label="Development status">
         <li><span class="dot ok" aria-hidden="true"></span>Core flight workflow tested internally with MSFS 2020</li>
+        <li><span class="dot ok" aria-hidden="true"></span>GSX Pro turnaround monitoring tested internally with MSFS 2020</li>
         <li><span class="dot dev" aria-hidden="true"></span>In development · not publicly downloadable</li>
       </ul>
     </div>
@@ -107,7 +108,7 @@
     <div class="section-head reveal">
       <p class="eyebrow">Built and tested</p>
       <h2 id="working-title">What’s working today</h2>
-      <p>These capabilities are implemented in internal Windows builds and have passed hands-on acceptance testing on a real PC running Microsoft Flight Simulator 2020, with a real SimBrief account. They aren’t publicly available yet.</p>
+      <p>These capabilities are implemented in internal Windows builds and have passed hands-on acceptance testing on a real PC running Microsoft Flight Simulator 2020, with a real SimBrief account and, for turnarounds and expenses, GSX Pro. They aren’t publicly available yet.</p>
     </div>
     <ul class="built-grid" role="list">
       <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Windows desktop simulator connection</h3><p>A Windows app with a background simulator bridge that reads live aircraft data from MSFS 2020 and shows connection and data freshness honestly.</p></li>
@@ -117,6 +118,9 @@
       <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Plan persistence and offline use</h3><p>An imported plan is saved locally and stays available after a restart or without an internet connection. An import attempted offline fails with a clear message.</p></li>
       <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Flight-plan attachment</h3><p>Attach the plan to a flight as a fixed snapshot. Later SimBrief imports never change what that flight was planned against.</p></li>
       <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Planned-versus-actual debrief</h3><p>After landing, compare planned and detected takeoff, landing and flight time. Values that weren’t detected are shown as such, never guessed.</p></li>
+      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Live GSX Pro turnaround monitoring</h3><p>Boarding, refuelling, pushback and deboarding states read live from GSX Pro in MSFS 2020 and recorded in a departure or arrival turnaround. Turnline only reads: it never sends GSX commands or changes GSX files.</p></li>
+      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>Flight-linked turnaround history</h3><p>Turnaround service activity is linked to the flight it belongs to and kept in that flight’s history, so what happened at the gate stays with the flight.</p></li>
+      <li class="built reveal"><span class="status tested">Implemented internally · MSFS 2020 tested</span><h3>GSX fuel invoices as simulated expenses</h3><p>Reads the Fuel receipts GSX generates. GSX prints amounts with “$” only, so you confirm the currency, then choose the flight the cost belongs to. It appears in that flight’s Debrief, survives a restart, and a repeat scan never counts it twice.</p></li>
     </ul>
     <div class="limits reveal">
       <h3>What “tested” means here</h3>
@@ -124,13 +128,17 @@
         <li>Hands-on acceptance testing by the Turnline team on one Windows PC with MSFS 2020 and a real SimBrief account, in the scenarios Turnline currently supports. It is not a formal compatibility certification.</li>
         <li>Public availability and broad aircraft, add-on and hardware compatibility have not been established.</li>
         <li>Microsoft Flight Simulator 2024 compatibility has not been verified.</li>
+        <li>GSX: only Fuel receipts are read today. Other GSX services, simulator restarts and some edge cases are still being tested. Expenses are simulated operating costs from flight simulation, not real money.</li>
       </ul>
+      <p class="limits-proof">In the GSX test session, a real GSX-generated Fuel receipt was imported, its currency confirmed as USD, and a USD 2,912.46 simulated fuel expense was linked to the completed flight and shown in its Debrief.</p>
     </div>
     <div class="next-up">
       <h3 class="next-title">Being validated next</h3>
       <ul class="next-list" role="list">
         <li class="reveal"><span class="status dev">In active development</span><div><strong>Dispatch release and operational timeline</strong><p>A formal release step and an OUT/OFF/ON/IN timeline. Built; awaiting acceptance testing on Windows.</p></div></li>
         <li class="reveal"><span class="status dev">In active development</span><div><strong>Route monitoring and navigation log</strong><p>Waypoint-by-waypoint navlog and live progress along the planned route. Awaiting acceptance on a real flight.</p></div></li>
+        <li class="reveal"><span class="status dev">In active development</span><div><strong>Automatic receipt import and matching</strong><p>New GSX receipts picked up automatically, then matched to the right flight. Today every receipt is linked to a flight by you.</p></div></li>
+        <li class="reveal"><span class="status plan">Planned</span><div><strong>Flight economics and profitability</strong><p>Fuel used, operating costs, revenue and profit per flight. Designed; not built yet.</p></div></li>
       </ul>
     </div>
   </div>
@@ -166,6 +174,38 @@
   </div>
 </section>
 
+<!-- A4. Operational flow -->
+<section class="section" id="flow" aria-labelledby="flow-title">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">One flight, start to finish</p>
+      <h2 id="flow-title">From dispatch to the GSX turnaround to the debrief</h2>
+      <p>What a flight looks like in the current internal build: plan it, run the turnaround with GSX Pro, and see what it cost in the debrief.</p>
+    </div>
+    <ol class="flow-steps" role="list">
+      <li class="flow-step reveal">
+        <span class="flow-num" aria-hidden="true">01</span>
+        <h3>Dispatch</h3>
+        <p>Import your SimBrief plan and attach it to the flight as a fixed baseline.</p>
+        <figure class="shot"><div class="shot-frame"><img src="assets/screens/dispatch-detail-600.webp" srcset="assets/screens/dispatch-detail-600.webp 600w, assets/screens/dispatch-detail-1000.webp 1000w" sizes="(max-width: 960px) calc(100vw - 32px), 360px" width="600" height="450" loading="lazy" decoding="async" alt="Dispatch screen detail: an imported SimBrief plan for fictional flight TLN247 from Boston to Chicago O’Hare, with aircraft, route and scheduled times. Sample data."></div></figure>
+      </li>
+      <li class="flow-step reveal">
+        <span class="flow-num" aria-hidden="true">02</span>
+        <h3>GSX turnaround</h3>
+        <p>Boarding, refuelling, pushback and deboarding are followed live. Afterwards, GSX’s fuel invoice is imported and you confirm its currency.</p>
+        <figure class="shot"><div class="shot-frame"><img src="assets/screens/receipt-confirm-600.webp" srcset="assets/screens/receipt-confirm-600.webp 600w, assets/screens/receipt-confirm-1000.webp 1000w" sizes="(max-width: 960px) calc(100vw - 32px), 360px" width="600" height="555" loading="lazy" decoding="async" alt="Confirm the receipt’s currency dialog: a GSX Fuel receipt prints its amounts with a dollar sign only, so the line items and the total of $ 28,022.40 are listed and USD is chosen before anything is counted. Sanitized sample receipt."></div></figure>
+      </li>
+      <li class="flow-step reveal">
+        <span class="flow-num" aria-hidden="true">03</span>
+        <h3>Debrief</h3>
+        <p>The confirmed fuel cost appears in the flight’s Debrief as a simulated expense, totalled per currency and never converted.</p>
+        <figure class="shot"><div class="shot-frame"><img src="assets/screens/debrief-expenses-600.webp" srcset="assets/screens/debrief-expenses-600.webp 600w, assets/screens/debrief-expenses-1000.webp 1000w" sizes="(max-width: 960px) calc(100vw - 32px), 360px" width="600" height="338" loading="lazy" decoding="async" alt="Debrief panel titled Turnarounds and simulated expenses: the GSX fuel invoice, with currency confirmed by the user, is listed as a USD 28,022.40 fuel expense with a confirmed USD total. Sample data."></div></figure>
+      </li>
+    </ol>
+    <p class="gallery-note flow-note"><span class="real-tag">Internal build</span> Real screens with sample data: a fictional SimBrief plan, the demo simulator’s recorded flight and a sanitized GSX Fuel receipt, so the amount differs from the USD 2,912.46 in our MSFS 2020 test session. The live GSX panel isn’t pictured yet. Automatic receipt matching, flight economics and profitability reporting are still in development and are not shown.</p>
+  </div>
+</section>
+
 <!-- B. What is Turnline -->
 <section class="section light" id="platform" aria-labelledby="platform-title">
   <div class="wrap what-grid">
@@ -198,11 +238,11 @@
     </div>
     <ol class="stages">
       <li class="stage reveal"><span class="stage-num" aria-hidden="true">01</span><div class="stage-card"><h3>Plan</h3><span class="status tested">Implemented internally · MSFS 2020 tested</span><p>Import your SimBrief plan, review route, fuel and schedule, and attach it to the flight as a fixed baseline.</p><p class="link">Sets the schedule every later stage is measured against.</p></div></li>
-      <li class="stage reveal"><span class="stage-num" aria-hidden="true">02</span><div class="stage-card"><h3>Prepare</h3><span class="status plan">Planned</span><p>Gate readiness, aircraft preparation, passenger boarding and ground-service milestones.</p><p class="link">Boarding and servicing progress decide when you’re ready.</p></div></li>
+      <li class="stage reveal"><span class="stage-num" aria-hidden="true">02</span><div class="stage-card"><h3>Prepare</h3><span class="status tested">Implemented internally · MSFS 2020 tested</span><p>GSX Pro boarding and refuelling recorded live in a departure turnaround. A single departure-readiness answer and passenger modelling are still to come.</p><p class="link">Boarding and servicing progress decide when you’re ready.</p></div></li>
       <li class="stage reveal"><span class="stage-num" aria-hidden="true">03</span><div class="stage-card"><h3>Depart</h3><span class="status dev">In active development</span><p>A dispatch release and off-block and takeoff times are being validated. Responding to delays and constraints is planned.</p><p class="link">A late milestone moves the departure estimate.</p></div></li>
       <li class="stage reveal"><span class="stage-num" aria-hidden="true">04</span><div class="stage-card"><h3>Operate</h3><span class="status tested">Implemented internally · MSFS 2020 tested</span><p>Live aircraft data, detected flight phases and a recorded flight. Progress along the planned route is in development.</p><p class="link">Phases and events are recorded as they happen.</p></div></li>
-      <li class="stage reveal"><span class="stage-num" aria-hidden="true">05</span><div class="stage-card"><h3>Arrive</h3><span class="status dev">In active development</span><p>Landing and arrival are detected today. On-block times are in development; turnaround completion is planned.</p><p class="link">Arrival is compared with the plan; the flight closes out.</p></div></li>
-      <li class="stage reveal"><span class="stage-num" aria-hidden="true">06</span><div class="stage-card"><h3>Debrief</h3><span class="status tested">Implemented internally · MSFS 2020 tested</span><p>Planned versus actual times and the recorded timeline today. Delay causes and decision analysis are planned.</p><p class="link">Explains what happened, and later why.</p></div></li>
+      <li class="stage reveal"><span class="stage-num" aria-hidden="true">05</span><div class="stage-card"><h3>Arrive</h3><span class="status dev">In active development</span><p>Landing and arrival are detected, and GSX deboarding is recorded in an arrival turnaround. On-block times are in development.</p><p class="link">Arrival is compared with the plan; the flight closes out.</p></div></li>
+      <li class="stage reveal"><span class="stage-num" aria-hidden="true">06</span><div class="stage-card"><h3>Debrief</h3><span class="status tested">Implemented internally · MSFS 2020 tested</span><p>Planned versus actual times, the recorded timeline and the flight’s simulated expenses today. Delay causes and decision analysis are planned.</p><p class="link">Explains what happened, and later why.</p></div></li>
     </ol>
     <p class="stages-note">A stage’s label reflects its main capability today; parts of each stage are still in development or planned, as described on each card. The Feature Explorer below lists every capability’s status.</p>
   </div>
@@ -252,11 +292,13 @@
         <section class="panel" id="panel-ground" role="tabpanel" aria-labelledby="tab-ground" tabindex="0">
           <div class="panel-head"><div class="panel-icon"><svg aria-hidden="true"><use href="#i-ground"/></svg></div><div><h3>Ground Operations &amp; Turnarounds</h3><p>Everything that has to happen at the gate before you can push.</p></div></div>
           <ul class="feature-list">
-            <li><div class="fl-top"><strong>Aircraft turnaround timeline</strong><span class="status plan">Planned</span></div><p>Turnaround activities laid out against the departure time they feed.</p></li>
-            <li><div class="fl-top"><strong>Boarding &amp; baggage milestones</strong><span class="status plan">Planned</span></div><p>Progress you can see, with late milestones flowing into departure readiness.</p></li>
-            <li><div class="fl-top"><strong>Catering &amp; servicing concepts</strong><span class="status plan">Planned</span></div><p>Servicing steps represented in the turnaround, at a level that stays manageable.</p></li>
-            <li><div class="fl-top"><strong>Pushback &amp; departure readiness</strong><span class="status plan">Planned</span></div><p>A single answer to “are we ready to go?” built from the milestones above.</p></li>
-            <li><div class="fl-top"><strong>GSX Pro interoperability</strong><span class="status research">Research</span></div><p>Investigating whether ground-service events can be reflected in the Turnline timeline. Not supported or endorsed today.</p></li>
+            <li><div class="fl-top"><strong>Live GSX Pro service monitoring</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Boarding, refuelling, pushback and deboarding states read live from GSX Pro in MSFS 2020. Read-only: Turnline never sends GSX commands.</p></li>
+            <li><div class="fl-top"><strong>Departure &amp; arrival turnarounds</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>GSX service activity recorded in a departure or arrival turnaround at the gate.</p></li>
+            <li><div class="fl-top"><strong>Flight-linked turnaround history</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Turnaround activity linked to its flight and kept in that flight’s history.</p></li>
+            <li><div class="fl-top"><strong>Catering &amp; de-icing states</strong><span class="status impl">Implemented internally</span></div><p>Read and recorded like the other GSX services; not yet checked in an MSFS session.</p></li>
+            <li><div class="fl-top"><strong>Manual service entries &amp; servicing readiness</strong><span class="status impl">Implemented internally</span></div><p>Record a service by hand when GSX isn’t used, and see which services are still open. Awaiting MSFS acceptance.</p></li>
+            <li><div class="fl-top"><strong>Turnaround timeline against departure</strong><span class="status plan">Planned</span></div><p>Turnaround activities laid out against the departure time they feed, with late milestones moving the estimate.</p></li>
+            <li><div class="fl-top"><strong>Boarding &amp; baggage milestones</strong><span class="status plan">Planned</span></div><p>Passenger and baggage progress modelled by Turnline itself, flowing into departure readiness.</p></li>
           </ul>
         </section>
 
@@ -288,7 +330,7 @@
           <ul class="feature-list">
             <li><div class="fl-top"><strong>SimBrief</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Import of your latest OFP through SimBrief’s documented public interface, tested with a real account. Not affiliated with Navigraph.</p></li>
             <li><div class="fl-top"><strong>SayIntentions interoperability</strong><span class="status research">Research</span></div><p>Under investigation. No working integration or partnership exists.</p></li>
-            <li><div class="fl-top"><strong>GSX Pro integration</strong><span class="status research">Research</span></div><p>Under investigation. No working integration or partnership exists.</p></li>
+            <li><div class="fl-top"><strong>GSX Pro</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Live service states and GSX Fuel receipts, read-only, tested with MSFS 2020. Not a partnership; not affiliated with FSDreamTeam.</p></li>
             <li><div class="fl-top"><strong>Aircraft ACARS / AOC</strong><span class="status research">Research</span></div><p>Researching what individual aircraft expose and what can be supported responsibly.</p></li>
             <li><div class="fl-top"><strong>Microsoft Flight Simulator 2020</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Tested on real hardware in supported scenarios. Broad aircraft and add-on compatibility not yet established.</p></li>
             <li><div class="fl-top"><strong>Microsoft Flight Simulator 2024</strong><span class="status dev">In active development</span></div><p>Validated separately from 2020. Compatibility has not been verified yet.</p></li>
@@ -301,6 +343,11 @@
             <li><div class="fl-top"><strong>Flight timeline</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>A phase-by-phase timeline and event log of each recorded flight.</p></li>
             <li><div class="fl-top"><strong>Planned versus actual</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>Detected takeoff, landing and flight time compared with the attached plan; anything not detected is shown as such.</p></li>
             <li><div class="fl-top"><strong>Persistent flight history</strong><span class="status impl">Implemented internally</span></div><p>Flights stored locally on your PC, so your history doesn’t depend on a cloud account. Survives restarts in internal tests; not yet separately checked with MSFS.</p></li>
+            <li><div class="fl-top"><strong>Simulated expenses from GSX fuel invoices</strong><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><p>A GSX Fuel receipt, with its currency confirmed by you, linked to the flight you choose and shown in its Debrief. Totals are per currency and never converted.</p></li>
+            <li><div class="fl-top"><strong>Manual simulated expenses</strong><span class="status impl">Implemented internally</span></div><p>Add or correct an expense by hand, with an audit trail. Awaiting MSFS acceptance.</p></li>
+            <li><div class="fl-top"><strong>Automatic receipt matching</strong><span class="status dev">In active development</span></div><p>Matching new GSX receipts to the right flight automatically. Not available: today you link each receipt yourself.</p></li>
+            <li><div class="fl-top"><strong>Flight economics</strong><span class="status plan">Planned</span></div><p>Fuel actually used and the full operating cost of each flight. Designed; not built yet.</p></li>
+            <li><div class="fl-top"><strong>Revenue &amp; profitability reporting</strong><span class="status plan">Planned</span></div><p>Revenue and profit per flight and over time. Not built yet.</p></li>
             <li><div class="fl-top"><strong>Navigation debrief</strong><span class="status dev">In active development</span></div><p>Planned versus flown route distance and time outside the planned route corridor, described as observations, not judgements.</p></li>
             <li><div class="fl-top"><strong>Delay classification</strong><span class="status plan">Planned</span></div><p>Delays attributed to causes such as boarding, servicing or air traffic.</p></li>
             <li><div class="fl-top"><strong>Decision-based analysis</strong><span class="status plan">Planned</span></div><p>The decisions you made and the consequences that followed.</p></li>
@@ -431,11 +478,11 @@
       <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">2024</span><span class="status dev">In active development</span></div><h3>Microsoft Flight Simulator 2024</h3><p>Target platform, validated separately from 2020. Compatibility has not been verified yet.</p></li>
       <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">OFP</span><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><h3>SimBrief</h3><p>Import of your latest operational flight plan through SimBrief’s documented public interface, tested with a real account. Only on request; no Navigraph password.</p></li>
       <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">ATC</span><span class="status research">Research</span></div><h3>SayIntentions</h3><p>Interoperability under investigation. Not a working integration or a partnership.</p></li>
-      <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">GND</span><span class="status research">Research</span></div><h3>GSX Pro</h3><p>Ground-service interoperability under investigation. Not a working integration or a partnership.</p></li>
+      <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">GND</span><span class="status tested">Implemented internally · MSFS 2020 tested</span></div><h3>GSX Pro</h3><p>Reads GSX Pro’s service states and the Fuel receipts it generates, tested with MSFS 2020. Read-only: Turnline never sends GSX commands or changes GSX files. Not a partnership.</p></li>
       <li class="provider reveal"><div class="provider-top"><span class="provider-mark" aria-hidden="true">AOC</span><span class="status research">Research</span></div><h3>Aircraft ACARS / AOC ecosystems</h3><p>Researching aircraft-specific messaging. Support would vary by aircraft and what it exposes.</p></li>
     </ul>
     <div class="integration-notes">
-      <p>Integration support depends on documented interfaces, each aircraft’s capabilities, and the permission of the provider involved. A working SimBrief import is not a partnership with Navigraph. Some connections may prove impractical, and we’ll say so if they do. Statuses here are updated as work progresses; “Research” means we’re investigating, not that support is coming.</p>
+      <p>Integration support depends on documented interfaces, each aircraft’s capabilities, and the permission of the provider involved. A working SimBrief import is not a partnership with Navigraph, and reading GSX Pro’s published states is not a partnership with FSDreamTeam. Some connections may prove impractical, and we’ll say so if they do. Statuses here are updated as work progresses; “Research” means we’re investigating, not that support is coming.</p>
       <p class="disclaimer">Product names are shown as plain text for identification only. Turnline is not affiliated with, endorsed by or sponsored by Microsoft, Navigraph (SimBrief), SayIntentions, FSDreamTeam (GSX), or any aircraft developer. No logos are used.</p>
     </div>
   </div>
@@ -454,7 +501,9 @@
       <li class="phase done reveal"><span class="phase-step">MILESTONE 2</span><h3>SimBrief integration</h3><span class="status tested">Implemented internally · MSFS 2020 tested</span><ul><li>OFP import, tested with a real SimBrief account</li><li>Scheduled and estimated times</li><li>Offline plan persistence</li><li>Immutable plan attachment</li><li>Planned-versus-actual debrief</li></ul></li>
       <li class="phase current reveal"><span class="phase-step">MILESTONE 3</span><h3>Dispatch release</h3><span class="status dev">In active development</span><ul><li>Dispatch release workflow</li><li>OUT/OFF/ON/IN operational timeline</li><li>Block and flight times against the release</li><li>Built; awaiting Windows acceptance testing</li></ul></li>
       <li class="phase current reveal"><span class="phase-step">MILESTONE 4</span><h3>Route monitoring &amp; navlog</h3><span class="status dev">In active development</span><ul><li>Waypoint navigation log</li><li>Live progress along the planned route</li><li>Navigation debrief</li><li>Awaiting acceptance on a real flight</li></ul></li>
-      <li class="phase reveal"><span class="phase-step">LATER</span><h3>Airline operations</h3><span class="status plan">Planned · Research</span><ul><li>Turnarounds, passengers and cabin (planned)</li><li>Operational cause-and-effect engine (planned)</li><li>Airline scheduling (planned)</li><li>SayIntentions, GSX and aircraft ACARS interoperability (research)</li></ul></li>
+      <li class="phase done reveal"><span class="phase-step">MILESTONE 5</span><h3>GSX turnaround &amp; expenses</h3><span class="status tested">Implemented internally · MSFS 2020 tested</span><ul><li>Live GSX Pro boarding, refuelling, pushback and deboarding</li><li>Departure and arrival turnarounds</li><li>Flight-linked turnaround history</li><li>GSX fuel invoices as simulated expenses</li></ul></li>
+      <li class="phase current reveal"><span class="phase-step">MILESTONE 6</span><h3>Automated flight economics</h3><span class="status dev">In active development</span><ul><li>Automatic receipt import and matching (in development)</li><li>Fuel used and operating cost per flight (planned)</li><li>Revenue and profitability reporting (planned)</li><li>Nothing here is available yet</li></ul></li>
+      <li class="phase reveal"><span class="phase-step">LATER</span><h3>Airline operations</h3><span class="status plan">Planned · Research</span><ul><li>Passengers and cabin (planned)</li><li>Operational cause-and-effect engine (planned)</li><li>Airline scheduling (planned)</li><li>SayIntentions and aircraft ACARS interoperability (research)</li></ul></li>
     </ol>
     <p class="roadmap-note">The roadmap is directional and not a commitment. Scope, order and timing may change as we learn from development and testing. We don’t publish delivery dates we can’t stand behind.</p>
   </div>
@@ -470,11 +519,13 @@
     </div>
     <div class="faq-list">
       <details><summary>What is Turnline?</summary><div class="answer"><p>Turnline is an airline operations simulation platform in development for Microsoft Flight Simulator. Today’s internal builds import your SimBrief plan, record your flight and compare plan with actual after landing. The long-term aim is to connect flight planning, ground handling, passengers, the live flight and the debrief into one operation, so decisions and delays carry through the whole flight.</p></div></details>
-      <details><summary>What works today?</summary><div class="answer"><p>In internal Windows builds tested with MSFS 2020: the simulator connection, flight recording and history, SimBrief OFP import with scheduled and estimated times, offline plan storage, attaching a fixed plan to a flight, and a planned-versus-actual debrief. A dispatch release, an OUT/OFF/ON/IN timeline and route monitoring are in development. See <a href="#working">what’s working</a>.</p><p>Passenger, ground-handling, ATC and airline-scheduling features have not been built.</p></div></details>
+      <details><summary>What works today?</summary><div class="answer"><p>In internal Windows builds tested with MSFS 2020: the simulator connection, flight recording and history, SimBrief OFP import with scheduled and estimated times, offline plan storage, attaching a fixed plan to a flight, a planned-versus-actual debrief, live GSX Pro turnaround monitoring, flight-linked turnaround history, and GSX fuel invoices as simulated expenses. A dispatch release, an OUT/OFF/ON/IN timeline, route monitoring and automatic receipt matching are in development. See <a href="#working">what’s working</a>.</p><p>Passenger, ATC, airline-scheduling, flight-economics and profitability features have not been built.</p></div></details>
       <details><summary>Is Turnline a flight tracker or an airline management game?</summary><div class="answer"><p>Neither, exactly. A flight tracker records where you flew; an airline management game usually has you run a company from a spreadsheet. Turnline focuses on the operation around each flight you actually fly: the plan, the preparation, what happens on the day, and the debrief.</p></div></details>
       <details><summary>Which flight simulators will Turnline support?</summary><div class="answer"><p>Turnline is being built for Microsoft Flight Simulator 2020 and Microsoft Flight Simulator 2024 on Windows PCs. The core workflow has been tested internally with MSFS 2020 on a real PC, in the scenarios Turnline supports. Broad aircraft and add-on compatibility isn’t established yet, and MSFS 2024 compatibility hasn’t been verified.</p></div></details>
       <details><summary>Does Turnline work with SimBrief?</summary><div class="answer"><p>Yes, in internal builds. Turnline imports your latest SimBrief operational flight plan by username or pilot ID when you ask, and it has been tested with a real SimBrief account. It never asks for your Navigraph password. It isn’t publicly available yet, and Turnline isn’t affiliated with Navigraph or SimBrief.</p></div></details>
-      <details><summary>Will it work with SayIntentions and GSX?</summary><div class="answer"><p>Both are under investigation. There’s no working integration or partnership today, and we can’t promise one. Whether it’s possible depends on what each product exposes and on its developer’s permission.</p></div></details>
+      <details><summary>Does Turnline work with GSX Pro?</summary><div class="answer"><p>Yes, in internal builds tested with MSFS 2020 and GSX Pro. Turnline reads GSX’s boarding, refuelling, pushback and deboarding states and records them in a departure or arrival turnaround, and it imports the Fuel receipts GSX generates as simulated expenses after you confirm the currency. It only reads: it never sends GSX commands or changes GSX files.</p><p>Other GSX receipt types aren’t read yet. Turnline isn’t affiliated with or endorsed by FSDreamTeam, and it isn’t publicly available yet.</p></div></details>
+      <details><summary>Does Turnline track costs and profit?</summary><div class="answer"><p>Costs, yes, in a simulated form; profit, not yet. Today’s internal builds turn GSX fuel invoices, and costs you enter by hand, into simulated expenses linked to a flight and shown in its Debrief. These are simulated operating costs, not real money.</p><p>Automatic receipt matching, a full flight-economics model and revenue or profitability reporting are still in development and not available.</p></div></details>
+      <details><summary>Will it work with SayIntentions?</summary><div class="answer"><p>It’s under investigation. There’s no working integration or partnership today, and we can’t promise one. Whether it’s possible depends on what SayIntentions exposes and on its developer’s permission.</p></div></details>
       <details><summary>Will aircraft ACARS systems be supported?</summary><div class="answer"><p>We’re researching it. ACARS/AOC features differ from aircraft to aircraft, so any support would be aircraft-specific and depend on what each aircraft makes available. No aircraft is supported today.</p></div></details>
       <details><summary>Can I use Turnline with my existing add-ons?</summary><div class="answer"><p>That’s the intent. Turnline is designed to run alongside your aircraft, planning tools, ATC and ground-handling add-ons rather than replace them. Specific compatibility will be confirmed through testing before we make any claims.</p></div></details>
       <details><summary>Is Turnline available now?</summary><div class="answer"><p>No. Turnline runs in internal development builds only, and there’s no public download yet. Joining the early-access list is the best way to hear when that changes.</p></div></details>

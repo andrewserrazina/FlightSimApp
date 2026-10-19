@@ -104,7 +104,7 @@ async function openPage({ width = 1280, height = 900, query = '', api = () => ({
   check('consent text unchanged from V1', html.includes('I agree to receive Turnline development news and beta invitations by email. I can unsubscribe at any time.'));
   // The lightbox's <img alt=""> has no src until a screenshot is opened.
   const imgs = [...html.matchAll(/<img\b[^>]*>/gi)].map((m) => m[0]).filter((tag) => !/^<img alt=""/.test(tag));
-  const badImgs = imgs.filter((tag) => !/\ssrc="assets\/screens\/[a-z]+-(?:detail-)?\d+\.webp"/.test(tag) || !/\salt="[^"]{40,}"/.test(tag) || !/\swidth="\d+"/.test(tag) || !/\sheight="\d+"/.test(tag));
+  const badImgs = imgs.filter((tag) => !/\ssrc="assets\/screens\/[a-z]+(?:-[a-z]+)*-\d+\.webp"/.test(tag) || !/\salt="[^"]{40,}"/.test(tag) || !/\swidth="\d+"/.test(tag) || !/\sheight="\d+"/.test(tag));
   check('no third-party logos: the only images are Turnline screenshots, each with alt text and dimensions', imgs.length > 0 && badImgs.length === 0, `${imgs.length} images${badImgs.length ? '; bad: ' + badImgs.join(' ').slice(0, 200) : ''}`);
   // V3 status language (the page must never overstate the product).
   const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
@@ -112,6 +112,10 @@ async function openPage({ width = 1280, height = 900, query = '', api = () => ({
   check('meta and social descriptions no longer promise MSFS 2024, passengers or ground handling', ![/name="description"[^>]*>/, /property="og:description"[^>]*>/, /name="twitter:description"[^>]*>/].some((re) => /2024|passenger|ground handling/i.test(re.exec(html)?.[0] ?? '')));
   check('no claim that MSFS 2024 is tested or verified', !/MSFS 2024 tested|2024 (?:is )?(?:tested|verified|supported)/i.test(text) && text.includes('Microsoft Flight Simulator 2024 compatibility has not been verified'));
   check('no "shipped", "launched" or "available now" claims', !/\b(?:now available|available now|shipped|launched)\b/i.test(text.replace(/Is Turnline available now\?/, '')));
+  // S2-05: the GSX test session's evidence is stated exactly, and future economics is never offered.
+  check('the MSFS 2020 + GSX test result is stated as recorded (USD 2,912.46 fuel expense, linked, shown in Debrief)', text.includes('a USD 2,912.46 simulated fuel expense was linked to the completed flight and shown in its Debrief'));
+  check('no claim that receipt matching, flight economics or profitability work today', !/(?:automatic(?:ally)? (?:receipt )?match\w*|profitability|flight economics|revenue)[^.()]{0,80}\b(?:works|is available|tested|today)\b/i.test(text.replace(/Today every receipt is linked to a flight by you|today you link each receipt yourself/g, '')));
+  check('expenses are called simulated, never real money', text.includes('simulated operating costs') && text.includes('not real money'));
 }
 
 // ---------- 2. layout, resources, console ----------
@@ -146,23 +150,27 @@ for (const width of [320, 390, 768, 1024, 1280, 1440]) {
   const dup = ids.filter((id, i) => ids.indexOf(id) !== i);
   check('no duplicate ids', dup.length === 0, dup.join(', '));
   check('exactly one h1', (await page.locator('h1').count()) === 1);
-  for (const id of ['top', 'working', 'product', 'platform', 'how', 'features', 'different', 'scenario', 'integrations', 'roadmap', 'faq', 'early-access']) {
+  for (const id of ['top', 'working', 'product', 'flow', 'platform', 'how', 'features', 'different', 'scenario', 'integrations', 'roadmap', 'faq', 'early-access']) {
     if (!(await page.locator('#' + id).count())) check(`section #${id} exists`, false);
   }
-  check('all twelve sections plus footer present', (await page.locator('#top, #working, #product, #platform, #how, #features, #different, #scenario, #integrations, #roadmap, #faq, #early-access, footer').count()) === 13);
+  check('all thirteen sections plus footer present', (await page.locator('#top, #working, #product, #flow, #platform, #how, #features, #different, #scenario, #integrations, #roadmap, #faq, #early-access, footer').count()) === 14);
   await page.click('.hero-actions a[href="#working"]');
   await page.waitForTimeout(300);
   check('"See What’s Working" scrolls to the Built and tested section', Math.abs(await page.evaluate(() => document.getElementById('working').getBoundingClientRect().top)) < 140);
   const built = await page.evaluate(() => [...document.querySelectorAll('#working .built')].map((li) => [li.querySelector('h3').textContent.trim(), li.querySelector('.status').textContent.trim()]));
-  const wantBuilt = ['Windows desktop simulator connection', 'Flight recording and history', 'SimBrief OFP import', 'Scheduled flight times', 'Plan persistence and offline use', 'Flight-plan attachment', 'Planned-versus-actual debrief'];
-  check('Built and tested: the seven validated capabilities, each "Implemented internally · MSFS 2020 tested"', built.length === 7 && wantBuilt.every((n, i) => built[i]?.[0] === n && built[i][1] === 'Implemented internally · MSFS 2020 tested'), built.map((b) => b[0]).join(', '));
+  const wantBuilt = ['Windows desktop simulator connection', 'Flight recording and history', 'SimBrief OFP import', 'Scheduled flight times', 'Plan persistence and offline use', 'Flight-plan attachment', 'Planned-versus-actual debrief', 'Live GSX Pro turnaround monitoring', 'Flight-linked turnaround history', 'GSX fuel invoices as simulated expenses'];
+  check('Built and tested: the ten validated capabilities (S2-01 plus S2-05), each "Implemented internally · MSFS 2020 tested"', built.length === 10 && wantBuilt.every((n, i) => built[i]?.[0] === n && built[i][1] === 'Implemented internally · MSFS 2020 tested'), built.map((b) => b[0]).join(', '));
   const limits = await page.textContent('#working .limits');
   check('Built and tested states its limits (one PC, supported scenarios, no public availability, MSFS 2024 unverified)', ['Windows PC with MSFS 2020', 'currently supports', 'Public availability', 'compatibility have not been established', '2024 compatibility has not been verified'].every((t) => limits.includes(t)));
   const dev = await page.evaluate(() => [...document.querySelectorAll('.next-list li, #roadmap .phase')].map((e) => e.textContent.replace(/\s+/g, ' ')));
   check('S2-02 (dispatch release) and S2-03 (route monitoring) are "In active development", never tested', ['Dispatch release', 'Route monitoring'].every((n) => dev.filter((d) => d.includes(n)).length >= 2 && dev.filter((d) => d.includes(n)).every((d) => d.includes('In active development') && !d.includes('MSFS 2020 tested'))));
   const features = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.feature-list li, .provider')].map((li) => [li.querySelector('strong, h3').textContent.trim(), li.querySelector('.status').textContent.trim()])));
-  const neverBuilt = Object.entries(features).filter(([n]) => /passenger|boarding|cabin|turnaround|catering|pushback|GSX|SayIntentions|ACARS|delay|decision/i.test(n));
-  check('passenger, ground, ATC, ACARS and delay/decision features stay Planned or Research', neverBuilt.length >= 12 && neverBuilt.every(([, st]) => st === 'Planned' || st === 'Research'), neverBuilt.map(([n, st]) => `${n}=${st}`).join('; '));
+  const neverBuilt = Object.entries(features).filter(([n]) => /passenger|boarding|cabin|SayIntentions|ACARS|delay|decision|turnaround timeline/i.test(n));
+  check('passenger, cabin, ATC, ACARS, turnaround-timeline and delay/decision features stay Planned or Research', neverBuilt.length >= 11 && neverBuilt.every(([, st]) => st === 'Planned' || st === 'Research'), neverBuilt.map(([n, st]) => `${n}=${st}`).join('; '));
+  const gsxTested = ['Live GSX Pro service monitoring', 'Departure & arrival turnarounds', 'Flight-linked turnaround history', 'Simulated expenses from GSX fuel invoices', 'GSX Pro'];
+  check('S2-05 owner-accepted features are "MSFS 2020 tested"; catering/de-icing and manual entries are only "Implemented internally"', gsxTested.every((n) => features[n] === 'Implemented internally · MSFS 2020 tested') && ['Catering & de-icing states', 'Manual service entries & servicing readiness', 'Manual simulated expenses'].every((n) => features[n] === 'Implemented internally'), gsxTested.map((n) => `${n}=${features[n]}`).join('; '));
+  const future = await page.evaluate(() => [...document.querySelectorAll('.feature-list li, .next-list li, #roadmap .phase')].filter((e) => /matching|economics|profitab/i.test(e.querySelector('strong, h3').textContent)).map((e) => [e.querySelector('strong, h3').textContent.trim(), e.querySelector('.status').textContent.trim()]));
+  check('receipt matching, flight economics and profitability are only "In active development" or "Planned"', future.length >= 6 && future.every(([, st]) => st === 'In active development' || st === 'Planned'), future.map((f) => f.join('=')).join('; '));
   check('MSFS 2024 is "In active development"; MSFS 2020 and SimBrief are tested', features['Microsoft Flight Simulator 2024'] === 'In active development' && features['Microsoft Flight Simulator 2020'] === 'Implemented internally · MSFS 2020 tested' && features['SimBrief'] === 'Implemented internally · MSFS 2020 tested');
   const shots = await page.evaluate(async () => {
     const imgs = [...document.querySelectorAll('main section img')];
@@ -170,7 +178,11 @@ for (const width of [320, 390, 768, 1024, 1280, 1440]) {
     for (const img of imgs) { img.loading = 'eager'; if (!img.complete) await new Promise((r) => { img.onload = img.onerror = r; }); }
     return imgs.map((img, i) => [img.currentSrc.split('/').pop(), img.naturalWidth, loading[i] ?? 'eager', img.closest('section').id]);
   });
-  check('screenshots load (hero eager, showcase lazy) and cover Dispatch, Live Flight, History and Debrief', shots.length === 5 && shots.every(([, w]) => w > 0) && shots[0][2] === 'eager' && shots[0][3] === 'top' && shots.slice(1).every(([, , l]) => l === 'lazy') && ['dispatch', 'live', 'history', 'debrief'].every((n) => shots.some(([src, , , sec]) => sec === 'product' && src.startsWith(n))), shots.map((s) => s.join(':')).join(', '));
+  check('screenshots load (hero eager, showcase lazy) and cover Dispatch, Live Flight, History and Debrief', shots.length === 8 && shots.every(([, w]) => w > 0) && shots[0][2] === 'eager' && shots[0][3] === 'top' && shots.slice(1).every(([, , l]) => l === 'lazy') && ['dispatch', 'live', 'history', 'debrief'].every((n) => shots.some(([src, , , sec]) => sec === 'product' && src.startsWith(n))), shots.map((s) => s.join(':')).join(', '));
+  const flow = shots.filter(([, , , sec]) => sec === 'flow').map(([src]) => src.replace(/-\d+\.webp$/, ''));
+  check('operational flow shows Dispatch → receipt confirmation → Debrief expenses, in order', flow.join(',') === 'dispatch-detail,receipt-confirm,debrief-expenses' && (await page.locator('#flow .flow-step h3').allTextContents()).join(',') === 'Dispatch,GSX turnaround,Debrief', flow.join(','));
+  const flowNote = await page.textContent('#flow .flow-note');
+  check('flow screens are disclosed as sample data (sanitized receipt, not the USD 2,912.46 session) and future features as not shown', ['Internal build', 'sample data', 'sanitized GSX Fuel receipt', 'USD 2,912.46', 'still in development and are not shown'].every((t) => flowNote.includes(t)), flowNote.trim().slice(0, 120));
   await page.locator('#product a[data-lightbox]').nth(3).click();
   await page.waitForFunction(() => document.getElementById('lightbox').open && document.querySelector('#lightbox img').complete);
   const box = await page.evaluate(() => { const i = document.querySelector('#lightbox img'); return [i.naturalWidth, i.alt === document.querySelectorAll('#product img')[3].alt, document.getElementById('lightbox-title').textContent, document.activeElement.className]; });

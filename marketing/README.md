@@ -45,6 +45,46 @@ without a separate release step, so merge marketing PRs only with explicit owner
 - Check the social preview (for example with each network's post inspector). Previews may show the previous image
   until the network's cache refreshes.
 
+## V4 (S2-05 GSX turnaround and expenses)
+- **What changed:**
+  - **Built and tested** gains three cards: live GSX Pro turnaround monitoring, flight-linked turnaround history, and
+    GSX fuel invoices as simulated expenses. The limits box adds a GSX line and states the test-session result once.
+  - New **operational flow** section (`#flow`, after `#product`): Dispatch → GSX turnaround → Debrief, using three real
+    screens. It isn't in the navigation.
+  - Statuses are updated in the hero facts, stages, Feature Explorer (Ground Ops and Debrief), Integrations, roadmap
+    (new Milestone 5, done; Milestone 6, in development), FAQ and metadata. The navigation, the waitlist form and the
+    prelaunch `noindex,nofollow` posture are unchanged.
+- **Evidence behind the GSX "MSFS 2020 tested" labels:** the owner's MSFS 2020 + GSX Pro session on 2026-10-18,
+  recorded in `docs/testing/s2-05-gsx-turnaround-acceptance.md`.
+  - Use the label only for: live GSX connection; boarding, refuelling, pushback and deboarding states; departure and
+    arrival turnaround activity; flight-linked turnaround history; Fuel receipt parsing; currency confirmation; expense
+    association; persistence across a restart; no duplicate on re-scan; display in the flight's Debrief.
+  - Catering and de-icing states, manual service entries, the servicing-readiness line and manual expenses are
+    **Implemented internally** only: they are still Pending in the acceptance doc.
+  - Automatic receipt import and matching is **In active development** (watcher PR open, matching disabled). Flight
+    economics and revenue/profitability reporting are **Planned** (design approved, not built). Never label any of
+    them tested or available until each passes owner acceptance and is merged.
+  - The USD 2,912.46 figure is the owner-reported test result. State it only as a simulated fuel expense, never as
+    real money.
+- **Flow screenshots** (`assets/screens/receipt-confirm-*.webp`, `debrief-expenses-*.webp`):
+  - Produced by `scripts/app-screens.mjs`. It renders the desktop app's real React UI in Chromium through
+    `apps/desktop/screens/` (in-memory stores, not part of the app build), replays the bridge's recorded **mock** demo
+    flight through the real `FlightRecorder`, and imports the sanitized GSX Fuel fixture
+    (`fixtures/gsx/receipts/fuel-kbos-sanitized.html`, total $ 28,022.40). Currency confirmation, "Count as expense" and
+    the flight association are clicked through the real UI. Nothing is retouched.
+  - The transport only ever reports the `mock` adapter, so **no screenshot shows a simulated MSFS or GSX connection**.
+    The live GSX Turnaround panel is deliberately not pictured until a real MSFS 2020 + GSX capture exists.
+  - The flow note discloses the sample data and that the receipt amount differs from the USD 2,912.46 session.
+  - Dispatch reuses the V3 `dispatch-detail` crop.
+  - To regenerate: `pnpm -r --filter "./packages/**" build`, then
+    `PLAYWRIGHT_MODULE=<playwright>/index.mjs node scripts/app-screens.mjs`.
+- **To replace with real MSFS 2020 + GSX captures:** capture the Live Flight Turnaround panel with GSX live, the
+  receipt confirmation and the Debrief expenses at the same panel crops; hide your SimBrief username, pilot ID,
+  aircraft registration and any Windows user name in file paths; update the alt text and the flow note.
+- **Tests:** `scripts/marketing-site-test.mjs` now expects the ten tested capabilities and the flow section. It also
+  checks that the S2-05 statuses are exact and that matching, economics and profitability stay In active development or
+  Planned. It rejects wording that presents them as working, and requires the expenses to be called simulated.
+
 ## V3 (real product progress and early access)
 - **What changed:**
   - Hero copy separates what works today from the long-term vision.

@@ -32,6 +32,12 @@ All amounts are **simulated operating costs** from flight simulation, not real m
 - **USD 2,912.46** correctly associated with the completed flight.
 - The expense survived an application restart, and a repeated scan found **0 new** receipts.
 
+**Owner addendum (2026-10-19, same session, reported with the marketing-site update):**
+- Departure **and arrival** turnaround activity was observed.
+- The USD 2,912.46 simulated fuel expense was displayed in the flight's **Debrief**.
+- This confirms that the expense was displayed. The Debrief totals and itemisation checks in §5.7 stay Pending until
+  they are run row by row.
+
 **Pending (not yet run):**
 - GSX absent (§1).
 - Catering and de-icing states; Couatl restart / stale handling (§2.2–2.3).
