@@ -6,14 +6,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { NavigateFn } from "../app/navigation";
 import { useDispatch } from "../dispatch/DispatchContext";
-import { PLAN_BASIS_TAG } from "../dispatch/planBasis";
 import { RecordMilestoneDialog } from "../dispatch/RecordMilestoneDialog";
 import { useOps } from "../ops/OpsContext";
 import { DiscardFlightDialog, EndFlightDialog, MoveAsideDialog, useCommandRunner } from "../recording/FlightDialogs";
 import { useRecorder } from "../recording/RecorderContext";
 import { Button } from "../ui/Button";
 import type { AttentionAction, AttentionItem, FlightActionId, HealthItem, Identity } from "./model";
-import { useLiveFlightModel } from "./useLiveFlightModel";
+import type { LiveFlightModel } from "./useLiveFlightModel";
 
 const ACTION_LABEL: Record<FlightActionId, string> = {
   start: "Start flight",
@@ -40,8 +39,7 @@ const ATTENTION_LABEL: Record<AttentionAction, string> = {
 
 type Dialog = null | "end" | "discard" | "out" | "in" | "move_aside";
 
-export function OpsCenterHeader({ navigate }: { navigate: NavigateFn }) {
-  const m = useLiveFlightModel();
+export function OpsCenterHeader({ model: m, navigate }: { model: LiveFlightModel; navigate: NavigateFn }) {
   const recorder = useRecorder();
   const ops = useOps();
   const dispatch = useDispatch();
@@ -131,29 +129,31 @@ export function OpsCenterHeader({ navigate }: { navigate: NavigateFn }) {
   );
 }
 
+/**
+ * Flight number and route on the first line, city names and type below, then a status line with the
+ * phase and the recording state. Fixed lines, so nothing reflows into a ragged wrap at narrower
+ * widths; the plan basis is shown on the route card.
+ */
 function IdentityBlock({ id }: { id: Identity }) {
   const route = id.origin && id.destination ? `${id.origin.icao} → ${id.destination.icao}` : null;
   const names = id.origin && id.destination ? [id.origin.name ?? id.origin.icao, id.destination.name ?? id.destination.icao].join(" → ") : null;
+  const rec = id.recording === "recording" ? { tone: "ok", text: "● Recording" } : id.recording === "interrupted" ? { tone: "warn", text: "! Recording interrupted" } : { tone: "neutral", text: "Not recording" };
   return (
     <div className="ops-id__identity">
-      <div className="ops-id__flight">{id.flight ?? <span className="ops-id__none">{route ? "No flight number" : "No flight plan"}</span>}</div>
-      <div className="ops-id__route">
-        {route ? <strong>{route}</strong> : <span className="unavailable">No route</span>}
-        <span className="muted">{[names, id.aircraftType].filter(Boolean).join(" · ") || "Import a SimBrief plan on Dispatch"}</span>
+      <div className="ops-id__line">
+        <span className="ops-id__flight">{id.flight ?? <span className="ops-id__none">{route ? "No flight number" : "No flight plan"}</span>}</span>
+        {route ? <strong className="ops-id__route">{route}</strong> : <span className="ops-id__route unavailable">No route</span>}
       </div>
-      {id.planBasis && (
-        <span className={`ops-chip ops-chip--${id.planBasis === "imported_preview" || id.planBasis === "release_open" ? "info" : id.planBasis === "release_cancelled" ? "warn" : "ok"}`} title="Which plan this view uses">
-          {PLAN_BASIS_TAG[id.planBasis]}
+      <div className="ops-id__sub muted">{[names, id.aircraftType].filter(Boolean).join(" · ") || "Import a SimBrief plan on Dispatch"}</div>
+      <div className="ops-id__status">
+        <span className="ops-id__phase">
+          <span className="ops-label">Phase</span> <strong>{id.phaseLabel}</strong>
         </span>
-      )}
-      <div className="ops-id__phase">
-        <span className="ops-label">Phase</span>
-        <strong>{id.phaseLabel}</strong>
+        <span className={`ops-chip ops-chip--${rec.tone}`} role="status">
+          {rec.text}
+          {id.elapsed ? ` · ${id.elapsed}` : ""}
+        </span>
       </div>
-      <span className={`ops-chip ops-chip--${id.recording === "recording" ? "ok" : id.recording === "interrupted" ? "warn" : "neutral"}`} role="status">
-        {id.recording === "recording" ? "● Recording" : id.recording === "interrupted" ? "! Interrupted" : "Not recording"}
-        {id.elapsed ? ` · ${id.elapsed}` : ""}
-      </span>
     </div>
   );
 }

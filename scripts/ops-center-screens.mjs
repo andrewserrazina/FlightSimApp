@@ -17,7 +17,7 @@ const desktop = join(repo, "apps/desktop");
 const stage = process.argv[2];
 const outArg = process.argv.indexOf("--out");
 const out = outArg > 0 ? process.argv[outArg + 1] : join(repo, "docs/screenshots/ops-center", stage ?? "");
-const STAGES = { l3: stageL3, l4: stageL4 };
+const STAGES = { l3: stageL3, l4: stageL4, l5: stageL5 };
 if (!STAGES[stage]) {
   console.error(`usage: node scripts/ops-center-screens.mjs <${Object.keys(STAGES).join("|")}> [--out dir]`);
   process.exit(2);
@@ -125,6 +125,73 @@ async function stageL4() {
     await shot(p, `arrival-${width}`, screen);
     await p.getByRole("button", { name: "More ▾" }).click();
     await shot(p, `arrival-more-menu-${width}`, screen);
+    await p.close();
+  }
+}
+
+async function stageL5() {
+  const conn = (state, at) => env("connection.state", { state, simulator: "mock", since: at, attempt: 0, next_retry_at: null, reason: state === "CONNECTED" ? null : { code: "simulator_closed", message: "The simulator connection was lost." }, schema_version: 1 });
+  for (const [width, height] of [[1100, 900], [1280, 1024], [1920, 1080]]) {
+    const screen = { full: false };
+    // At the gate with a released plan, flight started: Record OUT is the primary action.
+    let p = await open(width, { prefs: OPS, height });
+    await p.evaluate(async () => {
+      const d = window.__harness.dispatch;
+      await d.importLatest("username", "test_pilot");
+      await d.release({ warnings: [], unavailableInformational: [] });
+    });
+    await p.getByRole("button", { name: "Start flight" }).click();
+    await shot(p, `predeparture-${width}`, screen);
+    // Cruise: altitude, speed and fuel tiles, route card and milestone strip.
+    await replay(p, 3, cruiseAt);
+    await shot(p, `cruise-${width}`, screen);
+    if (width === 1280) await shot(p, "cruise-1280-full-page");
+    // The recorded demo flight is not flown along the fixture plan's route, so route progress stays
+    // unavailable above. For review only, a few recorded cruise frames are moved onto one planned leg
+    // (300 kt along the leg) to show the route card while tracking, with the ETA.
+    const base = frames[cruiseAt];
+    for (let i = 0; i < 6; i++) {
+      const at = new Date(Date.parse(base.data.observed_at) + (i + 1) * 5000);
+      await p.clock.setFixedTime(at);
+      await p.evaluate(({ base, i, at }) => {
+        const fixes = window.__harness.dispatch.currentPlan.navlog.fixes.filter((f) => f.lat !== null && f.lon !== null);
+        const a = fixes[Math.floor(fixes.length / 2)], b = fixes[Math.floor(fixes.length / 2) + 1];
+        const legNm = Math.hypot((b.lat - a.lat) * 60, (b.lon - a.lon) * 60 * Math.cos((a.lat * Math.PI) / 180));
+        const t = 0.3 + (i * 300 * (5 / 3600)) / legNm;
+        const f = structuredClone(base);
+        f.data.seq = base.data.seq + 1 + i;
+        f.data.observed_at = at;
+        f.data.readings.lat_deg.value = a.lat + (b.lat - a.lat) * t;
+        f.data.readings.lon_deg.value = a.lon + (b.lon - a.lon) * t;
+        window.__harness.transport.emit(f);
+      }, { base, i, at: at.toISOString() });
+    }
+    await p.waitForTimeout(1300);
+    await shot(p, `route-tracking-review-${width}`, screen);
+    // Data stops for 48 s: stale tiles are dimmed and aged; the ETA is withheld.
+    const cruiseMs = Date.parse(frames[cruiseAt].data.observed_at);
+    await p.clock.setFixedTime(new Date(cruiseMs + 48_000));
+    await p.waitForTimeout(1300);
+    await shot(p, `problem-stale-${width}`, screen);
+    // The simulator connection is lost: the flight is interrupted, and says so.
+    await emit(p, [conn("DISCONNECTED", new Date(cruiseMs + 50_000).toISOString())]);
+    await p.clock.setFixedTime(new Date(cruiseMs + 95_000));
+    await p.waitForTimeout(1300);
+    await shot(p, `interrupted-${width}`, screen);
+    // Data returns: after a lost connection the recorder asks before continuing, so Resume is the primary action.
+    await emit(p, [conn("CONNECTED", new Date(cruiseMs + 100_000).toISOString())]);
+    const back = firstFrameAtOrAfter(new Date(cruiseMs + 100_000).toISOString());
+    await replay(p, back, back + 6);
+    await p.waitForTimeout(800);
+    await shot(p, `interrupted-data-back-${width}`, screen);
+    // Resumed: recording continues and the header says so again.
+    await p.getByRole("region", { name: "Flight" }).getByRole("button", { name: "Resume flight" }).click();
+    await replay(p, back + 7, back + 12);
+    await p.waitForTimeout(800);
+    await shot(p, `resumed-${width}`, screen);
+    // Landed and parked: Record IN is primary, Confirm completion stays available under More.
+    await replay(p, back + 13, frames.length - 1);
+    await shot(p, `arrival-${width}`, screen);
     await p.close();
   }
 }

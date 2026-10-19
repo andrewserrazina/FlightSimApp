@@ -84,6 +84,37 @@ describe("operations-center layout (L4, opt-in)", () => {
     expect(screen.getByText("OUT recorded manually.")).toBeInTheDocument();
     expect(within(header()).queryByRole("button", { name: "Record OUT (off-block)" })).toBeNull();
     expect(within(header()).getByText("No action needed")).toBeInTheDocument();
+    // The milestone strip shows the recorded OUT with its provenance.
+    const out1 = within(screen.getByRole("list", { name: "OUT, OFF, ON and IN" })).getAllByRole("listitem")[0]!;
+    expect(out1).toHaveTextContent(/OUT\d{2}:\d{2}ZRecorded/);
+    expect(out1).toHaveAttribute("title", expect.stringMatching(/manual/i));
+  });
+
+  it("replaces the classic panels with tiles, the route card and the milestone strip; details stay one click away", async () => {
+    const { transport } = await renderApp({ optIn: true });
+    await send(transport, helloOk(), connState("CONNECTED"), liveFrame(1));
+    expect(screen.queryByRole("region", { name: "Operations" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Route monitoring" })).toBeNull();
+    const tiles = within(screen.getByRole("list", { name: "Key flight values" })).getAllByRole("listitem");
+    expect(tiles.map((t) => t.getAttribute("data-tile"))).toEqual(["scheduled_out", "fuel", "aircraft_state"]);
+    expect(tiles[0]).toHaveTextContent("Release or attach a plan to use its schedule");
+    expect(screen.getByRole("region", { name: "Route" })).toHaveTextContent("No flight plan imported.");
+    expect(within(screen.getByRole("list", { name: "OUT, OFF, ON and IN" })).getAllByRole("listitem").map((c) => c.textContent?.slice(0, 3))).toEqual(["OUT", "OFF", "ON—", "IN—"]);
+    // The plan baseline and every live reading are kept under Flight details.
+    const details = screen.getByText("Flight details: plan baseline and all live readings").closest("details")!;
+    expect(details.open).toBe(false);
+    expect(within(details).getByRole("region", { name: "Aircraft" })).toBeInTheDocument();
+    expect(within(details).getByRole("region", { name: "Position" })).toBeInTheDocument();
+  });
+
+  it("keeps the recording state next to the phase", async () => {
+    const { transport } = await renderApp({ optIn: true });
+    await send(transport, helloOk(), connState("CONNECTED"), liveFrame(1));
+    expect(within(header()).getByRole("status")).toHaveTextContent("Not recording");
+    fireEvent.click(within(header()).getByRole("button", { name: "Start flight" }));
+    await settle();
+    await send(transport, liveFrame(2));
+    expect(within(header()).getByText(/^● Recording/)).toBeInTheDocument();
   });
 
   it("keeps identifiers and technical terms out of the header", async () => {

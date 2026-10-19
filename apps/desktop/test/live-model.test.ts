@@ -15,19 +15,22 @@ import {
   flightActions,
   gsxSummary,
   health,
+  flownPhaseGroup,
   identity,
+  liveRouteProgress,
   milestoneCells,
   phaseGroup,
   planFuelAtLastFix,
   scheduleNote,
   selectTiles,
+  upcomingFixes,
   type ActionInputs,
   type HealthInputs,
   type TileInputs,
 } from "../src/live/model";
 import type { ServiceEventDto, TurnaroundDto } from "../src/ops/types";
 import { buildRouteGeometry } from "../src/route/geometry";
-import type { RouteProgress } from "../src/route/progress";
+import { INITIAL_TRACKER, routeProgress, stepTracker, type RouteProgress } from "../src/route/progress";
 import { fixture } from "./support";
 
 const NOW = Date.parse("2026-10-15T14:18:00Z");
@@ -153,6 +156,8 @@ describe("metric tiles", () => {
     expect(preview).toMatchObject({ value: null, state: "unavailable", note: "Release or attach a plan to use its schedule" });
     const late = selectTiles(tiles({ lc: active("PREPARING"), nowMs: Date.parse("2026-10-15T14:41:00Z") }))[0];
     expect(late).toMatchObject({ label: "Past scheduled off-block", value: "6" });
+    const early = selectTiles(tiles({ lc: active("PREPARING"), nowMs: Date.parse("2026-10-15T12:30:00Z") }))[0];
+    expect(early).toMatchObject({ label: "Scheduled off-block in", value: "2 h 05 min", unit: null });
     const recorded = selectTiles(tiles({ lc: active("PREPARING"), manual: manual("2026-10-15T14:38:00Z", null) }))[0];
     expect(recorded).toMatchObject({ label: "Off-block recorded", value: "14:38Z", secondary: "+3 min against schedule 14:35Z" });
     const recordedNoPlan = selectTiles(tiles({ lc: active("PREPARING"), schedulePlan: null, manual: manual("2026-10-15T14:38:00Z", null) }))[0];
@@ -349,5 +354,42 @@ describe("planned fuel at the last passed fix", () => {
     expect(planFuelAtLastFix(PLAN, geo, progress)).toEqual({ fix: leg.from.ident, kg: fix.fuelPlanOnboard!.kg });
     expect(planFuelAtLastFix(PLAN, geo, { status: "unavailable", reason: "x" })).toBeNull();
     expect(planFuelAtLastFix(null, geo, progress)).toBeNull();
+  });
+});
+
+describe("route card inputs", () => {
+  const geo = buildRouteGeometry(PLAN.navlog!);
+  const leg = geo.legs.find((l) => l.from.fixIndex >= 0 && !l.unreliable)!;
+  // Two airborne samples a quarter of the way along one leg, 1 nm apart at 420 kt, lock the tracker onto it.
+  const at = (f: number) => ({ lat: leg.from.lat + (leg.to.lat - leg.from.lat) * f, lon: leg.from.lon + (leg.to.lon - leg.from.lon) * f });
+  const step = 1 / leg.lengthNm;
+  const tracking = [0.25, 0.25 + step].reduce((s, f, i) => stepTracker(geo, s, { atUtc: new Date(NOW + i * (3600_000 / 420)).toISOString(), ...at(f), onGround: false, usable: true }), INITIAL_TRACKER);
+
+  it("uses the tracker only while telemetry is live, as the classic route monitor does", () => {
+    expect(tracking.mode).toBe("tracking");
+    expect(liveRouteProgress(geo, tracking, LIVE)).toEqual(routeProgress(geo, tracking));
+    expect(liveRouteProgress(geo, tracking, STALE)).toEqual({ status: "unavailable", reason: "Telemetry is stale or disconnected." });
+    expect(liveRouteProgress(geo, tracking, { kind: "none" } as Freshness)).toEqual({ status: "unavailable", reason: "No telemetry received." });
+    expect(liveRouteProgress(null, tracking, LIVE).status).toBe("unavailable");
+  });
+
+  it("lists the next fixes from the active leg's destination, and none when not tracking", () => {
+    const progress = liveRouteProgress(geo, tracking, LIVE);
+    const next = upcomingFixes(PLAN.navlog!.fixes, progress);
+    expect(next).toHaveLength(3);
+    expect(next[0]!.seq).toBe(PLAN.navlog!.fixes[leg.to.fixIndex]!.seq);
+    expect(upcomingFixes(PLAN.navlog!.fixes, { status: "unavailable", reason: "x" })).toEqual([]);
+  });
+});
+
+describe("flown phase and ETA reasons", () => {
+  it("an interrupted flight keeps the group of the phase it was in", () => {
+    expect(flownPhaseGroup(lc({ status: "interrupted", flightId: "f-1", phase: "INTERRUPTED" as LifecycleState["phase"], resumePhase: "CRUISE" }))).toBe("cruise");
+    expect(flownPhaseGroup(active("TAXI_OUT"))).toBe("taxi_out");
+  });
+  it("says why the ETA is hidden on the ground before takeoff and after landing", () => {
+    const base = { hasPlan: true, hasNavlog: true, airborne: false, freshness: LIVE, progress: null, groundSpeedKt: 0, nowMs: NOW };
+    expect(etaEstimate(base)).toEqual({ kind: "hidden", reason: "Starts after takeoff" });
+    expect(etaEstimate({ ...base, landed: true })).toEqual({ kind: "hidden", reason: "Not shown after landing" });
   });
 });

@@ -18,7 +18,8 @@ import type { GsxFeedView, GsxFeedViewStatus } from "../gsx/feed";
 import { GSX_STATE_LABEL, MANUAL_LABEL, readiness, SERVICE_LABEL } from "../ops/presentation";
 import type { ServiceEventDto, TurnaroundDto } from "../ops/types";
 import { PHASE_LABEL, SIMULATOR_SHORT, STATUS_LABEL } from "../pages/labels";
-import type { RouteProgress } from "../route/progress";
+import type { NavFix } from "../dispatch/navlog";
+import { routeProgress, type RouteProgress, type TrackerState } from "../route/progress";
 import type { RouteGeometry } from "../route/geometry";
 
 // ---------------------------------------------------------------- formatting
@@ -74,6 +75,12 @@ function groupOfPhase(phase: string): PhaseGroup {
     default:
       return "at_gate";
   }
+}
+
+/** The flown phase group: an interrupted flight keeps the group of the phase it was in. */
+export function flownPhaseGroup(lc: LifecycleState): PhaseGroup {
+  const g = phaseGroup(lc);
+  return g === "interrupted" ? (lc.resumePhase ? groupOfPhase(lc.resumePhase) : "at_gate") : g;
 }
 
 /** Which tile layout applies. Interrupted flights keep the layout of the phase they were in; no flight follows the aircraft. */
@@ -221,9 +228,11 @@ function scheduleTile(id: "scheduled_out" | "scheduled_off" | "on_block", t: Til
   if (!t.schedulePlan) return { id, label: `Scheduled ${name.toLowerCase()}`, value: null, unit: null, secondary: null, source, state: "unavailable", note: "Release or attach a plan to use its schedule" };
   if (!at) return { id, label: `Scheduled ${name.toLowerCase()}`, value: null, unit: null, secondary: null, source, state: "unavailable", note: "The plan has no scheduled time" };
   const m = minutesBetween(t.nowMs, Date.parse(at));
+  // An hour or more reads as hours and minutes ("2 h 05 min"); shorter counts stay in minutes.
+  const span = (abs: number) => (abs < 60 ? { value: num(abs), unit: "min" } : { value: formatHoursMinutes(abs * 60), unit: null });
   return m >= 0
-    ? { id, label: `Scheduled ${name.toLowerCase()} in`, value: num(m), unit: "min", secondary: `${hmUtc(at)} scheduled`, source, state: "ok", note: null }
-    : { id, label: `Past scheduled ${name.toLowerCase()}`, value: num(-m), unit: "min", secondary: `${hmUtc(at)} scheduled`, source, state: "ok", note: null };
+    ? { id, label: `Scheduled ${name.toLowerCase()} in`, ...span(m), secondary: `${hmUtc(at)} scheduled`, source, state: "ok", note: null }
+    : { id, label: `Past scheduled ${name.toLowerCase()}`, ...span(-m), secondary: `${hmUtc(at)} scheduled`, source, state: "ok", note: null };
 }
 
 function aircraftStateTile(t: TileInputs): MetricTile {
@@ -463,17 +472,34 @@ export const ETA_MIN_GROUND_SPEED_KT = 50;
  * speed. Shown only while the route is being tracked from live data; never extrapolated through a
  * data gap and never stored.
  */
-export function etaEstimate(i: { hasPlan: boolean; hasNavlog: boolean; airborne: boolean; freshness: Freshness; progress: RouteProgress | null; groundSpeedKt: number | null; nowMs: number }): Eta {
+export function etaEstimate(i: { hasPlan: boolean; hasNavlog: boolean; airborne: boolean; landed?: boolean; freshness: Freshness; progress: RouteProgress | null; groundSpeedKt: number | null; nowMs: number }): Eta {
   if (!i.hasPlan) return { kind: "hidden", reason: "No flight plan" };
   if (!i.hasNavlog) return { kind: "hidden", reason: "The flight plan has no navigation log" };
   if (i.freshness.kind !== "live") return { kind: "hidden", reason: "Paused until live data returns" };
-  if (!i.airborne) return { kind: "hidden", reason: "Starts after takeoff" };
+  if (!i.airborne) return { kind: "hidden", reason: i.landed ? "Not shown after landing" : "Starts after takeoff" };
   if (!i.progress || i.progress.status === "unavailable") return { kind: "hidden", reason: i.progress?.reason ?? "Route progress unavailable" };
   if (i.progress.status === "outside_corridor") return { kind: "hidden", reason: "Outside the planned route corridor" };
   if (i.progress.remainingNm === null) return { kind: "hidden", reason: "Remaining distance unknown" };
   if (i.groundSpeedKt === null || i.groundSpeedKt < ETA_MIN_GROUND_SPEED_KT) return { kind: "hidden", reason: "Ground speed too low for an estimate" };
   const minutes = Math.round((i.progress.remainingNm / i.groundSpeedKt) * 60);
   return { kind: "available", atUtc: new Date(i.nowMs + minutes * 60_000).toISOString(), minutes };
+}
+
+// ---------------------------------------------------------------- route
+
+/**
+ * Route progress as Live Flight shows it: the tracker's progress while telemetry is live, otherwise
+ * unavailable with the reason. Shared by the classic route monitor and the route card.
+ */
+export function liveRouteProgress(geometry: RouteGeometry | null, tracker: TrackerState, freshness: Freshness): RouteProgress {
+  if (!geometry) return { status: "unavailable", reason: "The flight plan has no navigation log with waypoint positions." };
+  if (freshness.kind !== "live") return { status: "unavailable", reason: freshness.kind === "none" ? "No telemetry received." : "Telemetry is stale or disconnected." };
+  return routeProgress(geometry, tracker);
+}
+
+/** The next `count` navlog fixes from the active leg's destination onwards, while tracking. */
+export function upcomingFixes(fixes: readonly NavFix[], progress: RouteProgress, count = 3): NavFix[] {
+  return progress.status === "tracking" ? fixes.slice(progress.leg.to.fixIndex, progress.leg.to.fixIndex + count) : [];
 }
 
 // ---------------------------------------------------------------- milestones
