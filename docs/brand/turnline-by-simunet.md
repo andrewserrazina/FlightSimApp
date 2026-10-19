@@ -6,16 +6,17 @@
 - **Each phase in §8 is a separate, owner-approved change.**
 - **This document builds on `turnline-working-brand.md`.** Its trademark caution and safe-migration checklist still apply.
 
-**Owner decision being implemented:**
+**Owner decisions being implemented** (brand decision, then the legal relationship confirmed on PR #36):
 
-| | |
-|---|---|
-| **Product** | **Turnline** |
-| **Endorsement** | **by SimuNet** |
-| **Tagline** | **Every flight. The whole operation.** |
+| Level | Name | What it is |
+|---|---|---|
+| **Legal entity** | **Apex Aviation Training Group LLC** ("Apex") | The company that operates both brands |
+| **Parent ecosystem brand** | **SimuNet** | A brand and simulation ecosystem operated by Apex: contracts, economy, logistics and operator progression. *Not* a separate legal entity. |
+| **Aviation operations product** | **Turnline by SimuNet** | SimuNet's aviation operations product. It keeps its navy and gold identity, with a subtle "by SimuNet" endorsement. |
 
-- **Turnline** is the dedicated aviation operations application. It keeps its navy and gold identity.
-- **SimuNet** is the parent simulation ecosystem: contracts, economy, logistics and operator progression.
+- **Tagline:** **Every flight. The whole operation.**
+- **Public-facing statement:** *"Turnline and SimuNet are brands operated by Apex Aviation Training Group LLC."*
+- **Still to confirm before any legal page changes** (§7a): the contractual details (which terms each service runs under) and the privacy-controller details (who is the data controller and processor for each data set).
 
 **Fixed product requirements (from the owner):**
 1. Turnline is usable on its own and offline.
@@ -40,18 +41,22 @@
 | **Website: domain and pages** | **turnlineops.com**: `/`, `/privacy.html`, `/confirm.html`, `/unsubscribe.html`, `/404.html` |
 | **Website: indexing and contact** | `noindex,nofollow`; contact `support@turnlineops.com` |
 | **Website: brand and tagline** | Curved-route mark in gold on navy plus the `TURNLINE` wordmark; tagline already "Every flight. The whole operation." |
-| **Website: legal line** | "© 2026 Turnline. Turnline is operated by Apex Aviation Training Group LLC. Turnline is a working product name." The same operator is named in the privacy notice and the welcome email. |
+| **Website: legal line** | "© 2026 Turnline. Turnline is operated by Apex Aviation Training Group LLC. Turnline is a working product name." Apex is also named as operator and controller in the waitlist privacy notice, with the support address and a Springfield, MA mailing address. The welcome email names Apex too. |
+| **Installer publisher** | Not set in `tauri.conf.json`, so Tauri derives a default from the identifier (`flightsimapp`). **Left unchanged by this proposal.** |
 | **Turnline colours** | Navy `#0B1F3A` / deep `#081629`, gold `#F4B400` / strong `#FFC933`; slate `#4B5B6B`, cloud `#E6EAEE` |
 | **SimuNet identity** | White "SimuNet" wordmark (capital S and N) over three orange chevrons on a charcoal disc (`simunet-html/assets/SimuNetLogo.png`) |
 | **SimuNet colours** | Charcoal `#1F232C`, orange accent `#FF6B2C`, signal blue `#3E92CC` |
 | **SimuNet domain and hero** | simunet.co; hero line "Fly it. Drive it. Watch the world react." |
 | **SimuNet accounts** | JWT accounts with FREE and PRO tiers through Stripe (`app/routers/billing.py`) |
-| **SimuNet legal entity** | Not stated anywhere in the SimuNet repo or site. **This needs an owner and legal decision (§9).** |
+| **SimuNet legal entity** | **Confirmed by the owner: SimuNet is operated by Apex.** SimuNet's privacy and terms pages (`simunet-html/privacy`, `/terms`) don't name Apex yet. They say "SimuNet" throughout and give support@simunet.co as the contact. |
 
-Two consequences shape the plan:
+Three consequences shape the plan:
 
 - **The desktop app still shows its old project name.** The first visible brand change in the app is "FlightSimApp" → "Turnline". Adding "by SimuNet" is a small step on top of that.
-- **Install and data identifiers must not change.** Renaming `productName` or `identifier` would move the install folder, the uninstall entry or the data folder. That is a separate migration with upgrade testing, not part of a brand rollout.
+- **Install and data identifiers must not change.** Renaming `productName` or `identifier` would move the install folder, the uninstall entry or the data folder.
+  - The owner has ruled this out: the installer publisher, installed identifiers and local data paths stay as they are.
+  - Only the *displayed* name changes.
+- **The legal wording is uneven today.** Turnline's pages name Apex; SimuNet's pages don't. §7a proposes one consistent set of wording for both brands.
 
 ---
 
@@ -66,7 +71,7 @@ Two consequences shape the plan:
 | **Top bar brand block** (replaces `FlightSimApp OPERATIONS`) | Turnline mark, then the **Turnline** wordmark, then a small muted **by SimuNet** (text only, no SimuNet logo) | One quiet endorsement in the frame. It replaces the "OPERATIONS" label, so no extra element is added. |
 | **Narrow windows** | Below 1100 px the endorsement text hides; the mark and wordmark stay | The top bar holds the connection chip, DEMO DATA tag and UTC clock, which matter more |
 | **Window title / taskbar / Start menu** | `Turnline` | Short and recognisable; the endorsement would be noise in the taskbar |
-| **Settings → About** (new, small section) | Mark, Turnline wordmark, by SimuNet, tagline, version, "Not for real-world navigation", the legal operator line, and links to turnlineops.com and simunet.co | The natural home for the full lockup and legal text |
+| **Settings → About** (new, small section) | Mark, Turnline wordmark, by SimuNet, tagline, version, "Not for real-world navigation", the About legal text from §7a, and links to turnlineops.com, simunet.co and the privacy notice | The natural home for the full lockup and legal text |
 | **Side-nav footer** | `Turnline 0.x · Preview` / `Not for real-world navigation` | Drops "Sprint 1"; no second endorsement here |
 | **Installer welcome and finish pages** | Full horizontal lockup (§2) | First impression; a moment when users look at branding |
 | **Splash / first-run** (if one is added later) | Full lockup, briefly | Same reason |
@@ -124,9 +129,9 @@ The domain, URLs, signup flow, privacy notice structure and support address stay
 | **Hero** | Unchanged headline. One line under the lead: *"Turnline is the aviation operations app in the SimuNet simulation ecosystem."* |
 | **New short section "Part of SimuNet"** (before the FAQ) | Three sentences and a link to simunet.co (copy in §4). Clearly labelled as planned. |
 | **FAQ additions** | "Do I need a SimuNet account?", "What is SimuNet?", "Is my early-access signup shared with SimuNet?" (copy in §4) |
-| **Footer** | Lockup, tagline and the legal line updated per the entity decision (§9). Add "Part of the SimuNet ecosystem" with a link to simunet.co under *Explore*. |
-| **Privacy notice** | Unchanged unless data is shared. Any sharing of waitlist data with SimuNet needs a new notice and fresh consent (§7). |
-| **Welcome email** | Sign-off changes to "Turnline by SimuNet"; the legal footer follows §9 |
+| **Footer** | Lockup, tagline, and the footer legal line from §7a. Add "Part of the SimuNet ecosystem" with a link to simunet.co under *Explore*. |
+| **Privacy notice** | Apex stays the named controller. The §7a intro sentence adds the brand relationship. **The waitlist scope is unchanged:** Turnline updates only, with no sharing with SimuNet (§7). Production edits only on approval. |
+| **Welcome email** | Sign-off changes to "Turnline by SimuNet"; the legal footer follows §7a |
 | **Site tests** | `scripts/marketing-site-test.mjs` gains checks that: (a) no copy claims a SimuNet integration, account linking, contracts or payouts are available; (b) the endorsement never appears in orange; (c) existing URLs and the noindex directives remain. |
 
 ### Never on turnlineops.com (until built and approved)
@@ -159,13 +164,15 @@ The domain, URLs, signup flow, privacy notice structure and support address stay
 > **About Turnline.** Turnline by SimuNet is a pilot-first airline operations application for Microsoft Flight Simulator. It connects dispatch, live flight recording, ground handling and post-flight debriefs around each flight you fly, with a clear record of what was planned, what was detected and what you recorded. Turnline runs locally and works on its own. No SimuNet account is required. Turnline is in development and tested internally with MSFS 2020.
 >
 > **About SimuNet.** SimuNet is a simulation ecosystem for contracts, logistics, economy and operator progression across flight and driving simulators. Turnline is its dedicated aviation operations application. Optional SimuNet account linking and aviation assignments are planned.
+>
+> Turnline and SimuNet are brands operated by Apex Aviation Training Group LLC.
 
 ### "Part of SimuNet" section (website)
 > **Part of SimuNet.** Turnline is the aviation operations app in the SimuNet simulation ecosystem. On its own, Turnline gives you dispatch, recording and debriefs for every flight. In future, an optional SimuNet link is planned to bring contracts, logistics and operator progression to your flights. It is not available yet. [Visit SimuNet →]
 
 ### FAQ copy
 - **Do I need a SimuNet account?** No. Turnline works on its own and offline. A SimuNet account will be optional, if and when linking becomes available.
-- **What is SimuNet?** SimuNet is the simulation ecosystem behind Turnline: contracts, logistics, economy and operator progression. Turnline is its aviation operations app.
+- **What is SimuNet?** SimuNet is the simulation ecosystem behind Turnline: contracts, logistics, economy and operator progression. Turnline is its aviation operations app. Both are brands operated by Apex Aviation Training Group LLC.
 - **Is my early-access signup shared with SimuNet?** No. Your Turnline early-access signup is used only for Turnline updates, as described in the privacy notice.
 
 ### Voice
@@ -180,7 +187,8 @@ A one-page "SimuNet family" sheet that both repositories reference. Each product
 
 | | Turnline | SimuNet |
 |---|---|---|
-| **Role** | Product (aviation operations) | Parent ecosystem / endorser |
+| **Role** | SimuNet's aviation operations product | Parent ecosystem brand / endorser |
+| **Operated by** | Apex Aviation Training Group LLC | Apex Aviation Training Group LLC |
 | **Primary colours** | Navy `#0B1F3A`, gold `#F4B400` | Charcoal `#1F232C`, orange `#FF6B2C` |
 | **Support colours** | Slate `#4B5B6B`, cloud `#E6EAEE` | Signal blue `#3E92CC` |
 | **Logo** | Curved-route mark + TURNLINE | White SimuNet wordmark + orange chevrons on charcoal |
@@ -245,11 +253,73 @@ Nothing below is built until you approve it. The account-linking items also wait
 - *"Turnline is complete on its own. SimuNet membership adds contracts, logistics and progression across simulators."*
 - No price or plan names on either site until terms exist, which `turnline-working-brand.md` already requires.
 
+### Accounts and infrastructure stay separate for now
+- **Turnline keeps its own setup:** its optional cloud account and sync (Supabase project `itapyrwjijnvzdsatttp`), its waitlist (Supabase + Resend + Turnstile) and its local SQLite data.
+- **SimuNet keeps its own setup:** accounts, FREE/PRO billing (Stripe) and backend (FastAPI/PostgreSQL on Render).
+- **One company is not one database.** Neither system reads the other's data. Single sign-on, a shared account or shared billing would each need an approved integration architecture first.
+
 ### Consent and data
-- **The waitlist stays Turnline's.** Subscribers consented to Turnline updates from the current operator.
-  - Emailing them SimuNet marketing, or sharing their addresses with SimuNet, needs updated notices and fresh opt-in.
-  - A Turnline update that *mentions* the endorsement is fine.
+- **Same company, separate purposes.** Apex operating both brands doesn't make Turnline's waitlist available to SimuNet marketing.
+  - Subscribers opted in to **Turnline** development updates and beta invitations. Using their addresses for SimuNet marketing, or copying them into SimuNet's systems, needs an updated notice and a fresh, separate opt-in.
+  - A Turnline update that *mentions* the endorsement or links to SimuNet is within scope.
+  - The same applies in reverse: SimuNet's early-access list isn't used for Turnline marketing without consent.
 - **Linking will need explicit consent** for which telemetry and flight fields leave the machine (see the feasibility study).
+
+---
+
+## 7a. Legal language: one consistent set for both brands (proposed; not applied)
+
+Apex is the operating legal entity for both brands. Each sentence below is a **proposal**. Production legal pages change only after you approve, and after the confirmations at the end of this section.
+
+### Footer (both sites)
+- **turnlineops.com:**
+  > © 2026 Apex Aviation Training Group LLC. Turnline and SimuNet are brands operated by Apex Aviation Training Group LLC. Turnline is a working product name.
+- **simunet.co:**
+  > © 2026 Apex Aviation Training Group LLC. SimuNet and Turnline are brands operated by Apex Aviation Training Group LLC.
+- Keep the existing "not affiliated with Microsoft, SimBrief, GSX or real-world airlines" disclaimers where they appear.
+- Keep "Turnline is a working product name" until trademark clearance (§8, P1).
+
+### Desktop app: Settings → About
+> **Turnline by SimuNet**, version 0.x (preview)
+> Every flight. The whole operation.
+> Turnline and SimuNet are brands operated by Apex Aviation Training Group LLC.
+> Not for real-world navigation. Not affiliated with Microsoft, SimBrief or GSX.
+> Privacy notice · turnlineops.com · simunet.co
+
+The installer's publisher field is left as is (owner decision). The About text, not the installer metadata, is where Apex is named in the app.
+
+### Privacy notices
+- **Turnline waitlist notice** (`marketing/privacy.html`): keep Apex as the named operator and controller. Add one sentence to the intro:
+  > Turnline is part of the SimuNet ecosystem; Turnline and SimuNet are brands operated by Apex Aviation Training Group LLC. This notice covers only the Turnline early-access list. Your information is used for Turnline updates and is not used for SimuNet marketing or shared with SimuNet's systems without your separate consent.
+- **SimuNet privacy policy** (`simunet-html/privacy`, SimuNet repo): name the operator.
+  > SimuNet is a brand operated by Apex Aviation Training Group LLC ("Apex"), which is responsible for the personal data described in this policy.
+
+  Also add the mailing address used on the Turnline notice, if confirmed.
+- **Desktop app:** when the app later collects anything leaving the machine (cloud sync is already optional), its notice follows the same pattern: Apex is the operator, and the scope is per product.
+
+### Terms
+- **SimuNet terms** (`simunet-html/terms`): first line
+  > These terms are an agreement between you and Apex Aviation Training Group LLC ("Apex"), which operates SimuNet.
+
+  Keep "SimuNet" as the service name in the body.
+- **Turnline:** there are no public terms yet (no product is offered). When there are, use the same pattern:
+  > These terms are an agreement between you and Apex Aviation Training Group LLC, which operates Turnline, a SimuNet product.
+
+### Emails
+- **Turnline welcome and updates:** "Turnline by SimuNet · Turnline and SimuNet are brands operated by Apex Aviation Training Group LLC." Keep the existing unsubscribe link and support address.
+- **SimuNet emails:** the same line with the order reversed.
+
+### Usage rules
+- **Apex appears in legal contexts only:** footers, About, privacy, terms and email footers. It never appears in product UI, marketing headlines or the Operations Center.
+- **No "Inc."** Write "Apex Aviation Training Group LLC" in full on first use, "Apex" after that.
+- **Wording:** say "brands operated by". Avoid "subsidiary", "division" or "company" for either brand, because neither is a separate legal entity.
+
+### Confirmations needed before any legal page changes
+1. **Controller details:** that Apex is the data controller for both the Turnline waitlist and SimuNet accounts and telemetry. Also, which processors each brand uses: Turnline uses Supabase, Resend and Cloudflare; SimuNet uses Render, Stripe and its email provider.
+2. **Contact points:** whether each brand keeps its own privacy contact (support@turnlineops.com and support@simunet.co) or one Apex contact serves both. Note that turnlineops.com currently has no MX record (from the earlier site audit), so support@turnlineops.com may not receive mail.
+3. **Contracts:** that existing vendor accounts and agreements for both brands are in Apex's name, or which ones need updating.
+4. **Mailing address:** that the Springfield, MA address is correct for both brands.
+5. **Effective dates and change notice** for the revised privacy and terms pages.
 
 ---
 
@@ -258,10 +328,11 @@ Nothing below is built until you approve it. The account-linking items also wait
 | Phase | Scope | Preserves | Gate |
 |---|---|---|---|
 | **P0** | This proposal | — | Owner review |
-| **P1: Clearance and artwork** | Trademark and domain clearance for "Turnline", and for "Turnline by SimuNet" as a combined mark. The entity and legal relationship statement (§9). Designer-final lockups, app icon and favicon. The shared guideline sheet. | Everything (no product change) | Owner and legal approval |
+| **P1: Clearance and artwork** | Trademark and domain clearance for "Turnline", and for "Turnline by SimuNet" as a combined mark. The §7a confirmations. Designer-final lockups, app icon and favicon. The shared guideline sheet. | Everything (no product change) | Owner and legal approval |
+| **P1b: Legal language** | Apply the approved §7a wording to both sites' footers, privacy and terms (both repos). Preview first. | Waitlist scope, unsubscribe links, accounts | Owner approval of the final text, then production approval |
 | **P2: Website copy** | §3 and §4 on turnlineops.com, with site tests updated. **Preview deploy only**; production deploy on your approval. | All URLs, signup and confirmation flow, unsubscribe links, support address, noindex | Owner approval for production |
 | **P3: Desktop display branding** | "FlightSimApp" → "Turnline" in the top bar, window title, side-nav footer and recovery banner; the curved-route mark replaces ▲; "by SimuNet" in the top bar and installer pages; a new Settings → About. **`productName`, `identifier`, install folder, uninstall key and data folder are unchanged.** It touches only the frame and Settings, never Live Flight content. | Installed builds, data, upgrade path, tests (the smoke test checks the uninstall key and data folder) | Owner approval. Scheduled **after the Ops Center L-series** (or as a tiny PR rebased onto it) so it doesn't collide with L6–L8 in `AppShell.tsx` |
-| **P3b (optional): Installed identity** | Rename the installer `productName` and install folder to Turnline, with a tested upgrade from 0.1.x that keeps `%APPDATA%\dev.flightsimapp.desktop` and the flight history | User data and flight history | Separate approval plus a Windows upgrade and recovery test |
+| ~~P3b: Installed identity~~ | **Not proposed.** The owner has ruled out changing the installer publisher, installed identifiers and local data paths. The `FlightSimApp` install identity stays behind the Turnline display name. | — | Would need a new owner decision |
 | **P4: SimuNet side** | Turnline product card on simunet.co (SimuNet repo) | SimuNet URLs and accounts | Owner approval (SimuNet repo) |
 | **P5: Optional account linking** | Per the approved integration architecture: Settings → Accounts, the optional health item, and Debrief verification | Offline use; linking off by default | Integration architecture approval |
 | **P6: Native aviation assignments** | SimuNet assignments as a Dispatch plan source | SimBrief import unchanged | Owner approval |
@@ -275,16 +346,23 @@ Nothing below is built until you approve it. The account-linking items also wait
 
 ## 9. Decisions requiring owner approval
 
-1. **Legal relationship and operator line.** Today every Turnline surface says "operated by Apex Aviation Training Group LLC", and SimuNet's legal entity is not stated anywhere. Is SimuNet a brand of the same company, a separate entity, or a licence arrangement? This decides:
-   - the footer and privacy wording;
-   - whether a trademark licence is needed for the endorsement;
-   - the installer publisher name.
-2. **Trademark and domain clearance** for "Turnline", still outstanding per `turnline-working-brand.md`, and for the combined "Turnline by SimuNet" mark.
-3. **Endorsement placement in the app top bar** (recommended), or only in About and the installer (more minimal).
-4. **Logo model:** endorsed brand with a text-only "by SimuNet" (recommended), or a small SimuNet chevron glyph beside the text.
-5. **Website changes in P2,** including the "Part of SimuNet" section and the FAQ answers.
-6. **simunet.co listing Turnline** (P4) and its wording.
-7. **Subscription model:** A separate (recommended), B included in PRO, or C bundle.
-8. **Whether waitlist subscribers are told** about the endorsement in a Turnline update email.
-9. **Whether to do P3b** (installed-identity rename with migration), or keep the FlightSimApp install identity indefinitely behind a Turnline display name.
+**Already decided** (PR #36 review):
+- Apex operates both brands.
+- SimuNet is the parent ecosystem brand, not a separate entity.
+- Turnline is SimuNet's aviation operations product.
+- The public statement is "Turnline and SimuNet are brands operated by Apex Aviation Training Group LLC".
+- The installer publisher, identifiers and data paths stay unchanged.
+- No waitlist sharing without consent.
+- Accounts and infrastructure stay separate for now.
+
+**Still open:**
+1. **The §7a confirmations:** controller and processor details, contact points, vendor contracts, the mailing address and effective dates.
+2. **The §7a wording** for footers, About, privacy, terms and emails, before it goes to any production page.
+3. **Trademark and domain clearance** for "Turnline", still outstanding per `turnline-working-brand.md`, and for the combined "Turnline by SimuNet" mark.
+4. **Endorsement placement in the app top bar** (recommended), or only in About and the installer (more minimal).
+5. **Logo model:** endorsed brand with a text-only "by SimuNet" (recommended), or a small SimuNet chevron glyph beside the text.
+6. **Website changes in P2,** including the "Part of SimuNet" section and the FAQ answers.
+7. **simunet.co listing Turnline** (P4) and its wording.
+8. **Subscription model:** A separate (recommended), B included in PRO, or C bundle.
+9. **Whether waitlist subscribers are told** about the endorsement in a Turnline update email (within their existing consent).
 10. **Optional future alias,** for example `turnline.simunet.co` redirecting to turnlineops.com, or none.
