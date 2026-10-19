@@ -6,6 +6,7 @@ pub mod fuel;
 pub mod gsx_fuel;
 pub mod import;
 pub mod money;
+pub mod receipt_id;
 pub mod review;
 pub mod scan;
 pub mod watch;
