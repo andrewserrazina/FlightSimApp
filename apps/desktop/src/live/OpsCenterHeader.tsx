@@ -11,7 +11,7 @@ import { useOps } from "../ops/OpsContext";
 import { DiscardFlightDialog, EndFlightDialog, MoveAsideDialog, useCommandRunner } from "../recording/FlightDialogs";
 import { useRecorder } from "../recording/RecorderContext";
 import { Button } from "../ui/Button";
-import type { AttentionAction, AttentionItem, FlightActionId, HealthItem, Identity } from "./model";
+import type { AttentionAction, AttentionItem, FlightActionId, HealthItem, Identity, InterruptionKind } from "./model";
 import type { LiveFlightModel } from "./useLiveFlightModel";
 
 const ACTION_LABEL: Record<FlightActionId, string> = {
@@ -101,7 +101,7 @@ export function OpsCenterHeader({ model: m, navigate }: { model: LiveFlightModel
   return (
     <div className="ops-head">
       <section className="ops-id" aria-label="Flight">
-        <IdentityBlock id={m.identity} />
+        <IdentityBlock id={m.identity} interruption={m.interruption} />
         <div className="ops-id__actions">
           {m.actions.primary ? (
             <Button variant="primary" className="ops-primary" disabled={blocked(m.actions.primary)} onClick={() => perform(m.actions.primary!)}>
@@ -132,12 +132,21 @@ export function OpsCenterHeader({ model: m, navigate }: { model: LiveFlightModel
 /**
  * Flight number and route on the first line, city names and type below, then a status line with the
  * phase and the recording state. Fixed lines, so nothing reflows into a ragged wrap at narrower
- * widths; the plan basis is shown on the route card.
+ * widths; only the status line may break, between the phase and the recording chip, never inside
+ * either. The plan basis is shown on the route card.
  */
-function IdentityBlock({ id }: { id: Identity }) {
+function IdentityBlock({ id, interruption }: { id: Identity; interruption: InterruptionKind | null }) {
   const route = id.origin && id.destination ? `${id.origin.icao} → ${id.destination.icao}` : null;
   const names = id.origin && id.destination ? [id.origin.name ?? id.origin.icao, id.destination.name ?? id.destination.icao].join(" → ") : null;
-  const rec = id.recording === "recording" ? { tone: "ok", text: "● Recording" } : id.recording === "interrupted" ? { tone: "warn", text: "! Recording interrupted" } : { tone: "neutral", text: "Not recording" };
+  // An automatic interruption is a pause that ends by itself; the other kinds wait for Resume.
+  const rec =
+    id.recording === "recording"
+      ? { tone: "ok", text: "● Recording" }
+      : id.recording === "interrupted"
+        ? interruption === "auto"
+          ? { tone: "warn", text: "‖ Recording paused" }
+          : { tone: "alert", text: "! Resume needed" }
+        : { tone: "neutral", text: "Not recording" };
   return (
     <div className="ops-id__identity">
       <div className="ops-id__line">

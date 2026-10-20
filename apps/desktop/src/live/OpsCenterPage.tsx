@@ -40,6 +40,13 @@ function OpsCenterBody({ navigate }: { navigate: NavigateFn }) {
           <ErrorBoundary label="Route">
             <RouteCard route={m.route} basis={m.basis} cells={m.milestones.cells} flightOpen={m.flightId !== null} navigate={navigate} />
           </ErrorBoundary>
+          <details className="ops-details">
+            <summary>Flight details: plan baseline and all live readings</summary>
+            <div className="ops-details__body">
+              <FlightPlanBaseline flightId={m.flightId} navigate={navigate} />
+              <TelemetryPanels showTiming={false} />
+            </div>
+          </details>
         </div>
         <div className="ops-side">
           <ErrorBoundary label="Milestones">
@@ -48,13 +55,6 @@ function OpsCenterBody({ navigate }: { navigate: NavigateFn }) {
           <TurnaroundPanel navigate={navigate} />
         </div>
       </div>
-      <details className="ops-details">
-        <summary>Flight details: plan baseline and all live readings</summary>
-        <div className="ops-details__body">
-          <FlightPlanBaseline flightId={m.flightId} navigate={navigate} />
-          <TelemetryPanels showTiming={false} />
-        </div>
-      </details>
       <p className="ops-preview-note">Preview layout. Ground services and the remaining details move into the new design in the next steps.</p>
     </>
   );

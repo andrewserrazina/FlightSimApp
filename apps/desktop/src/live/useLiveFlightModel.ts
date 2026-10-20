@@ -15,7 +15,7 @@ import { useOpsView } from "../ops/OpsContext";
 import { usePreferences } from "../preferences/PreferencesContext";
 import { useRecorderView } from "../recording/RecorderContext";
 import { useRouteTracker } from "../route/RouteTrackerContext";
-import { AIRBORNE_GROUPS, etaEstimate, flightActions, flownPhaseGroup, health, identity, liveRouteProgress, milestoneCells, planFuelAtLastFix, scheduleNote, selectTiles, upcomingFixes } from "./model";
+import { AIRBORNE_GROUPS, etaEstimate, flightActions, flownPhaseGroup, health, identity, interruptionKind, liveRouteProgress, milestoneCells, planFuelAtLastFix, scheduleNote, selectTiles, upcomingFixes } from "./model";
 
 export type LiveFlightModel = ReturnType<typeof useLiveFlightModel>;
 
@@ -82,6 +82,7 @@ export function useLiveFlightModel() {
       position: frame && freshness.kind === "live" ? { lat: readingValue(frame.readings.lat_deg), lon: readingValue(frame.readings.lon_deg) } : null,
     },
     milestones: { rows, cells: milestoneCells(rows), note: scheduleNote(basis) },
+    interruption: interruptionKind(lc, recorder.recovered ?? false),
     turnaround,
     basis,
     busy: recorder.busy || !recorder.initialized,

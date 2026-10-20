@@ -9,7 +9,7 @@
  * basis from `planBasisForFlight`, GSX state from `gsxFeedView`.
  */
 import { readingValue, type GsxService, type GsxServiceState, type Reading, type SimulatorId, type TelemetryFrameV1, type Unit } from "@flightsim/contracts";
-import { availableActions, type LifecycleState } from "@flightsim/flight-core";
+import { availableActions, DEFAULT_LIFECYCLE_CONFIG, type LifecycleState } from "@flightsim/flight-core";
 import type { PlanBasis, PlanBasisKind } from "../dispatch/planBasis";
 import type { ImportedFlightPlan } from "../dispatch/model";
 import { manualEligibility, PROVENANCE_TEXT, type ManualMilestones, type MilestoneRow } from "../dispatch/timeline";
@@ -23,6 +23,24 @@ import { routeProgress, type RouteProgress, type TrackerState } from "../route/p
 import type { RouteGeometry } from "../route/geometry";
 
 // ---------------------------------------------------------------- formatting
+
+/** Seconds of missing telemetry after which the recorder marks a flight interrupted (engine config). */
+export const INTERRUPT_AFTER_S = Math.round(DEFAULT_LIFECYCLE_CONFIG.interruptAfterMs / 1000);
+
+/**
+ * How an interrupted flight can continue, from the recorder's own rules (flight-core engine):
+ * - "auto": lost telemetry; the recorder resumes by itself when data returns for the same aircraft
+ *   within the distance it could have flown during the gap;
+ * - "reconcile": data returned but the aircraft changed or moved too far, so it waits for Resume;
+ * - "restart": the app closed with the flight open; it waits for Resume.
+ */
+export type InterruptionKind = "auto" | "reconcile" | "restart";
+
+export function interruptionKind(lc: LifecycleState, recovered: boolean): InterruptionKind | null {
+  if (lc.status !== "interrupted") return null;
+  if (recovered) return "restart";
+  return lc.needsUserDecision ? "reconcile" : "auto";
+}
 
 const NUM = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 const num = (n: number) => NUM.format(Math.round(n));
@@ -236,7 +254,7 @@ function scheduleTile(id: "scheduled_out" | "scheduled_off" | "on_block", t: Til
 }
 
 function aircraftStateTile(t: TileInputs): MetricTile {
-  const base = { id: "aircraft_state" as const, label: "Aircraft", unit: null, source: SIM };
+  const base = { id: "aircraft_state" as const, label: "Parking brake", unit: null, source: SIM };
   if (!t.frame) return { ...base, value: null, secondary: null, state: "unavailable", note: "No data from the simulator yet" };
   const r = t.frame.readings;
   const brake = readingValue(r.parking_brake_set);
@@ -247,7 +265,7 @@ function aircraftStateTile(t: TileInputs): MetricTile {
   const stale = t.freshness.kind !== "live";
   return {
     ...base,
-    value: brake === null ? null : brake ? "Parking brake set" : "Parking brake released",
+    value: brake === null ? null : brake ? "Set" : "Released",
     secondary: parts.join(" · "),
     state: brake === null ? "unavailable" : stale ? "stale" : "ok",
     note: brake === null ? "Parking brake not reported by this aircraft" : stale && t.freshness.kind === "stale" ? `${formatAge(t.freshness.ageMs)} old` : null,
@@ -352,7 +370,7 @@ export function flightActions(a: ActionInputs): ActionsModel {
   if (engine.end) secondary.push("end");
   if (engine.discard) secondary.push("discard");
   if (closed && primary !== "open_debrief") secondary.push("open_debrief");
-  return { primary, secondary, idleNote: primary ? null : autoResume ? "Recording resumes automatically when data returns" : open ? "No action needed" : null };
+  return { primary, secondary, idleNote: primary ? null : autoResume ? "Paused · resumes on its own if data returns for the same aircraft" : open ? "No action needed" : null };
 }
 
 // ---------------------------------------------------------------- health and attention
@@ -409,7 +427,7 @@ export function health(h: HealthInputs): { items: HealthItem[]; attention: Atten
 
   if (h.store.state === "unavailable") items.push({ id: "recording", level: "action", text: "Recording unavailable" });
   else if (h.writeError) items.push({ id: "recording", level: "warn", text: "Saving delayed" });
-  else if (h.lc.status === "interrupted") items.push({ id: "recording", level: "warn", text: "Recording interrupted" });
+  else if (h.lc.status === "interrupted") items.push({ id: "recording", level: h.lc.needsUserDecision || h.recovered ? "action" : "warn", text: h.lc.needsUserDecision || h.recovered ? "Resume needed" : "Recording paused" });
   else items.push({ id: "recording", level: open ? "ok" : "info", text: open ? "Recording" : "Not recording" });
 
   const b = h.basis?.kind;
@@ -432,16 +450,24 @@ export function health(h: HealthInputs): { items: HealthItem[]; attention: Atten
     attention.push({ id: "store", level: "action", title: "Flight recording is unavailable.", detail: "Flights can't be saved until the flight database is available again.", actions: h.store.canReset ? ["retry_store", "move_aside"] : ["retry_store"] });
   else if (h.writeError)
     attention.push({ id: "write", level: "action", title: "Recent flight data hasn't been saved yet.", detail: `${h.pendingItems} item${h.pendingItems === 1 ? " is" : "s are"} kept safely in memory and saving is retried automatically.`, actions: ["retry_flush"] });
-  if (h.lc.status === "interrupted")
-    attention.push(
-      h.recovered
-        ? { id: "interrupted", level: "action", title: "Unfinished flight found.", detail: `A flight started ${h.lc.startedAt ? hmUtc(h.lc.startedAt) : "earlier"} was still open when Turnline closed. Resume to continue recording it (the phase is re-checked against live data), or end or discard it from More.`, actions: ["resume"] }
-        : h.lc.needsUserDecision
-        ? { id: "interrupted", level: "action", title: "This flight was interrupted.", detail: "Resume to continue recording it, or end or discard it from More.", actions: ["resume"] }
-        : { id: "interrupted", level: "warn", title: "Recording is paused: the simulator stopped sending data.", detail: "It resumes automatically when consistent data returns.", actions: [] },
-    );
-  if (h.freshness.kind === "stale" && h.simulatorConnected)
-    attention.push({ id: "stale", level: "warn", title: `No new data from the simulator for ${formatAge(h.freshness.ageMs)}.`, detail: "The simulator may be paused, loading or busy. Values shown are the last ones received and are marked as old.", actions: [] });
+  const kind = interruptionKind(h.lc, h.recovered ?? false);
+  if (kind === "restart")
+    attention.push({ id: "interrupted", level: "action", title: "Unfinished flight found.", detail: `A flight started ${h.lc.startedAt ? hmUtc(h.lc.startedAt) : "earlier"} was still open when Turnline closed. Resume to continue recording it (the phase is re-checked against live data), or end or discard it from More.`, actions: ["resume"] });
+  else if (kind === "reconcile")
+    attention.push({ id: "interrupted", level: "action", title: "Recording needs you to resume.", detail: "Data is back, but the aircraft changed or moved further than it could have flown during the gap, so Turnline won't continue the flight on its own. Resume to continue (the phase is re-checked against live data), or end or discard it from More.", actions: ["resume"] });
+  else if (kind === "auto")
+    attention.push({ id: "interrupted", level: "warn", title: `Recording is paused: no data from the simulator for over ${INTERRUPT_AFTER_S} s.`, detail: "It resumes on its own when data returns for the same aircraft, near where it was. If the aircraft changed or moved further than it could have flown, you'll be asked to resume.", actions: [] });
+  // Stale but not yet interrupted: recording carries on; only a gap is logged.
+  if (h.freshness.kind === "stale" && h.simulatorConnected && !kind)
+    attention.push({
+      id: "stale",
+      level: "warn",
+      title: `No new data from the simulator for ${formatAge(h.freshness.ageMs)}.`,
+      detail: open
+        ? `Recording continues; if no data arrives for ${INTERRUPT_AFTER_S} s, the flight is marked interrupted. Values shown are the last ones received and are marked as old.`
+        : "The simulator may be paused, loading or busy. Values shown are the last ones received and are marked as old.",
+      actions: [],
+    });
   else if (open && !h.simulatorConnected && h.lc.status !== "interrupted")
     attention.push({ id: "disconnected", level: "warn", title: "The simulator is not connected.", detail: "Recording continues once the connection returns.", actions: ["connect"] });
   if (h.gsxRecordError) attention.push({ id: "gsx_record", level: "action", title: "GSX activity couldn't be saved to the turnaround.", detail: "Turnline keeps retrying. Nothing observed so far is lost.", actions: [] });
