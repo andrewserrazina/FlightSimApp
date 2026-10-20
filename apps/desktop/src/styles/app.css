@@ -451,10 +451,33 @@ details > summary { cursor: pointer; color: var(--text-muted); font-size: var(--
 @container (min-width: 1200px) {
   .ops-grid { grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr); }
 }
+.ops-ground p { margin: 0 0 var(--space-2); }
+.ops-ground__line { font-weight: 600; color: var(--text-primary); }
+.ops-ground__feed { font-size: var(--text-sm); }
+.ops-ground__rows { margin: 0 0 var(--space-2); padding: 0; list-style: none; display: grid; gap: 2px; }
+.ops-ground__row { display: grid; grid-template-columns: minmax(96px, 38%) minmax(0, 1fr); gap: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--surface-2); border-left: 3px solid var(--border-strong); font-size: var(--text-sm); }
+.ops-ground__row--active { border-left-color: var(--status-info); }
+.ops-ground__row--available { border-left-color: var(--color-gold); }
+.ops-ground__row--done { border-left-color: var(--status-ok); }
+.ops-ground__service { font-weight: 600; }
+.ops-ground__state { min-width: 0; }
+.ops-ground__unverified { margin-left: var(--space-2); padding: 0 6px; border: 1px solid var(--border-strong); border-radius: 999px; font-size: var(--text-xs); color: var(--text-muted); }
+.ops-ground__inactive, .ops-ground__readiness, .ops-ground__receipts { font-size: var(--text-sm); color: var(--text-muted); }
+.ops-ground__history { margin: var(--space-2) 0; }
+.ops-ground__history ol { margin: var(--space-2) 0 0; padding-left: var(--space-5); font-size: var(--text-sm); display: grid; gap: 2px; }
+.ops-ground__paused { margin: 0 0 var(--space-3); padding: var(--space-3); border-radius: var(--radius-sm); background: var(--status-warn-surface); border: 1px solid color-mix(in srgb, var(--status-warn) 55%, transparent); }
+.ops-ground__actions { margin-top: var(--space-2); }
+.ops-ground__manage { margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border-subtle); }
+.ops-ground__manage .form-row { flex-wrap: wrap; }
 /* One column: flatten the columns so Flight details can follow the milestones and turnaround. */
 @container (max-width: 1199px) {
   .ops-main, .ops-side { display: contents; }
   .ops-details { order: 1; }
+}
+/* Medium widths: milestones and ground services side by side under the route card. */
+@container (min-width: 820px) and (max-width: 1199px) {
+  .ops-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .ops-grid .ops-tiles, .ops-grid .ops-route, .ops-grid .ops-details { grid-column: 1 / -1; }
 }
 /* Narrower windows: a tighter identity header. */
 @container (max-width: 1000px) {

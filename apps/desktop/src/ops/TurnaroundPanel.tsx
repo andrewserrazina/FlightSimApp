@@ -95,7 +95,8 @@ function ServiceTable({ turnaround, feed }: { turnaround: TurnaroundDto | null; 
   );
 }
 
-function StartTurnaround() {
+/** The start-a-turnaround form (shared by the classic panel and the Ground services card). */
+export function StartTurnaround() {
   const ops = useOps();
   const dispatch = useDispatchView();
   const rec = useRecorderView().lifecycle;
@@ -160,23 +161,7 @@ function StartTurnaround() {
 }
 
 function OpenTurnaround({ t, navigate }: { t: TurnaroundDto; navigate: NavigateFn }) {
-  const ops = useOps();
-  const view = useOpsView();
-  const rec = useRecorderView().lifecycle;
-  const recordingId = rec.status === "active" || rec.status === "interrupted" ? rec.flightId : null;
   const [error, setError] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<null | "close" | "abandon" | "link">(null);
-  const [reason, setReason] = useState("");
-  const ready = readiness(t);
-  const expenses = view.expenses.kind === "ready" ? view.expenses.value.filter((e) => e.turnaroundId === t.id) : [];
-  const totals = totalsByCurrency(expenses);
-
-  const run = async (p: Promise<{ ok: boolean; message?: string }>) => {
-    setError(null);
-    const r = await p;
-    if (!r.ok) setError(r.message ?? "Failed.");
-    return r.ok;
-  };
 
   return (
     <section className="subsection" aria-label="Current turnaround">
@@ -196,13 +181,81 @@ function OpenTurnaround({ t, navigate }: { t: TurnaroundDto; navigate: NavigateF
           This turnaround was interrupted{t.feedLog.at(-1)?.feed === "app_restarted" ? " because Turnline restarted" : ""}. GSX changes during the gap were not observed and are not filled in. Resume to continue recording.
         </div>
       )}
-      <p className="muted" aria-label="Servicing readiness">
-        <strong>Advisory:</strong> {ready.done.length} of {ready.done.length + ready.pending.length} servicing items recorded complete
-        {ready.pending.length ? ` (open: ${ready.pending.map((s) => SERVICE_LABEL[s]).join(", ")})` : ""}. Pushback is not part of this check, and Turnline never decides when you may push back.
-      </p>
+      <ReadinessAdvisory t={t} />
 
       {t.status === "open" && <ManualEntry t={t} onError={setError} />}
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
 
+      <TurnaroundControls t={t} />
+      <TurnaroundExpenses t={t} navigate={navigate} />
+    </section>
+  );
+}
+
+export function ManualEntry({ t, onError }: { t: TurnaroundDto; onError(m: string | null): void }) {
+  const ops = useOps();
+  const [service, setService] = useState<GsxService>(t.side === "arrival" ? "deboarding" : "boarding");
+  const [status, setStatus] = useState<ManualServiceStatus>("completed");
+  const [note, setNote] = useState("");
+  const save = async () => {
+    onError(null);
+    const r = await ops.recordManual(t.id, service, status, note);
+    if (r.ok) setNote("");
+    else onError(r.message);
+  };
+  return (
+    <section className="subsection" aria-labelledby="ta-manual-h">
+      <h3 id="ta-manual-h" className="subsection__title">
+        Record a service manually
+      </h3>
+      <p className="muted">Manual entries are kept separate from GSX observations and time-stamped with this computer's UTC clock.</p>
+      <div className="form-row">
+        <SelectField<GsxService> label="Service" value={service} options={GSX_SERVICES.map((s) => ({ value: s, label: SERVICE_LABEL[s] }))} onChange={setService} />
+        <SelectField<ManualServiceStatus> label="Status" value={status} options={(Object.keys(MANUAL_LABEL) as ManualServiceStatus[]).map((s) => ({ value: s, label: MANUAL_LABEL[s] }))} onChange={setStatus} />
+        <TextField label="Note (required)" value={note} onChange={setNote} maxLength={500} />
+      </div>
+      <div className="button-row">
+        <Button disabled={!note.trim()} onClick={() => void save()}>
+          Record entry
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+/** The servicing-readiness advisory: advisory only; pushback is never part of it. */
+export function ReadinessAdvisory({ t }: { t: TurnaroundDto }) {
+  const ready = readiness(t);
+  return (
+    <p className="muted" aria-label="Servicing readiness">
+      <strong>Advisory:</strong> {ready.done.length} of {ready.done.length + ready.pending.length} servicing items recorded complete
+      {ready.pending.length ? ` (open: ${ready.pending.map((s) => SERVICE_LABEL[s]).join(", ")})` : ""}. Pushback is not part of this check, and Turnline never decides when you may push back.
+    </p>
+  );
+}
+
+/** Pause or resume, link to the current flight, close and abandon, each with its confirmation. */
+export function TurnaroundControls({ t }: { t: TurnaroundDto }) {
+  const ops = useOps();
+  const rec = useRecorderView().lifecycle;
+  const recordingId = rec.status === "active" || rec.status === "interrupted" ? rec.flightId : null;
+  const [error, setError] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<null | "close" | "abandon" | "link">(null);
+  const [reason, setReason] = useState("");
+
+  const run = async (p: Promise<{ ok: boolean; message?: string }>) => {
+    setError(null);
+    const r = await p;
+    if (!r.ok) setError(r.message ?? "Failed.");
+    return r.ok;
+  };
+
+  return (
+    <>
       <div className="button-row">
         {t.status === "open" ? (
           <Button onClick={() => void run(ops.setTurnaroundStatus(t.id, "interrupt", null))}>Pause</Button>
@@ -222,26 +275,6 @@ function OpenTurnaround({ t, navigate }: { t: TurnaroundDto; navigate: NavigateF
           {error}
         </p>
       )}
-
-      <section className="subsection" aria-labelledby="ta-exp-h">
-        <h3 id="ta-exp-h" className="subsection__title">
-          Simulated expenses for this turnaround
-        </h3>
-        {totals.length === 0 ? (
-          <p className="muted">None associated yet.</p>
-        ) : (
-          <ul className="plain-list">
-            {totals.map((x) => (
-              <li key={x.currency} className="num">
-                {formatMinor(x.amountMinor, x.currency, x.exponent)} ({x.count} item{x.count === 1 ? "" : "s"})
-              </li>
-            ))}
-          </ul>
-        )}
-        <Button variant="quiet" onClick={() => navigate("expenses")}>
-          Receipts &amp; expenses
-        </Button>
-      </section>
 
       {dialog === "link" && recordingId && (
         <ConfirmDialog
@@ -280,37 +313,34 @@ function OpenTurnaround({ t, navigate }: { t: TurnaroundDto; navigate: NavigateF
           <TextField label={dialog === "close" ? "Note (optional)" : "Reason (required)"} value={reason} onChange={setReason} maxLength={200} />
         </ConfirmDialog>
       )}
-    </section>
+    </>
   );
 }
 
-function ManualEntry({ t, onError }: { t: TurnaroundDto; onError(m: string | null): void }) {
-  const ops = useOps();
-  const [service, setService] = useState<GsxService>(t.side === "arrival" ? "deboarding" : "boarding");
-  const [status, setStatus] = useState<ManualServiceStatus>("completed");
-  const [note, setNote] = useState("");
-  const save = async () => {
-    onError(null);
-    const r = await ops.recordManual(t.id, service, status, note);
-    if (r.ok) setNote("");
-    else onError(r.message);
-  };
+/** Simulated expenses associated with this turnaround, with the way to Receipts & Expenses. */
+export function TurnaroundExpenses({ t, navigate }: { t: TurnaroundDto; navigate: NavigateFn }) {
+  const view = useOpsView();
+  const expenses = view.expenses.kind === "ready" ? view.expenses.value.filter((e) => e.turnaroundId === t.id) : [];
+  const totals = totalsByCurrency(expenses);
   return (
-    <section className="subsection" aria-labelledby="ta-manual-h">
-      <h3 id="ta-manual-h" className="subsection__title">
-        Record a service manually
+      <section className="subsection" aria-labelledby="ta-exp-h">
+      <h3 id="ta-exp-h" className="subsection__title">
+        Simulated expenses for this turnaround
       </h3>
-      <p className="muted">Manual entries are kept separate from GSX observations and time-stamped with this computer's UTC clock.</p>
-      <div className="form-row">
-        <SelectField<GsxService> label="Service" value={service} options={GSX_SERVICES.map((s) => ({ value: s, label: SERVICE_LABEL[s] }))} onChange={setService} />
-        <SelectField<ManualServiceStatus> label="Status" value={status} options={(Object.keys(MANUAL_LABEL) as ManualServiceStatus[]).map((s) => ({ value: s, label: MANUAL_LABEL[s] }))} onChange={setStatus} />
-        <TextField label="Note (required)" value={note} onChange={setNote} maxLength={500} />
-      </div>
-      <div className="button-row">
-        <Button disabled={!note.trim()} onClick={() => void save()}>
-          Record entry
-        </Button>
-      </div>
+      {totals.length === 0 ? (
+        <p className="muted">None associated yet.</p>
+      ) : (
+        <ul className="plain-list">
+          {totals.map((x) => (
+            <li key={x.currency} className="num">
+              {formatMinor(x.amountMinor, x.currency, x.exponent)} ({x.count} item{x.count === 1 ? "" : "s"})
+            </li>
+          ))}
+        </ul>
+      )}
+      <Button variant="quiet" onClick={() => navigate("expenses")}>
+        Receipts &amp; expenses
+      </Button>
     </section>
   );
 }

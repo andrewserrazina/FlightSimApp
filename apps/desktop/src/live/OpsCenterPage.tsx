@@ -1,14 +1,14 @@
 /**
  * Live Flight, operations-center preview (Ops Center L4–L5, opt-in). The header, metric tiles,
  * route card and milestone strip replace the classic Operations, Route monitoring and live-reading
- * panels; the plan baseline and every raw reading stay available under Flight details. The
- * turnaround panel is the current one until L6. The classic page stays the default.
+ * panels, and the Ground services card (L6) replaces the classic Turnaround panel; the plan baseline
+ * and every raw reading stay available under Flight details. The classic page stays the default.
  */
 import type { NavigateFn } from "../app/navigation";
 import { FlightPlanBaseline } from "../dispatch/PlanWidgets";
-import { TurnaroundPanel } from "../ops/TurnaroundPanel";
 import { TelemetryPanels } from "../pages/LiveFlightPage";
 import { ErrorBoundary } from "../ui/ErrorBoundary";
+import { GroundServicesCard } from "./GroundServicesCard";
 import { MetricTiles } from "./MetricTiles";
 import { MilestoneStrip } from "./MilestoneStrip";
 import { OpsCenterHeader } from "./OpsCenterHeader";
@@ -52,10 +52,12 @@ function OpsCenterBody({ navigate }: { navigate: NavigateFn }) {
           <ErrorBoundary label="Milestones">
             <MilestoneStrip rows={m.milestones.rows} cells={m.milestones.cells} note={m.milestones.note} interrupted={m.lc.status === "interrupted"} />
           </ErrorBoundary>
-          <TurnaroundPanel navigate={navigate} />
+          <ErrorBoundary label="Ground services">
+            <GroundServicesCard navigate={navigate} />
+          </ErrorBoundary>
         </div>
       </div>
-      <p className="ops-preview-note">Preview layout. Ground services and the remaining details move into the new design in the next steps.</p>
+      <p className="ops-preview-note">Preview layout. The classic Live Flight page remains the default.</p>
     </>
   );
 }

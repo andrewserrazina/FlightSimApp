@@ -5,7 +5,7 @@ import { useFlightHistory } from "../data/flightHistory";
 import { useOps, useOpsView } from "../ops/OpsContext";
 import type { ActionResult } from "../ops/OpsService";
 import { CATEGORY_LABEL, formatMinor, MANUAL_CURRENCIES, parseMajorToMinor, totalsByCurrency } from "../ops/money";
-import { REVIEW_LABEL } from "../ops/presentation";
+import { receiptsWaiting, REVIEW_LABEL } from "../ops/presentation";
 import type { ExpenseCategory, ExpenseDto, ReceiptDto, TurnaroundDto } from "../ops/types";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
@@ -47,7 +47,7 @@ export function ExpensesPage({ navigate }: { navigate: NavigateFn }) {
   const flights = useFlights();
   const [showDismissed, setShowDismissed] = useState(false);
   const receipts = view.receipts.kind === "ready" ? view.receipts.value : [];
-  const queue = receipts.filter((r) => !r.dismissedAtUtc && !r.activeExpenseId);
+  const queue = receiptsWaiting(receipts);
   const dismissed = receipts.filter((r) => r.dismissedAtUtc);
   const expenses = view.expenses.kind === "ready" ? view.expenses.value : [];
 

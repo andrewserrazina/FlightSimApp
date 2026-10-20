@@ -14,7 +14,7 @@ import type { PlanBasis, PlanBasisKind } from "../dispatch/planBasis";
 import type { ImportedFlightPlan } from "../dispatch/model";
 import { manualEligibility, PROVENANCE_TEXT, type ManualMilestones, type MilestoneRow } from "../dispatch/timeline";
 import { formatAge, type Freshness } from "../domain/freshness";
-import type { GsxFeedView, GsxFeedViewStatus } from "../gsx/feed";
+import { isOwnerVerified, type GsxFeedView, type GsxFeedViewStatus } from "../gsx/feed";
 import { GSX_STATE_LABEL, MANUAL_LABEL, readiness, SERVICE_LABEL } from "../ops/presentation";
 import type { ServiceEventDto, TurnaroundDto } from "../ops/types";
 import { PHASE_LABEL, SIMULATOR_SHORT, STATUS_LABEL } from "../pages/labels";
@@ -580,6 +580,8 @@ export interface GsxRow {
   /** "14:09Z" of the latest recorded entry for this service, when it matches what is shown. */
   at: string | null;
   source: "gsx" | "manual";
+  /** A GSX value that follows GSX's documentation but has not been confirmed on real MSFS + GSX yet. */
+  unverified: boolean;
 }
 
 export interface GsxSummary {
@@ -616,11 +618,11 @@ export function gsxSummary(gsx: GsxFeedView, turnaround: TurnaroundDto | null): 
     const live = gsx.status === "live" ? s.state : null;
     if (live && TONE[live]) {
       const matches = rec?.source === "gsx" && rec.gsxState === live;
-      rows.push({ service: s.service, label: SERVICE_LABEL[s.service], stateLabel: GSX_STATE_LABEL[live], tone: TONE[live]!, at: matches ? hmUtc(rec!.observedAtUtc) : null, source: "gsx" });
+      rows.push({ service: s.service, label: SERVICE_LABEL[s.service], stateLabel: GSX_STATE_LABEL[live], tone: TONE[live]!, at: matches ? hmUtc(rec!.observedAtUtc) : null, source: "gsx", unverified: !isOwnerVerified(s.service, s.raw) });
     } else if (!live && rec && (rec.source === "manual" || (rec.gsxState && TONE[rec.gsxState]))) {
       const tone = rec.source === "manual" ? manualTone(rec) : TONE[rec.gsxState!]!;
       const stateLabel = rec.source === "manual" ? `${MANUAL_LABEL[rec.manualStatus!]} (manual)` : GSX_STATE_LABEL[rec.gsxState!];
-      rows.push({ service: s.service, label: SERVICE_LABEL[s.service], stateLabel, tone, at: hmUtc(rec.observedAtUtc), source: rec.source });
+      rows.push({ service: s.service, label: SERVICE_LABEL[s.service], stateLabel, tone, at: hmUtc(rec.observedAtUtc), source: rec.source, unverified: rec.source === "gsx" && !isOwnerVerified(s.service, rec.gsxRaw ?? null) });
     } else inactive.push(SERVICE_LABEL[s.service]);
   }
   rows.sort((a, b) => ORDER.indexOf(a.tone) - ORDER.indexOf(b.tone));

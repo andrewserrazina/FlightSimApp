@@ -1,6 +1,6 @@
 import type { GsxService, GsxServiceState } from "@flightsim/contracts";
 import type { GsxFeedViewStatus } from "../gsx/feed";
-import type { ReviewState, ServiceEventDto, TurnaroundDto } from "./types";
+import type { ReceiptDto, ReviewState, ServiceEventDto, TurnaroundDto } from "./types";
 
 export const SERVICE_LABEL: Record<GsxService, string> = {
   boarding: "Boarding",
@@ -67,4 +67,9 @@ export function readiness(t: TurnaroundDto): { done: GsxService[]; pending: GsxS
     (ok ? done : pending).push(s);
   }
   return { done, pending };
+}
+
+/** Receipts still waiting for review on Receipts & Expenses: not dismissed and not yet counted. */
+export function receiptsWaiting(receipts: readonly ReceiptDto[]): ReceiptDto[] {
+  return receipts.filter((r) => !r.dismissedAtUtc && !r.activeExpenseId);
 }
