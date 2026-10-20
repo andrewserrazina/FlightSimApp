@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { NOTICE_MS } from "../src/live/OpsCenterHeader";
+import { progressReason } from "../src/live/RouteCard";
 import { App } from "../src/App";
 import { DispatchService } from "../src/dispatch/DispatchService";
 import { MemoryDispatchStore } from "../src/dispatch/store";
@@ -144,4 +146,28 @@ describe("operations-center layout (L4, opt-in)", () => {
     fireEvent.click(within(screen.getByRole("navigation", { name: "Primary" })).getByRole("button", { name: /Flight History/ }));
     expect(screen.getByText(/C:\/Users\/pilot\/AppData\/flightsim.db/)).toBeInTheDocument();
   });
+
+  it("shows a confirmation such as \"Flight started.\" briefly, then removes it", async () => {
+    const { transport } = await renderApp({ optIn: true });
+    await send(transport, helloOk(), connState("CONNECTED"), liveFrame(1));
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      fireEvent.click(within(header()).getByRole("button", { name: "Start flight" }));
+      await settle();
+      expect(screen.getByText("Flight started.")).toHaveClass("ops-toast");
+      await act(async () => {
+        vi.advanceTimersByTime(NOTICE_MS + 100);
+      });
+      expect(screen.queryByText("Flight started.")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("says once that route progress is unavailable", () => {
+    expect(progressReason("Not within the planned route corridor; route progress unavailable.")).toBe("Not within the planned route corridor.");
+    expect(progressReason("On the ground. Route progress starts after takeoff.")).toBe("On the ground. Route progress starts after takeoff.");
+    expect(progressReason("Telemetry is stale or disconnected.")).toBe("Telemetry is stale or disconnected.");
+  });
 });
+

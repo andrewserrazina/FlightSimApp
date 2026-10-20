@@ -272,8 +272,14 @@ function aircraftStateTile(t: TileInputs): MetricTile {
   };
 }
 
-function onBlockTile(t: TileInputs): MetricTile {
-  return scheduleTile("on_block", t, t.schedulePlan?.schedule.inUtc ?? null, t.manual.in?.atUtc ?? null, "On-block");
+function onBlockTile(t: TileInputs, parked: boolean): MetricTile {
+  const at = t.schedulePlan?.schedule.inUtc ?? null;
+  const actual = t.manual.in?.atUtc ?? null;
+  // Parked at the gate: a countdown to scheduled IN means little; show the scheduled time until IN is
+  // recorded, then the recorded time and its variance.
+  if (parked && !actual && at)
+    return { id: "on_block", label: "Scheduled on-block", value: hmUtc(at), unit: null, secondary: "IN not recorded yet", source: "SimBrief plan", state: "ok", note: null };
+  return scheduleTile("on_block", t, at, actual, "On-block");
 }
 
 function blockTimeTile(t: TileInputs): MetricTile {
@@ -300,9 +306,9 @@ export function selectTiles(t: TileInputs): [MetricTile, MetricTile, MetricTile]
   }
   if (g === "landing") {
     const gs = telemetryTile("ground_speed", "Ground speed", t.frame?.readings.ground_speed_kt, "kt", t);
-    return [gs, onBlockTile(t), fuelTile(t, g)];
+    return [gs, onBlockTile(t, false), fuelTile(t, g)];
   }
-  if (g === "parked") return [blockTimeTile(t), onBlockTile(t), fuelTile(t, g)];
+  if (g === "parked") return [blockTimeTile(t), onBlockTile(t, true), fuelTile(t, g)];
   return [scheduleTile("scheduled_out", t, t.schedulePlan?.schedule.outUtc ?? null, t.manual.out?.atUtc ?? null, "Off-block"), fuelTile(t, "at_gate"), aircraftStateTile(t)];
 }
 
@@ -370,7 +376,7 @@ export function flightActions(a: ActionInputs): ActionsModel {
   if (engine.end) secondary.push("end");
   if (engine.discard) secondary.push("discard");
   if (closed && primary !== "open_debrief") secondary.push("open_debrief");
-  return { primary, secondary, idleNote: primary ? null : autoResume ? "Paused · resumes on its own if data returns for the same aircraft" : open ? "No action needed" : null };
+  return { primary, secondary, idleNote: primary ? null : autoResume ? "Paused · waiting for data" : open ? "No action needed" : null };
 }
 
 // ---------------------------------------------------------------- health and attention

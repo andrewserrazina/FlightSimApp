@@ -24,15 +24,17 @@ export const REJECTION_TEXT: Record<string, string> = {
 /** Runs a recorder command and reports the outcome as one line of text (success text, or why it was refused). */
 export type RunCommand = (cmd: () => Promise<CommandResult>, success?: string) => Promise<void>;
 
-export function useCommandRunner(): { run: RunCommand; message: string | null; setMessage: (m: string | null) => void } {
-  const [message, setMessage] = useState<string | null>(null);
+/** Runs recorder commands and keeps the last outcome; `ok` tells a confirmation from a problem. */
+export function useCommandRunner(): { run: RunCommand; message: string | null; ok: boolean; setMessage: (m: string | null, ok?: boolean) => void } {
+  const [state, setState] = useState<{ message: string | null; ok: boolean }>({ message: null, ok: false });
+  const setMessage = (message: string | null, ok = false) => setState({ message, ok });
   const run: RunCommand = async (cmd, success) => {
     setMessage(null);
     const r = await cmd();
-    if (r.ok) setMessage(success ?? null);
+    if (r.ok) setMessage(success ?? null, true);
     else setMessage(r.message ?? REJECTION_TEXT[r.reason] ?? r.reason);
   };
-  return { run, message, setMessage };
+  return { run, message: state.message, ok: state.ok, setMessage };
 }
 
 export function EndFlightDialog({ run, onClose }: { run: RunCommand; onClose: () => void }) {

@@ -5,8 +5,7 @@
  */
 import type { NavigateFn } from "../app/navigation";
 import { fixLabel } from "../dispatch/navlog";
-import { PlanBasisTag } from "../dispatch/PlanBasisWidgets";
-import type { PlanBasis } from "../dispatch/planBasis";
+import { PLAN_BASIS_LABEL, PLAN_BASIS_TAG, type PlanBasis } from "../dispatch/planBasis";
 import type { LatLon } from "../route/geo";
 import { RouteMap } from "../route/RouteWidgets";
 import { Button } from "../ui/Button";
@@ -17,6 +16,9 @@ import type { LiveFlightModel } from "./useLiveFlightModel";
 type Route = LiveFlightModel["route"];
 
 const nm = (v: number) => `${Math.round(v).toLocaleString("en-US")} nm`;
+
+/** The tracker's reason without a trailing "route progress unavailable", which the heading already says. */
+export const progressReason = (reason: string) => reason.replace(/[;,.]?\s*route progress (?:is )?unavailable\.?\s*$/i, ".").replace(/\.\.$/, ".");
 
 function Endpoint({ icao, cell, align }: { icao: string; cell: MilestoneCell | undefined; align: "start" | "end" }) {
   return (
@@ -56,7 +58,15 @@ export function RouteCard({ route, basis, cells, flightOpen, navigate }: { route
   const to = plan.destination?.icao ?? "Destination unknown";
   const title = `${from} → ${to}`;
   return (
-    <Panel title="Route" className="ops-route" actions={<PlanBasisTag basis={basis} />}>
+    <Panel
+      title="Route"
+      className="ops-route"
+      actions={
+        <span className="ops-chip ops-chip--quiet" title={PLAN_BASIS_LABEL[basis.kind]}>
+          {PLAN_BASIS_TAG[basis.kind]}
+        </span>
+      }
+    >
       <div className="ops-route__ends">
         <Endpoint icao={from} cell={off} align="start" />
         <div className="ops-route__bar" role="progressbar" aria-label="Planned route flown" aria-valuemin={0} aria-valuemax={100} aria-valuenow={fraction === null ? undefined : Math.round(fraction * 100)}>
@@ -97,7 +107,7 @@ export function RouteCard({ route, basis, cells, flightOpen, navigate }: { route
         </dl>
       ) : (
         <p className="ops-route__status" role="status">
-          <strong>{progress.status === "outside_corridor" ? "Outside the planned route corridor." : "Route progress unavailable."}</strong> {progress.reason}
+          <strong>{progress.status === "outside_corridor" ? "Outside the planned route corridor." : "Route progress unavailable."}</strong> {progressReason(progress.reason)}
         </p>
       )}
 
@@ -108,7 +118,8 @@ export function RouteCard({ route, basis, cells, flightOpen, navigate }: { route
             <strong>{eta.atUtc.slice(11, 16)}Z</strong> <span className="muted">at current ground speed · in {eta.minutes} min</span>
           </>
         ) : (
-          <span className="muted">{progress.status !== "tracking" && eta.reason === progress.reason ? "Not available while route progress is unavailable" : eta.reason}</span>
+          // While the route isn't tracked the status line above already says why; don't repeat it.
+          <span className="muted">{plan.navlog && progress.status !== "tracking" ? "Not shown" : eta.reason}</span>
         )}
         {on?.kind === "scheduled" && on.time && <span className="muted"> · scheduled landing {on.time}</span>}
       </p>

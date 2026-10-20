@@ -376,6 +376,7 @@ details > summary { cursor: pointer; color: var(--text-muted); font-size: var(--
 .ops-chip--ok { color: var(--status-ok); border-color: color-mix(in srgb, var(--status-ok) 45%, transparent); }
 .ops-chip--warn { color: var(--status-warn); border-color: color-mix(in srgb, var(--status-warn) 45%, transparent); }
 .ops-chip--alert { color: var(--status-alert); border-color: color-mix(in srgb, var(--status-alert) 55%, transparent); }
+.ops-chip--quiet { color: var(--text-muted); border-color: var(--border-subtle); font-weight: 600; }
 .ops-chip--info { color: var(--status-info); border-color: color-mix(in srgb, var(--status-info) 45%, transparent); }
 .ops-more { position: relative; }
 .ops-more .button { min-height: 46px; }
@@ -400,6 +401,8 @@ details > summary { cursor: pointer; color: var(--text-muted); font-size: var(--
 .ops-attention__item--action { background: var(--status-alert-surface); border: 1px solid color-mix(in srgb, var(--status-alert) 60%, transparent); color: #ffd9d5; }
 .ops-attention__item .button-row { margin: 0; }
 .ops-message { margin: 0; color: var(--text-secondary); font-size: var(--text-sm); }
+/* Transient confirmation: shown briefly over the page, never part of the layout. */
+.ops-toast { position: fixed; top: calc(var(--topbar-height) + var(--space-3)); right: var(--space-5); z-index: 30; margin: 0; max-width: 360px; padding: var(--space-2) var(--space-4); border: 1px solid var(--border-strong); border-left: 3px solid var(--status-ok); border-radius: var(--radius-md); background: var(--surface-2); color: var(--text-primary); font-size: var(--text-sm); box-shadow: 0 10px 24px rgba(0, 0, 0, .35); }
 .ops-preview-note { margin: 0; color: var(--text-muted); font-size: var(--text-xs); }
 .ops-center { container-type: inline-size; }
 .ops-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); align-items: start; }
@@ -452,6 +455,14 @@ details > summary { cursor: pointer; color: var(--text-muted); font-size: var(--
 @container (max-width: 1199px) {
   .ops-main, .ops-side { display: contents; }
   .ops-details { order: 1; }
+}
+/* Narrower windows: a tighter identity header. */
+@container (max-width: 1000px) {
+  .ops-id { padding: var(--space-3) var(--space-4); gap: var(--space-2) var(--space-5); }
+  .ops-id__flight { font-size: 1.6rem; }
+  .ops-id__route { font-size: 1.1rem; }
+  .ops-id__status { margin-top: var(--space-1); }
+  .ops-health { padding-top: var(--space-2); }
 }
 @container (max-width: 760px) {
   .ops-id { grid-template-columns: minmax(0, 1fr); grid-template-areas: "identity" "actions" "health"; }

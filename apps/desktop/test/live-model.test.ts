@@ -191,7 +191,7 @@ describe("flight actions", () => {
     // Interrupted before takeoff: the existing rules still allow a manual OUT, so it stays reachable.
     expect(acts({ lc: lc({ status: "interrupted", flightId: "f-1", phase: "INTERRUPTED", needsUserDecision: true }) })).toMatchObject({ primary: "resume", secondary: ["record_out", "end", "discard"] });
     // Automatic interruption: recording resumes on its own; Resume stays available but is not the primary.
-    expect(acts({ lc: lc({ status: "interrupted", flightId: "f-1", phase: "INTERRUPTED", takeoffAt: "x" }) })).toMatchObject({ primary: null, secondary: ["resume", "end", "discard"], idleNote: "Paused · resumes on its own if data returns for the same aircraft" });
+    expect(acts({ lc: lc({ status: "interrupted", flightId: "f-1", phase: "INTERRUPTED", takeoffAt: "x" }) })).toMatchObject({ primary: null, secondary: ["resume", "end", "discard"], idleNote: "Paused · waiting for data" });
     expect(acts({ lc: lc({ status: "completed", flightId: "f-1" }) })).toMatchObject({ primary: "start", secondary: ["open_debrief"] });
     expect(acts({ lc: lc({ status: "completed", flightId: "f-1" }), telemetryLive: false })).toMatchObject({ primary: "connect", secondary: ["open_debrief"] });
   });
@@ -464,7 +464,7 @@ describe("interruption messages follow the recorder's real recovery rules", () =
     expect(a.detail).toMatch(/resumes on its own when data returns for the same aircraft/);
     expect(a.detail).toMatch(/you'll be asked to resume/);
     expect(h({ lc: open() }).items.find((i) => i.id === "recording")).toMatchObject({ level: "warn", text: "Recording paused" });
-    expect(acts({ lc: open({ takeoffAt: "x" }) })).toMatchObject({ primary: null, idleNote: "Paused · resumes on its own if data returns for the same aircraft" });
+    expect(acts({ lc: open({ takeoffAt: "x" }) })).toMatchObject({ primary: null, idleNote: "Paused · waiting for data" });
   });
 
   it("a mismatch after data returns asks for Resume and says why; it never claims to resume automatically", () => {
@@ -481,5 +481,19 @@ describe("interruption messages follow the recorder's real recovery rules", () =
     expect(a).toMatchObject({ id: "stale", level: "warn" });
     expect(a.detail).toMatch(new RegExp(`Recording continues; if no data arrives for ${INTERRUPT_AFTER_S} s, the flight is marked interrupted`));
     expect(INTERRUPT_AFTER_S).toBe(30);
+  });
+});
+
+describe("L5 polish", () => {
+  it("parked: shows scheduled IN until IN is recorded, then the recorded time and its variance (never a countdown)", () => {
+    const parked = active("TAXI_IN", { arrived: true, takeoffAt: "2026-10-15T14:52:00Z", landingAt: "2026-10-15T17:08:00Z" });
+    const before = selectTiles(tiles({ lc: parked, nowMs: Date.parse("2026-10-15T17:12:00Z") }))[1];
+    expect(before).toMatchObject({ id: "on_block", label: "Scheduled on-block", value: "17:18Z", secondary: "IN not recorded yet" });
+    expect(before.label).not.toMatch(/ in$/);
+    const after = selectTiles(tiles({ lc: parked, manual: manual("2026-10-15T14:38:00Z", "2026-10-15T17:25:00Z") }))[1];
+    expect(after).toMatchObject({ label: "On-block recorded", value: "17:25Z", secondary: "+7 min against schedule 17:18Z" });
+    // Taxiing in, the countdown to scheduled IN is still useful.
+    const taxiIn = selectTiles(tiles({ lc: active("TAXI_IN", { takeoffAt: "2026-10-15T14:52:00Z", landingAt: "2026-10-15T17:08:00Z" }), nowMs: Date.parse("2026-10-15T17:12:00Z") }))[1];
+    expect(taxiIn).toMatchObject({ label: "Scheduled on-block in", value: "6" });
   });
 });

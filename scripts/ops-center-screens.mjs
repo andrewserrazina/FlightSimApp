@@ -189,6 +189,7 @@ async function stageL5() {
     let p = await open(width, { prefs: OPS, height });
     await startFlight(p);
     await capture(p, `predeparture-${width}`, screen);
+    await p.locator(".ops-toast").waitFor({ state: "detached", timeout: 10_000 }); // "Flight started." is transient
     await replay(p, 3, cruiseAt);
     await capture(p, `cruise-${width}`, screen);
     if (width === 1280) await shot(p, "cruise-1280-full-page");
@@ -217,6 +218,7 @@ async function stageL5() {
     // so the route card can be seen tracking with an ETA. Not mixed into session 1.
     p = await open(width, { prefs: OPS, height });
     await startFlight(p);
+    await p.locator(".ops-toast").waitFor({ state: "detached", timeout: 10_000 });
     await replay(p, 3, cruiseAt);
     const base = frames[cruiseAt];
     for (let i = 0; i < 12; i++) {

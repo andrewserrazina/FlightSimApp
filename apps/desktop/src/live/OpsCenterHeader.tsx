@@ -37,13 +37,22 @@ const ATTENTION_LABEL: Record<AttentionAction, string> = {
   resume_turnaround: "Resume turnaround",
 };
 
+/** How long a confirmation stays on screen. */
+export const NOTICE_MS = 6000;
+
 type Dialog = null | "end" | "discard" | "out" | "in" | "move_aside";
 
 export function OpsCenterHeader({ model: m, navigate }: { model: LiveFlightModel; navigate: NavigateFn }) {
   const recorder = useRecorder();
   const ops = useOps();
   const dispatch = useDispatch();
-  const { run, message, setMessage } = useCommandRunner();
+  const { run, message, ok, setMessage } = useCommandRunner();
+  // Confirmations ("Flight started.") are transient; problems stay until the next action.
+  useEffect(() => {
+    if (!message || !ok) return;
+    const t = setTimeout(() => setMessage(null), NOTICE_MS);
+    return () => clearTimeout(t);
+  }, [message, ok]);
   const [dialog, setDialog] = useState<Dialog>(null);
 
   const perform = (a: FlightActionId) => {
@@ -69,12 +78,12 @@ export function OpsCenterHeader({ model: m, navigate }: { model: LiveFlightModel
       case "attach_release":
         if (m.flightId) {
           const label = m.basis?.release ?? "release";
-          void dispatch.attachRelease(m.flightId).then((r) => setMessage(r.ok ? `Release ${label} attached to this flight.` : `Could not attach the release: ${r.message}`));
+          void dispatch.attachRelease(m.flightId).then((r) => setMessage(r.ok ? `Release ${label} attached to this flight.` : `Could not attach the release: ${r.message}`, r.ok));
         }
         return;
       case "attach_plan":
         if (m.flightId)
-          void dispatch.associate(m.flightId).then((r) => setMessage(!r.ok ? `Could not attach the plan: ${r.message}` : r.outcome === "created" ? "Plan attached to this flight." : "This flight already has a plan attached; it was left unchanged."));
+          void dispatch.associate(m.flightId).then((r) => setMessage(!r.ok ? `Could not attach the plan: ${r.message}` : r.outcome === "created" ? "Plan attached to this flight." : "This flight already has a plan attached; it was left unchanged.", r.ok));
         return;
     }
   };
@@ -115,7 +124,7 @@ export function OpsCenterHeader({ model: m, navigate }: { model: LiveFlightModel
         <HealthSummary items={m.health.items} />
       </section>
       {message && (
-        <p className="ops-message" role="status">
+        <p className={ok ? "ops-toast" : "ops-message"} role="status">
           {message}
         </p>
       )}
@@ -124,7 +133,7 @@ export function OpsCenterHeader({ model: m, navigate }: { model: LiveFlightModel
       {dialog === "end" && <EndFlightDialog run={run} onClose={() => setDialog(null)} />}
       {dialog === "discard" && <DiscardFlightDialog run={run} onClose={() => setDialog(null)} />}
       {dialog === "move_aside" && <MoveAsideDialog onClose={() => setDialog(null)} />}
-      {(dialog === "out" || dialog === "in") && m.flightId && <RecordMilestoneDialog which={dialog} flightId={m.flightId} onClose={() => setDialog(null)} onResult={(r) => setMessage(r.text)} />}
+      {(dialog === "out" || dialog === "in") && m.flightId && <RecordMilestoneDialog which={dialog} flightId={m.flightId} onClose={() => setDialog(null)} onResult={(r) => setMessage(r.text, r.ok)} />}
     </div>
   );
 }
