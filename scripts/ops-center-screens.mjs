@@ -17,7 +17,7 @@ const desktop = join(repo, "apps/desktop");
 const stage = process.argv[2];
 const outArg = process.argv.indexOf("--out");
 const out = outArg > 0 ? process.argv[outArg + 1] : join(repo, "docs/screenshots/ops-center", stage ?? "");
-const STAGES = { l3: stageL3, l4: stageL4, l5: stageL5 };
+const STAGES = { l3: stageL3, l4: stageL4, l5: stageL5, l6: stageL6 };
 if (!STAGES[stage]) {
   console.error(`usage: node scripts/ops-center-screens.mjs <${Object.keys(STAGES).join("|")}> [--out dir]`);
   process.exit(2);
@@ -40,14 +40,15 @@ const errors = [];
 const written = [];
 
 /** Open the harness at a width, connected to the recorded mock flight's first frames. */
-async function open(width, { page = "live", height = 1000, prefs = null } = {}) {
+async function open(width, { page = "live", height = 1000, prefs = null, adapter = "mock" } = {}) {
   const p = await browser.newPage({ viewport: { width, height }, reducedMotion: "reduce" });
   p.on("pageerror", (e) => errors.push(e.message));
   await p.clock.setFixedTime(new Date(frames[0].data.observed_at));
   const q = new URLSearchParams({ page, ...(prefs ? { prefs: JSON.stringify(prefs) } : {}) });
   await p.goto(`${BASE}/test/visual/ops.html?${q}`, { waitUntil: "networkidle" });
   const session = frames[0].data.session_id;
-  await emit(p, [env("hello.ok", { bridge_version: "0.1.0", session_id: session, adapter: "mock" }), ...lines.filter((l) => l.type === "connection.state").slice(0, 2), ...frames.slice(0, 3)]);
+  const conns = lines.filter((l) => l.type === "connection.state").slice(0, 2).map((l) => (adapter === "mock" ? l : { ...l, data: { ...l.data, simulator: adapter } }));
+  await emit(p, [env("hello.ok", { bridge_version: "0.1.0", session_id: session, adapter }), ...conns, ...frames.slice(0, 3)]);
   return p;
 }
 const emit = (p, payloads) => p.evaluate((ps) => ps.forEach((x) => window.__harness.transport.emit(x)), payloads);
@@ -251,6 +252,84 @@ async function stageL5() {
     await replay(p, real, real + 4);
     await p.getByText("! Resume needed").waitFor({ timeout: 10_000 });
     await capture(p, `resume-needed-${width}`, screen);
+    await p.close();
+  }
+}
+
+/**
+ * L6: the Ground services card in place of the classic Turnaround panel. GSX data is the bridge's
+ * gsx.state contract fixture (fixtures/contracts/v1/valid/gsx-state.live.json) with its service states
+ * set per scene, delivered through the real bridge → GSX sync → turnaround pipeline. The bridge announces
+ * an MSFS adapter so GSX is read (the mock adapter has none); the flight underneath is still the recorded
+ * mock demo flight. Review captures of scripted fixture data, not a real MSFS + GSX session.
+ */
+async function stageL6() {
+  const gsxFixture = JSON.parse(await readFile(join(repo, "fixtures/contracts/v1/valid/gsx-state.live.json"), "utf8"));
+  const RAW = { not_available: 2, can_be_called: 1, requested: 4, being_performed: 5, completed: 6 };
+  const DETAIL = { not_available: "not available", can_be_called: "can be called", requested: "requested", being_performed: "being performed", completed: "completed" };
+  const gsx = async (p, states) => {
+    const at = await p.evaluate(() => new Date().toISOString());
+    const data = structuredClone(gsxFixture.data);
+    data.session_id = frames[0].data.session_id;
+    data.observed_at = at;
+    data.last_data_at = at;
+    data.services = data.services.map((x) => {
+      const st = states[x.service] ?? "not_available";
+      return { ...x, raw: RAW[st], state: st, detail: `${RAW[st]} = ${DETAIL[st]}` };
+    });
+    await emit(p, [env("gsx.state", data)]);
+    await p.waitForTimeout(600);
+  };
+  const ofp = await screenshotOfp();
+  const capture = async (p, name, opts) => {
+    await assertNothingCutOff(p, name);
+    await shot(p, name, opts);
+  };
+  const card = (p) => p.getByRole("region", { name: "Ground services" });
+  for (const [width, height] of [[1100, 900], [1280, 1024], [1920, 1080]]) {
+    const p = await open(width, { prefs: OPS, height, adapter: "msfs2020" });
+    await p.evaluate(async (o) => {
+      window.__ofpOverride = o;
+      const d = window.__harness.dispatch;
+      await d.importLatest("username", "test_pilot");
+      await d.release({ warnings: [], unavailableInformational: [] });
+    }, ofp);
+    // Before the flight: a departure turnaround at the plan's origin, with GSX servicing under way.
+    await card(p).getByRole("button", { name: "Start a turnaround" }).click();
+    await card(p).getByRole("button", { name: "Start turnaround" }).click();
+    await gsx(p, { refueling: "completed", catering: "completed" });
+    await gsx(p, { refueling: "completed", catering: "completed", boarding: "being_performed", pushback: "can_be_called" });
+    await p.getByRole("region", { name: "Flight" }).getByRole("button", { name: "Start flight" }).click();
+    await p.locator(".ops-toast").waitFor({ state: "detached", timeout: 10_000 });
+    await gsx(p, { refueling: "completed", catering: "completed", boarding: "being_performed", pushback: "can_be_called" });
+    await capture(p, `ground-departure-${width}`, { full: true });
+    if (width === 1280) {
+      await card(p).getByRole("button", { name: "Manage turnaround" }).click();
+      await card(p).getByText(/^Service history/).click();
+      await capture(p, "ground-manage-1280", { full: true });
+      await card(p).getByRole("button", { name: "Pause" }).click();
+      await card(p).getByText(/Turnaround paused\./).waitFor();
+      await capture(p, "ground-paused-1280", { full: true });
+      await card(p).getByRole("button", { name: "Resume" }).click();
+      await card(p).getByRole("button", { name: "Hide turnaround controls" }).click();
+    }
+    // Departure turnaround closed; the flight is flown; an arrival turnaround at the gate with deboarding.
+    await gsx(p, { refueling: "completed", catering: "completed", boarding: "completed", pushback: "completed" });
+    await card(p).getByRole("button", { name: /Manage turnaround/ }).click();
+    await card(p).getByRole("button", { name: "Close turnaround" }).click();
+    await p.getByRole("dialog", { name: "Close turnaround?" }).getByRole("button", { name: "Close" }).click();
+    await replay(p, 3, frames.length - 1);
+    // The desktop store links a turnaround opened during recording to that flight; the in-memory store
+    // used here needs the recording flight set the same way.
+    await p.evaluate(() => {
+      const h = window.__harness;
+      h.opsStore.recordingFlightId = [...h.store.flights.keys()][0] ?? null;
+    });
+    await card(p).getByRole("button", { name: "Start a turnaround" }).click();
+    await card(p).getByRole("button", { name: "Start turnaround" }).click();
+    await gsx(p, { deboarding: "requested" });
+    await gsx(p, { deboarding: "being_performed" });
+    await capture(p, `ground-arrival-${width}`, { full: true });
     await p.close();
   }
 }
