@@ -28,6 +28,8 @@ keyring = { version = "3", features = ["windows-native", "apple-native", "linux-
 # Both are already in the lock file through Tauri; no new third-party code.
 dom_query = "0.28"
 sha2 = "0.10"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 
 [profile.release]
 strip = true
