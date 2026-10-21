@@ -10,7 +10,10 @@ pub fn run() {
             use tauri::Manager;
             let path = store::commands::database_path(app.handle());
             let log_dir = path.parent().map(|d| d.join("logs"));
-            app.manage(store::actor::StoreHandle::spawn(path));
+            let store_handle = store::actor::StoreHandle::spawn(path);
+            // S2-06: automatic GSX receipt import on its own thread; never on the recording path.
+            app.manage(receipts::watch_service::start(app.handle().clone(), store_handle.clone()));
+            app.manage(store_handle);
             bridge::start(app.handle().clone(), log_dir.and_then(|d| bridge_log::prepare(&d)));
             Ok(())
         })
@@ -59,6 +62,9 @@ pub fn run() {
             store::commands::turnaround_link_flight,
             store::commands::receipts_scan,
             store::commands::receipts_list,
+            store::commands::receipts_watch_status,
+            store::commands::receipts_watch_set_enabled,
+            store::commands::receipt_files_list,
             store::commands::receipt_confirm_currency,
             store::commands::receipt_associate,
             store::commands::receipt_dismiss,

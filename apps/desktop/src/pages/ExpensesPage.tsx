@@ -6,7 +6,7 @@ import { useOps, useOpsView } from "../ops/OpsContext";
 import type { ActionResult } from "../ops/OpsService";
 import { CATEGORY_LABEL, formatMinor, MANUAL_CURRENCIES, parseMajorToMinor, totalsByCurrency } from "../ops/money";
 import { REVIEW_LABEL } from "../ops/presentation";
-import type { ExpenseCategory, ExpenseDto, ReceiptDto, TurnaroundDto } from "../ops/types";
+import type { ExpenseCategory, ExpenseDto, ReceiptDto, TurnaroundDto, WatcherHealthDto } from "../ops/types";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { CheckboxField, SelectField, TextField } from "../ui/Fields";
@@ -67,6 +67,7 @@ export function ExpensesPage({ navigate }: { navigate: NavigateFn }) {
           }
         >
           {view.receipts.kind === "unavailable" && <p className="unavailable-text">{view.receipts.message}</p>}
+          <WatchStatus />
           <ScanReport />
           <h3 className="subsection__title">Review queue</h3>
           {queue.length === 0 ? <p className="muted">No receipts waiting. Receipts that are counted appear under Expenses.</p> : queue.map((r) => <ReceiptCard key={r.id} receipt={r} flights={flights} turnarounds={view.recent} expenses={expenses} />)}
@@ -103,6 +104,7 @@ function ScanReport() {
       {r.rootStatus === "found" && (
         <p>
           {r.imported} new · {r.duplicates} already imported · {r.possibleRevisions} possible revision{r.possibleRevisions === 1 ? "" : "s"} · {r.notVerifiable} need attention
+          {r.pending ? ` · ${r.pending} still being written (imported automatically once complete)` : ""}
           {r.truncated ? " · stopped at the file limit; scan again to continue" : ""}
         </p>
       )}
@@ -119,6 +121,71 @@ function ScanReport() {
         </details>
       )}
     </div>
+  );
+}
+
+const WATCH_LABEL: Record<WatcherHealthDto["state"], { label: string; tone: "ok" | "warn" | "neutral" | "info" | "alert" }> = {
+  starting: { label: "Starting", tone: "info" },
+  watching: { label: "Watching", tone: "ok" },
+  periodic_only: { label: "Watching (periodic scans)", tone: "ok" },
+  folder_missing: { label: "Folder not found", tone: "warn" },
+  access_denied: { label: "Access denied", tone: "alert" },
+  unavailable: { label: "Folder unavailable", tone: "warn" },
+  disabled: { label: "Off", tone: "neutral" },
+  unsupported: { label: "Not available here", tone: "neutral" },
+  stopped: { label: "Stopped", tone: "alert" },
+};
+
+/** Automatic import status: health, last successful scan, files still settling, last problem. */
+function WatchStatus() {
+  const { watch } = useOpsView();
+  const ops = useOps();
+  const { error, run } = useAction();
+  if (!watch) return null;
+  const s = WATCH_LABEL[watch.state];
+  return (
+    <section className="watch-status" aria-label="Automatic receipt import">
+      <div className="watch-status__row">
+        <span className="field__label">Automatic import</span>
+        <Tag tone={s.tone}>{s.label}</Tag>
+        <span className="muted">
+          {watch.lastSuccessfulScanAtUtc ? `Last successful scan ${utcDateTime(watch.lastSuccessfulScanAtUtc)}` : "No successful scan yet"}
+          {watch.lastScanReason ? ` (${watch.lastScanReason})` : ""}
+          {watch.lastImportAtUtc ? ` · last import ${utcDateTime(watch.lastImportAtUtc)}` : ""}
+        </span>
+      </div>
+      {watch.detail && <p className="muted">{watch.detail}</p>}
+      {(watch.pending > 0 || watch.unstable > 0 || watch.failed > 0 || watch.partialScan) && (
+        <p className="muted">
+          {[
+            watch.pending > 0 && `${watch.pending} file(s) being written, waiting until complete`,
+            watch.unstable > 0 && `${watch.unstable} file(s) kept changing; retried at the next scan`,
+            watch.failed > 0 && `${watch.failed} file(s) could not be read; retried at the next scan`,
+            watch.partialScan && "the last scan could not read every folder",
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      )}
+      {watch.lastError && (
+        <p className="form-error" role="status">
+          Last problem{watch.lastErrorAtUtc ? ` (${utcDateTime(watch.lastErrorAtUtc)})` : ""}: {watch.lastError}
+        </p>
+      )}
+      {watch.state !== "unsupported" && (
+        <CheckboxField
+          label="Import new GSX receipts automatically"
+          description="Reads GSX's receipt folder without changing it. New receipts appear in the review queue; nothing is matched, counted or confirmed automatically."
+          checked={watch.enabled}
+          onChange={(v) => void run(ops.setWatchEnabled(v))}
+        />
+      )}
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+    </section>
   );
 }
 

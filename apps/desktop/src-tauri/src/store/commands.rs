@@ -57,8 +57,21 @@ pub async fn flight_open(store: State<'_, StoreHandle>) -> Result<Option<OpenFli
 }
 
 #[tauri::command]
-pub async fn flight_commit(store: State<'_, StoreHandle>, batch: CommitBatch) -> Result<(), StoreError> {
-    store.call(move |slot| slot.get()?.commit(&batch)).await
+pub async fn flight_commit(store: State<'_, StoreHandle>, app: tauri::AppHandle, batch: CommitBatch) -> Result<(), StoreError> {
+    let closed = batch.flight.ended_at_utc.is_some();
+    store.call(move |slot| slot.get()?.commit(&batch)).await?;
+    if closed {
+        // GSX may write invoices at takeoff or on quit; look for them soon. Never blocks the recorder.
+        nudge_watcher(&app, "flight closed");
+    }
+    Ok(())
+}
+
+fn nudge_watcher(app: &tauri::AppHandle, why: &'static str) {
+    use tauri::Manager;
+    if let Some(w) = app.try_state::<WatcherHandle>() {
+        w.nudge(why);
+    }
 }
 
 #[tauri::command]
@@ -225,6 +238,7 @@ pub async fn flight_milestones(store: State<'_, StoreHandle>, flight_id: String)
 use super::ledger::{ExpenseOut, ImportReport, ManualExpense, ReceiptOut, RevisionResolution};
 use super::turnaround::{TurnaroundOpen, TurnaroundOut};
 use crate::receipts::scan::{self, RootStatus, ScanResult};
+use crate::receipts::watch::{root_status_of, Msg, WatcherHandle, WatcherHealth};
 
 #[tauri::command]
 pub async fn turnaround_open(store: State<'_, StoreHandle>, request: TurnaroundOpen) -> Result<TurnaroundOut, StoreError> {
@@ -268,8 +282,13 @@ pub async fn turnaround_record_manual(store: State<'_, StoreHandle>, id: String,
 }
 
 #[tauri::command]
-pub async fn turnaround_set_status(store: State<'_, StoreHandle>, id: String, action: String, reason: Option<String>) -> Result<TurnaroundOut, StoreError> {
-    store.call(move |slot| slot.get()?.turnaround_set_status(&id, &action, reason.as_deref())).await
+pub async fn turnaround_set_status(store: State<'_, StoreHandle>, app: tauri::AppHandle, id: String, action: String, reason: Option<String>) -> Result<TurnaroundOut, StoreError> {
+    let finishing = action == "close" || action == "abandon";
+    let out = store.call(move |slot| slot.get()?.turnaround_set_status(&id, &action, reason.as_deref())).await?;
+    if finishing {
+        nudge_watcher(&app, "turnaround closed");
+    }
+    Ok(out)
 }
 
 #[tauri::command]
@@ -282,10 +301,21 @@ pub async fn turnaround_link_flight(store: State<'_, StoreHandle>, id: String, f
     store.call(move |slot| slot.get()?.turnaround_link_flight(&id, &flight_id)).await
 }
 
-/// Scan GSX's own Receipts folder (fixed location, read-only; no path is accepted from the UI) and import
-/// new content.
+/// Manual "Scan GSX receipts". With the watcher running, the scan goes through its single thread (so it
+/// can never race an automatic import) and waits briefly for files that are still being written.
+/// Without it, the S2-05 direct scan runs. Either way the folder is only read.
 #[tauri::command]
-pub async fn receipts_scan(store: State<'_, StoreHandle>) -> Result<ImportReport, StoreError> {
+pub async fn receipts_scan(store: State<'_, StoreHandle>, watcher: State<'_, WatcherHandle>) -> Result<ImportReport, StoreError> {
+    let (reply, rx) = std::sync::mpsc::channel();
+    if watcher.send(Msg::ManualScan(reply)) {
+        let got = tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(std::time::Duration::from_secs(60)))
+            .await
+            .map_err(|e| StoreError::invalid(format!("The receipts scan failed: {e}")))?;
+        if let Ok((outcome, r)) = got {
+            let (root_status, detail) = root_status_of(&outcome);
+            return Ok(ImportReport { root_status, detail, imported: r.imported, duplicates: r.duplicates, possible_revisions: r.possible_revisions, not_verifiable: r.not_verifiable, skipped: vec![], truncated: false, pending: r.pending });
+        }
+    }
     let result = tauri::async_runtime::spawn_blocking(|| match scan::default_root() {
         Some(root) => scan::scan(&root),
         None => ScanResult { root_status: RootStatus::NotFound, detail: Some("The GSX Receipts folder is only available on Windows.".into()), files: vec![], skipped: vec![], truncated: false },
@@ -293,6 +323,27 @@ pub async fn receipts_scan(store: State<'_, StoreHandle>) -> Result<ImportReport
     .await
     .map_err(|e| StoreError::invalid(format!("The receipts scan failed: {e}")))?;
     store.call(move |slot| slot.get()?.receipts_import(result)).await
+}
+
+/// Health of the automatic receipt watcher (state, last successful scan, pending files, last error).
+#[tauri::command]
+pub fn receipts_watch_status(watcher: State<'_, WatcherHandle>) -> WatcherHealth {
+    watcher.health()
+}
+
+/// Turn automatic import on or off (persisted). Manual scans keep working either way.
+#[tauri::command]
+pub fn receipts_watch_set_enabled(watcher: State<'_, WatcherHandle>, enabled: bool) -> WatcherHealth {
+    watcher.send(Msg::SetEnabled(enabled));
+    let mut h = watcher.health();
+    h.enabled = enabled;
+    h
+}
+
+/// Recent receipt files seen by the watcher (bookkeeping, newest first).
+#[tauri::command]
+pub async fn receipt_files_list(store: State<'_, StoreHandle>, limit: Option<i64>) -> Result<Vec<super::watch::ReceiptFileOut>, StoreError> {
+    store.call(move |slot| slot.get()?.receipt_files_list(limit.unwrap_or(200))).await
 }
 
 #[tauri::command]

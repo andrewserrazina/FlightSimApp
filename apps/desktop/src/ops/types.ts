@@ -128,6 +128,29 @@ export interface ImportReportDto {
   notVerifiable: number;
   skipped: SkippedFileDto[];
   truncated: boolean;
+  /** Files still being written when the scan returned; the watcher imports them once stable. */
+  pending?: number;
+}
+
+/** Health of the automatic GSX receipt watcher (S2-06). Mirrors src-tauri/src/receipts/watch.rs. */
+export interface WatcherHealthDto {
+  enabled: boolean;
+  state: "starting" | "watching" | "periodic_only" | "folder_missing" | "access_denied" | "unavailable" | "disabled" | "unsupported" | "stopped";
+  detail: string | null;
+  notifications: boolean;
+  lastScanAtUtc: string | null;
+  lastScanReason: string | null;
+  lastSuccessfulScanAtUtc: string | null;
+  lastImportAtUtc: string | null;
+  lastError: string | null;
+  lastErrorAtUtc: string | null;
+  pending: number;
+  unstable: number;
+  failed: number;
+  vanished: number;
+  importedSinceStart: number;
+  duplicatesSinceStart: number;
+  partialScan: boolean;
 }
 
 export type ExpenseCategory = "fuel" | "catering" | "handling" | "passenger_transport" | "deicing" | "other";
