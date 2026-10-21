@@ -1,42 +1,61 @@
 /**
- * Live Flight, operations-center preview (Ops Center L4, opt-in). The header is the new design; the
- * panels below are the current ones until L5–L7 replace them with tiles, the route card, the
- * milestone strip and the ground-services card. The classic page stays the default.
+ * Live Flight, operations-center preview (Ops Center L4–L5, opt-in). The header, metric tiles,
+ * route card and milestone strip replace the classic Operations, Route monitoring and live-reading
+ * panels; the plan baseline and every raw reading stay available under Flight details. The
+ * turnaround panel is the current one until L6. The classic page stays the default.
  */
 import type { NavigateFn } from "../app/navigation";
-import { useBridgeState } from "../bridge/BridgeContext";
 import { FlightPlanBaseline } from "../dispatch/PlanWidgets";
-import { LiveOperations } from "../dispatch/OperationsWidgets";
 import { TurnaroundPanel } from "../ops/TurnaroundPanel";
 import { TelemetryPanels } from "../pages/LiveFlightPage";
-import { useRecorderView } from "../recording/RecorderContext";
-import { RouteMonitor } from "../route/RouteWidgets";
-import { Button } from "../ui/Button";
-import { EmptyState } from "../ui/EmptyState";
 import { ErrorBoundary } from "../ui/ErrorBoundary";
+import { MetricTiles } from "./MetricTiles";
+import { MilestoneStrip } from "./MilestoneStrip";
 import { OpsCenterHeader } from "./OpsCenterHeader";
+import { RouteCard } from "./RouteCard";
+import { useLiveFlightModel } from "./useLiveFlightModel";
 
 export function OpsCenterPage({ navigate }: { navigate: NavigateFn }) {
-  const frame = useBridgeState().lastFrame;
-  const rec = useRecorderView().lifecycle;
-  const flightOpen = rec.status === "active" || rec.status === "interrupted";
   return (
     <div className="page ops-center">
-      <ErrorBoundary label="Flight header">
-        <OpsCenterHeader navigate={navigate} />
+      <ErrorBoundary label="Live Flight">
+        <OpsCenterBody navigate={navigate} />
       </ErrorBoundary>
-      <p className="ops-preview-note">Preview layout. Live values, route, milestones and ground services move into the new design in the next steps; the panels below are the current ones.</p>
-      <TurnaroundPanel navigate={navigate} />
-      <LiveOperations navigate={navigate} />
-      <FlightPlanBaseline flightId={flightOpen ? rec.flightId : null} navigate={navigate} />
-      <RouteMonitor navigate={navigate} />
-      {frame ? (
-        <TelemetryPanels showTiming={false} />
-      ) : (
-        <EmptyState title="Waiting for Microsoft Flight Simulator" action={<Button onClick={() => navigate("welcome")}>Go to connection</Button>}>
-          <p>Live values appear here once the simulator sends data. Nothing is shown until then.</p>
-        </EmptyState>
-      )}
     </div>
+  );
+}
+
+function OpsCenterBody({ navigate }: { navigate: NavigateFn }) {
+  const m = useLiveFlightModel();
+  return (
+    <>
+      <ErrorBoundary label="Flight header">
+        <OpsCenterHeader model={m} navigate={navigate} />
+      </ErrorBoundary>
+      <div className="ops-grid">
+        <div className="ops-main">
+          <ErrorBoundary label="Key flight values">
+            <MetricTiles tiles={m.tiles} />
+          </ErrorBoundary>
+          <ErrorBoundary label="Route">
+            <RouteCard route={m.route} basis={m.basis} cells={m.milestones.cells} flightOpen={m.flightId !== null} navigate={navigate} />
+          </ErrorBoundary>
+          <details className="ops-details">
+            <summary>Flight details: plan baseline and all live readings</summary>
+            <div className="ops-details__body">
+              <FlightPlanBaseline flightId={m.flightId} navigate={navigate} />
+              <TelemetryPanels showTiming={false} />
+            </div>
+          </details>
+        </div>
+        <div className="ops-side">
+          <ErrorBoundary label="Milestones">
+            <MilestoneStrip rows={m.milestones.rows} cells={m.milestones.cells} note={m.milestones.note} interrupted={m.lc.status === "interrupted"} />
+          </ErrorBoundary>
+          <TurnaroundPanel navigate={navigate} />
+        </div>
+      </div>
+      <p className="ops-preview-note">Preview layout. Ground services and the remaining details move into the new design in the next steps.</p>
+    </>
   );
 }

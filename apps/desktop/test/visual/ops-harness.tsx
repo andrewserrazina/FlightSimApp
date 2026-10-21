@@ -63,7 +63,9 @@ const preferences = params.get("prefs");
 if (preferences) storage.setItem(STORAGE_KEY, preferences);
 const dispatch = new DispatchService({
   store: new MemoryDispatchStore(),
-  fetch: (async () => new Response(JSON.stringify(ofp), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch,
+  // The capture script may supply a screenshot-only copy of the OFP (window.__ofpOverride), e.g. with
+  // its schedule moved onto the recorded demo flight's timeline. The fixture file itself is unchanged.
+  fetch: (async () => new Response(JSON.stringify((window as { __ofpOverride?: unknown }).__ofpOverride ?? ofp), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch,
 });
 
 Object.assign(window, { __harness: { transport, store, opsStore, dispatch, storage } });

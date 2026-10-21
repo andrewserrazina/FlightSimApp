@@ -18,6 +18,7 @@ import { PlanBasisNote, PlanBasisTag } from "../dispatch/PlanBasisWidgets";
 import { fixLabel, plannedRemainingNm, positionStatusOf, type NavFix, type PlanNavlog, type PositionStatus } from "../dispatch/navlog";
 import { fmtAltitude, fmtDuration, fmtUtcTime, fmtWeight, routeTitle, UNAVAILABLE } from "../dispatch/presentation";
 import { telemetryFreshness } from "../domain/freshness";
+import { liveRouteProgress } from "../live/model";
 import { usePreferences } from "../preferences/PreferencesContext";
 import type { SampleRowDto } from "../recording/types";
 import { Button } from "../ui/Button";
@@ -26,7 +27,7 @@ import { Tag } from "../ui/Tag";
 import type { LatLon } from "./geo";
 import { buildRouteGeometry, type RouteGeometry } from "./geometry";
 import { navObservations } from "./observations";
-import { OUTSIDE_CORRIDOR_CAUSES, routeProgress, type RouteProgress } from "./progress";
+import { OUTSIDE_CORRIDOR_CAUSES, type RouteProgress } from "./progress";
 import { useRouteTracker } from "./RouteTrackerContext";
 
 const nm = (v: number | null, digits = 0) => (v === null ? UNAVAILABLE : `${v.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: digits })} nm`);
@@ -325,11 +326,7 @@ export function RouteMonitor({ navigate }: { navigate: NavigateFn }) {
       </Panel>
     );
   }
-  const live: RouteProgress = !geometry
-    ? { status: "unavailable", reason: "The flight plan has no navigation log with waypoint positions." }
-    : fresh.kind !== "live"
-      ? { status: "unavailable", reason: fresh.kind === "none" ? "No telemetry received." : "Telemetry is stale or disconnected." }
-      : routeProgress(geometry, tracker);
+  const live = liveRouteProgress(geometry, tracker, fresh);
   const pos = frame && fresh.kind === "live" ? { lat: readingValue(frame.readings.lat_deg), lon: readingValue(frame.readings.lon_deg) } : null;
   return (
     <Panel

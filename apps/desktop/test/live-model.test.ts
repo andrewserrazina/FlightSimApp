@@ -15,19 +15,24 @@ import {
   flightActions,
   gsxSummary,
   health,
+  flownPhaseGroup,
   identity,
+  INTERRUPT_AFTER_S,
+  interruptionKind,
+  liveRouteProgress,
   milestoneCells,
   phaseGroup,
   planFuelAtLastFix,
   scheduleNote,
   selectTiles,
+  upcomingFixes,
   type ActionInputs,
   type HealthInputs,
   type TileInputs,
 } from "../src/live/model";
 import type { ServiceEventDto, TurnaroundDto } from "../src/ops/types";
 import { buildRouteGeometry } from "../src/route/geometry";
-import type { RouteProgress } from "../src/route/progress";
+import { INITIAL_TRACKER, routeProgress, stepTracker, type RouteProgress } from "../src/route/progress";
 import { fixture } from "./support";
 
 const NOW = Date.parse("2026-10-15T14:18:00Z");
@@ -148,11 +153,13 @@ describe("metric tiles", () => {
     const [sched, fuel, ac] = selectTiles(tiles({ lc: active("PREPARING") }));
     expect(sched).toMatchObject({ id: "scheduled_out", label: "Scheduled off-block in", value: "17", unit: "min", secondary: "14:35Z scheduled" });
     expect(fuel).toMatchObject({ value: "5,120", secondary: "Planned block fuel 7,420 kg" });
-    expect(ac).toMatchObject({ value: "Parking brake set", secondary: "0 of 2 engines running · on ground" });
+    expect(ac).toMatchObject({ label: "Parking brake", value: "Set", secondary: "0 of 2 engines running · on ground" });
     const preview = selectTiles(tiles({ lc: active("PREPARING"), schedulePlan: null }))[0];
     expect(preview).toMatchObject({ value: null, state: "unavailable", note: "Release or attach a plan to use its schedule" });
     const late = selectTiles(tiles({ lc: active("PREPARING"), nowMs: Date.parse("2026-10-15T14:41:00Z") }))[0];
     expect(late).toMatchObject({ label: "Past scheduled off-block", value: "6" });
+    const early = selectTiles(tiles({ lc: active("PREPARING"), nowMs: Date.parse("2026-10-15T12:30:00Z") }))[0];
+    expect(early).toMatchObject({ label: "Scheduled off-block in", value: "2 h 05 min", unit: null });
     const recorded = selectTiles(tiles({ lc: active("PREPARING"), manual: manual("2026-10-15T14:38:00Z", null) }))[0];
     expect(recorded).toMatchObject({ label: "Off-block recorded", value: "14:38Z", secondary: "+3 min against schedule 14:35Z" });
     const recordedNoPlan = selectTiles(tiles({ lc: active("PREPARING"), schedulePlan: null, manual: manual("2026-10-15T14:38:00Z", null) }))[0];
@@ -184,7 +191,7 @@ describe("flight actions", () => {
     // Interrupted before takeoff: the existing rules still allow a manual OUT, so it stays reachable.
     expect(acts({ lc: lc({ status: "interrupted", flightId: "f-1", phase: "INTERRUPTED", needsUserDecision: true }) })).toMatchObject({ primary: "resume", secondary: ["record_out", "end", "discard"] });
     // Automatic interruption: recording resumes on its own; Resume stays available but is not the primary.
-    expect(acts({ lc: lc({ status: "interrupted", flightId: "f-1", phase: "INTERRUPTED", takeoffAt: "x" }) })).toMatchObject({ primary: null, secondary: ["resume", "end", "discard"], idleNote: "Recording resumes automatically when data returns" });
+    expect(acts({ lc: lc({ status: "interrupted", flightId: "f-1", phase: "INTERRUPTED", takeoffAt: "x" }) })).toMatchObject({ primary: null, secondary: ["resume", "end", "discard"], idleNote: "Paused · waiting for data" });
     expect(acts({ lc: lc({ status: "completed", flightId: "f-1" }) })).toMatchObject({ primary: "start", secondary: ["open_debrief"] });
     expect(acts({ lc: lc({ status: "completed", flightId: "f-1" }), telemetryLive: false })).toMatchObject({ primary: "connect", secondary: ["open_debrief"] });
   });
@@ -253,7 +260,8 @@ describe("health summary and attention", () => {
     expect(h({ writeError: "busy", pendingItems: 23 }).attention[0]).toMatchObject({ id: "write", detail: "23 items are kept safely in memory and saving is retried automatically.", actions: ["retry_flush"] });
     expect(h({ lc: lc({ status: "interrupted", flightId: "f-1", needsUserDecision: true }) }).attention[0]).toMatchObject({ id: "interrupted", level: "action", actions: ["resume"] });
     expect(h({ lc: lc({ status: "interrupted", flightId: "f-1", needsUserDecision: true, startedAt: "2026-10-15T14:00:00Z" }), recovered: true }).attention[0]).toMatchObject({ title: "Unfinished flight found.", actions: ["resume"] });
-    expect(h({ lc: lc({ status: "interrupted", flightId: "f-1" }), freshness: STALE, simulatorConnected: true }).attention.map((a) => a.id)).toEqual(["interrupted", "stale"]);
+    // Once interrupted, the interruption message replaces the stale one (which would promise an interruption that already happened).
+    expect(h({ lc: lc({ status: "interrupted", flightId: "f-1" }), freshness: STALE, simulatorConnected: true }).attention.map((a) => a.id)).toEqual(["interrupted"]);
     expect(h({ freshness: { kind: "stale", ageMs: 9000, reason: "disconnected" }, simulatorConnected: false }).attention[0]).toMatchObject({ id: "disconnected", actions: ["connect"] });
     expect(h({ lc: lc(), freshness: { kind: "none" }, simulatorConnected: false }).attention).toEqual([]);
     expect(h({ turnaround: turnaround([], { status: "interrupted" }) }).attention[0]).toMatchObject({ id: "turnaround", actions: ["resume_turnaround"] });
@@ -349,5 +357,143 @@ describe("planned fuel at the last passed fix", () => {
     expect(planFuelAtLastFix(PLAN, geo, progress)).toEqual({ fix: leg.from.ident, kg: fix.fuelPlanOnboard!.kg });
     expect(planFuelAtLastFix(PLAN, geo, { status: "unavailable", reason: "x" })).toBeNull();
     expect(planFuelAtLastFix(null, geo, progress)).toBeNull();
+  });
+});
+
+describe("route card inputs", () => {
+  const geo = buildRouteGeometry(PLAN.navlog!);
+  const leg = geo.legs.find((l) => l.from.fixIndex >= 0 && !l.unreliable)!;
+  // Two airborne samples a quarter of the way along one leg, 1 nm apart at 420 kt, lock the tracker onto it.
+  const at = (f: number) => ({ lat: leg.from.lat + (leg.to.lat - leg.from.lat) * f, lon: leg.from.lon + (leg.to.lon - leg.from.lon) * f });
+  const step = 1 / leg.lengthNm;
+  const tracking = [0.25, 0.25 + step].reduce((s, f, i) => stepTracker(geo, s, { atUtc: new Date(NOW + i * (3600_000 / 420)).toISOString(), ...at(f), onGround: false, usable: true }), INITIAL_TRACKER);
+
+  it("uses the tracker only while telemetry is live, as the classic route monitor does", () => {
+    expect(tracking.mode).toBe("tracking");
+    expect(liveRouteProgress(geo, tracking, LIVE)).toEqual(routeProgress(geo, tracking));
+    expect(liveRouteProgress(geo, tracking, STALE)).toEqual({ status: "unavailable", reason: "Telemetry is stale or disconnected." });
+    expect(liveRouteProgress(geo, tracking, { kind: "none" } as Freshness)).toEqual({ status: "unavailable", reason: "No telemetry received." });
+    expect(liveRouteProgress(null, tracking, LIVE).status).toBe("unavailable");
+  });
+
+  it("lists the next fixes from the active leg's destination, and none when not tracking", () => {
+    const progress = liveRouteProgress(geo, tracking, LIVE);
+    const next = upcomingFixes(PLAN.navlog!.fixes, progress);
+    expect(next).toHaveLength(3);
+    expect(next[0]!.seq).toBe(PLAN.navlog!.fixes[leg.to.fixIndex]!.seq);
+    expect(upcomingFixes(PLAN.navlog!.fixes, { status: "unavailable", reason: "x" })).toEqual([]);
+  });
+});
+
+describe("flown phase and ETA reasons", () => {
+  it("an interrupted flight keeps the group of the phase it was in", () => {
+    expect(flownPhaseGroup(lc({ status: "interrupted", flightId: "f-1", phase: "INTERRUPTED" as LifecycleState["phase"], resumePhase: "CRUISE" }))).toBe("cruise");
+    expect(flownPhaseGroup(active("TAXI_OUT"))).toBe("taxi_out");
+  });
+  it("says why the ETA is hidden on the ground before takeoff and after landing", () => {
+    const base = { hasPlan: true, hasNavlog: true, airborne: false, freshness: LIVE, progress: null, groundSpeedKt: 0, nowMs: NOW };
+    expect(etaEstimate(base)).toEqual({ kind: "hidden", reason: "Starts after takeoff" });
+    expect(etaEstimate({ ...base, landed: true })).toEqual({ kind: "hidden", reason: "Not shown after landing" });
+  });
+});
+
+describe("tile values are never cut off", () => {
+  // Every tile value must fit a three-up tile at 1100 px (about 12 characters at the value size);
+  // longer wording goes in the label or the secondary line, never in the value.
+  const MAX_VALUE_CHARS = 12;
+  const states: LifecycleState[] = [
+    lc(),
+    active("PREPARING"),
+    active("TAXI_OUT"),
+    active("TAKEOFF"),
+    active("CLIMB"),
+    active("CRUISE"),
+    active("DESCENT"),
+    active("APPROACH"),
+    active("LANDING", { takeoffAt: "2026-10-15T14:52:00Z", landingAt: "2026-10-15T17:08:00Z" }),
+    active("TAXI_IN", { takeoffAt: "2026-10-15T14:52:00Z", landingAt: "2026-10-15T17:08:00Z" }),
+    active("TAXI_IN", { arrived: true, takeoffAt: "2026-10-15T14:52:00Z", landingAt: "2026-10-15T17:08:00Z" }),
+    lc({ status: "interrupted", flightId: "f-1", phase: "INTERRUPTED" as LifecycleState["phase"], resumePhase: "CRUISE" }),
+  ];
+  const frames = [frame(), frame((r) => (r.parking_brake_set = { value: false, unit: "bool", quality: "ok" })), airborneFrame(), airborneFrame(41_000, -2400, 290, 520, 1800), null];
+  const nows = [NOW, Date.parse("2026-10-15T09:00:00Z"), Date.parse("2026-10-16T02:00:00Z")];
+  const manuals = [NO_MANUAL, manual("2026-10-15T14:38:00Z", null), manual("2026-10-15T14:38:00Z", "2026-10-15T17:25:00Z")];
+
+  it(`keep every value within ${MAX_VALUE_CHARS} characters in every phase, reading and schedule`, () => {
+    for (const l of states)
+      for (const f of frames)
+        for (const nowMs of nows)
+          for (const m of manuals)
+            for (const fresh of [LIVE, STALE])
+              for (const t of selectTiles(tiles({ lc: l, frame: f, nowMs, manual: m, freshness: fresh })))
+                if (t.value !== null) expect(t.value.length, `${t.id} "${t.value}"`).toBeLessThanOrEqual(MAX_VALUE_CHARS);
+  });
+
+  it("the parking-brake tile keeps its full meaning in the label, value and secondary line", () => {
+    const [, , ac] = selectTiles(tiles({ lc: active("PREPARING") }));
+    expect(`${ac.label}: ${ac.value}`).toBe("Parking brake: Set");
+    const released = selectTiles(tiles({ lc: active("PREPARING"), frame: frame((r) => (r.parking_brake_set = { value: false, unit: "bool", quality: "ok" })) }))[2];
+    expect(released.value).toBe("Released");
+  });
+
+  it("the stylesheet lets tile values wrap instead of truncating them", () => {
+    const css = readFileSync(join(__dirname, "../src/styles/app.css"), "utf8");
+    const rule = css.match(/\.ops-tile__value \{[^}]*\}/)?.[0] ?? "";
+    expect(rule).not.toBe("");
+    expect(rule).not.toMatch(/text-overflow:\s*ellipsis|white-space:\s*nowrap/);
+  });
+});
+
+describe("interruption messages follow the recorder's real recovery rules", () => {
+  const open = (o: Partial<LifecycleState> = {}) => lc({ status: "interrupted", flightId: "f-1", phase: "INTERRUPTED" as LifecycleState["phase"], resumePhase: "CRUISE", ...o });
+  const h = (o: Partial<HealthInputs>) =>
+    health({ lc: active("CRUISE"), freshness: LIVE, simulatorConnected: true, simulator: "msfs2020", store: { state: "ready" }, writeError: null, pendingItems: 0, basis: basis("release_attached_current"), gsx: feed("live"), gsxRecordError: null, turnaround: null, opsError: null, ...o });
+  const acts = (o: Partial<ActionInputs>) => flightActions({ lc: lc(), telemetryLive: true, storeReady: true, opsReady: true, manual: NO_MANUAL, ...o });
+
+  it("tells apart lost data (resumes on its own), a reconciliation mismatch and an app restart (both need Resume)", () => {
+    expect(interruptionKind(open(), false)).toBe("auto");
+    expect(interruptionKind(open({ needsUserDecision: true }), false)).toBe("reconcile");
+    expect(interruptionKind(open({ needsUserDecision: true }), true)).toBe("restart");
+    expect(interruptionKind(active("CRUISE"), false)).toBeNull();
+  });
+
+  it("an automatic interruption says it is a pause that ends on its own, and when it would not", () => {
+    const a = h({ lc: open() }).attention[0]!;
+    expect(a).toMatchObject({ id: "interrupted", level: "warn", actions: [] });
+    expect(a.title).toBe(`Recording is paused: no data from the simulator for over ${INTERRUPT_AFTER_S} s.`);
+    expect(a.detail).toMatch(/resumes on its own when data returns for the same aircraft/);
+    expect(a.detail).toMatch(/you'll be asked to resume/);
+    expect(h({ lc: open() }).items.find((i) => i.id === "recording")).toMatchObject({ level: "warn", text: "Recording paused" });
+    expect(acts({ lc: open({ takeoffAt: "x" }) })).toMatchObject({ primary: null, idleNote: "Paused · waiting for data" });
+  });
+
+  it("a mismatch after data returns asks for Resume and says why; it never claims to resume automatically", () => {
+    const a = h({ lc: open({ needsUserDecision: true }) }).attention[0]!;
+    expect(a).toMatchObject({ level: "action", title: "Recording needs you to resume.", actions: ["resume"] });
+    expect(a.detail).toMatch(/changed or moved further than it could have flown/);
+    expect(a.detail).not.toMatch(/automatically|on its own when/);
+    expect(h({ lc: open({ needsUserDecision: true }) }).items.find((i) => i.id === "recording")).toMatchObject({ level: "action", text: "Resume needed" });
+    expect(acts({ lc: open({ needsUserDecision: true, takeoffAt: "x" }) })).toMatchObject({ primary: "resume", idleNote: null });
+  });
+
+  it("stale data before the interruption threshold says recording continues and when it would be interrupted", () => {
+    const a = h({ lc: active("CRUISE"), freshness: STALE, simulatorConnected: true }).attention[0]!;
+    expect(a).toMatchObject({ id: "stale", level: "warn" });
+    expect(a.detail).toMatch(new RegExp(`Recording continues; if no data arrives for ${INTERRUPT_AFTER_S} s, the flight is marked interrupted`));
+    expect(INTERRUPT_AFTER_S).toBe(30);
+  });
+});
+
+describe("L5 polish", () => {
+  it("parked: shows scheduled IN until IN is recorded, then the recorded time and its variance (never a countdown)", () => {
+    const parked = active("TAXI_IN", { arrived: true, takeoffAt: "2026-10-15T14:52:00Z", landingAt: "2026-10-15T17:08:00Z" });
+    const before = selectTiles(tiles({ lc: parked, nowMs: Date.parse("2026-10-15T17:12:00Z") }))[1];
+    expect(before).toMatchObject({ id: "on_block", label: "Scheduled on-block", value: "17:18Z", secondary: "IN not recorded yet" });
+    expect(before.label).not.toMatch(/ in$/);
+    const after = selectTiles(tiles({ lc: parked, manual: manual("2026-10-15T14:38:00Z", "2026-10-15T17:25:00Z") }))[1];
+    expect(after).toMatchObject({ label: "On-block recorded", value: "17:25Z", secondary: "+7 min against schedule 17:18Z" });
+    // Taxiing in, the countdown to scheduled IN is still useful.
+    const taxiIn = selectTiles(tiles({ lc: active("TAXI_IN", { takeoffAt: "2026-10-15T14:52:00Z", landingAt: "2026-10-15T17:08:00Z" }), nowMs: Date.parse("2026-10-15T17:12:00Z") }))[1];
+    expect(taxiIn).toMatchObject({ label: "Scheduled on-block in", value: "6" });
   });
 });

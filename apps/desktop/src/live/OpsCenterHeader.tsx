@@ -6,14 +6,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { NavigateFn } from "../app/navigation";
 import { useDispatch } from "../dispatch/DispatchContext";
-import { PLAN_BASIS_TAG } from "../dispatch/planBasis";
 import { RecordMilestoneDialog } from "../dispatch/RecordMilestoneDialog";
 import { useOps } from "../ops/OpsContext";
 import { DiscardFlightDialog, EndFlightDialog, MoveAsideDialog, useCommandRunner } from "../recording/FlightDialogs";
 import { useRecorder } from "../recording/RecorderContext";
 import { Button } from "../ui/Button";
-import type { AttentionAction, AttentionItem, FlightActionId, HealthItem, Identity } from "./model";
-import { useLiveFlightModel } from "./useLiveFlightModel";
+import type { AttentionAction, AttentionItem, FlightActionId, HealthItem, Identity, InterruptionKind } from "./model";
+import type { LiveFlightModel } from "./useLiveFlightModel";
 
 const ACTION_LABEL: Record<FlightActionId, string> = {
   start: "Start flight",
@@ -38,14 +37,22 @@ const ATTENTION_LABEL: Record<AttentionAction, string> = {
   resume_turnaround: "Resume turnaround",
 };
 
+/** How long a confirmation stays on screen. */
+export const NOTICE_MS = 6000;
+
 type Dialog = null | "end" | "discard" | "out" | "in" | "move_aside";
 
-export function OpsCenterHeader({ navigate }: { navigate: NavigateFn }) {
-  const m = useLiveFlightModel();
+export function OpsCenterHeader({ model: m, navigate }: { model: LiveFlightModel; navigate: NavigateFn }) {
   const recorder = useRecorder();
   const ops = useOps();
   const dispatch = useDispatch();
-  const { run, message, setMessage } = useCommandRunner();
+  const { run, message, ok, setMessage } = useCommandRunner();
+  // Confirmations ("Flight started.") are transient; problems stay until the next action.
+  useEffect(() => {
+    if (!message || !ok) return;
+    const t = setTimeout(() => setMessage(null), NOTICE_MS);
+    return () => clearTimeout(t);
+  }, [message, ok]);
   const [dialog, setDialog] = useState<Dialog>(null);
 
   const perform = (a: FlightActionId) => {
@@ -71,12 +78,12 @@ export function OpsCenterHeader({ navigate }: { navigate: NavigateFn }) {
       case "attach_release":
         if (m.flightId) {
           const label = m.basis?.release ?? "release";
-          void dispatch.attachRelease(m.flightId).then((r) => setMessage(r.ok ? `Release ${label} attached to this flight.` : `Could not attach the release: ${r.message}`));
+          void dispatch.attachRelease(m.flightId).then((r) => setMessage(r.ok ? `Release ${label} attached to this flight.` : `Could not attach the release: ${r.message}`, r.ok));
         }
         return;
       case "attach_plan":
         if (m.flightId)
-          void dispatch.associate(m.flightId).then((r) => setMessage(!r.ok ? `Could not attach the plan: ${r.message}` : r.outcome === "created" ? "Plan attached to this flight." : "This flight already has a plan attached; it was left unchanged."));
+          void dispatch.associate(m.flightId).then((r) => setMessage(!r.ok ? `Could not attach the plan: ${r.message}` : r.outcome === "created" ? "Plan attached to this flight." : "This flight already has a plan attached; it was left unchanged.", r.ok));
         return;
     }
   };
@@ -103,7 +110,7 @@ export function OpsCenterHeader({ navigate }: { navigate: NavigateFn }) {
   return (
     <div className="ops-head">
       <section className="ops-id" aria-label="Flight">
-        <IdentityBlock id={m.identity} />
+        <IdentityBlock id={m.identity} interruption={m.interruption} />
         <div className="ops-id__actions">
           {m.actions.primary ? (
             <Button variant="primary" className="ops-primary" disabled={blocked(m.actions.primary)} onClick={() => perform(m.actions.primary!)}>
@@ -117,7 +124,7 @@ export function OpsCenterHeader({ navigate }: { navigate: NavigateFn }) {
         <HealthSummary items={m.health.items} />
       </section>
       {message && (
-        <p className="ops-message" role="status">
+        <p className={ok ? "ops-toast" : "ops-message"} role="status">
           {message}
         </p>
       )}
@@ -126,34 +133,45 @@ export function OpsCenterHeader({ navigate }: { navigate: NavigateFn }) {
       {dialog === "end" && <EndFlightDialog run={run} onClose={() => setDialog(null)} />}
       {dialog === "discard" && <DiscardFlightDialog run={run} onClose={() => setDialog(null)} />}
       {dialog === "move_aside" && <MoveAsideDialog onClose={() => setDialog(null)} />}
-      {(dialog === "out" || dialog === "in") && m.flightId && <RecordMilestoneDialog which={dialog} flightId={m.flightId} onClose={() => setDialog(null)} onResult={(r) => setMessage(r.text)} />}
+      {(dialog === "out" || dialog === "in") && m.flightId && <RecordMilestoneDialog which={dialog} flightId={m.flightId} onClose={() => setDialog(null)} onResult={(r) => setMessage(r.text, r.ok)} />}
     </div>
   );
 }
 
-function IdentityBlock({ id }: { id: Identity }) {
+/**
+ * Flight number and route on the first line, city names and type below, then a status line with the
+ * phase and the recording state. Fixed lines, so nothing reflows into a ragged wrap at narrower
+ * widths; only the status line may break, between the phase and the recording chip, never inside
+ * either. The plan basis is shown on the route card.
+ */
+function IdentityBlock({ id, interruption }: { id: Identity; interruption: InterruptionKind | null }) {
   const route = id.origin && id.destination ? `${id.origin.icao} → ${id.destination.icao}` : null;
   const names = id.origin && id.destination ? [id.origin.name ?? id.origin.icao, id.destination.name ?? id.destination.icao].join(" → ") : null;
+  // An automatic interruption is a pause that ends by itself; the other kinds wait for Resume.
+  const rec =
+    id.recording === "recording"
+      ? { tone: "ok", text: "● Recording" }
+      : id.recording === "interrupted"
+        ? interruption === "auto"
+          ? { tone: "warn", text: "‖ Recording paused" }
+          : { tone: "alert", text: "! Resume needed" }
+        : { tone: "neutral", text: "Not recording" };
   return (
     <div className="ops-id__identity">
-      <div className="ops-id__flight">{id.flight ?? <span className="ops-id__none">{route ? "No flight number" : "No flight plan"}</span>}</div>
-      <div className="ops-id__route">
-        {route ? <strong>{route}</strong> : <span className="unavailable">No route</span>}
-        <span className="muted">{[names, id.aircraftType].filter(Boolean).join(" · ") || "Import a SimBrief plan on Dispatch"}</span>
+      <div className="ops-id__line">
+        <span className="ops-id__flight">{id.flight ?? <span className="ops-id__none">{route ? "No flight number" : "No flight plan"}</span>}</span>
+        {route ? <strong className="ops-id__route">{route}</strong> : <span className="ops-id__route unavailable">No route</span>}
       </div>
-      {id.planBasis && (
-        <span className={`ops-chip ops-chip--${id.planBasis === "imported_preview" || id.planBasis === "release_open" ? "info" : id.planBasis === "release_cancelled" ? "warn" : "ok"}`} title="Which plan this view uses">
-          {PLAN_BASIS_TAG[id.planBasis]}
+      <div className="ops-id__sub muted">{[names, id.aircraftType].filter(Boolean).join(" · ") || "Import a SimBrief plan on Dispatch"}</div>
+      <div className="ops-id__status">
+        <span className="ops-id__phase">
+          <span className="ops-label">Phase</span> <strong>{id.phaseLabel}</strong>
         </span>
-      )}
-      <div className="ops-id__phase">
-        <span className="ops-label">Phase</span>
-        <strong>{id.phaseLabel}</strong>
+        <span className={`ops-chip ops-chip--${rec.tone}`} role="status">
+          {rec.text}
+          {id.elapsed ? ` · ${id.elapsed}` : ""}
+        </span>
       </div>
-      <span className={`ops-chip ops-chip--${id.recording === "recording" ? "ok" : id.recording === "interrupted" ? "warn" : "neutral"}`} role="status">
-        {id.recording === "recording" ? "● Recording" : id.recording === "interrupted" ? "! Interrupted" : "Not recording"}
-        {id.elapsed ? ` · ${id.elapsed}` : ""}
-      </span>
     </div>
   );
 }
