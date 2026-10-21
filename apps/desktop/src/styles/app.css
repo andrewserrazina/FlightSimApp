@@ -203,6 +203,10 @@ body {
 .table--compact td { padding: 6px var(--space-3); }
 
 .report { width: 100%; margin-top: var(--space-2); background: var(--surface-app); color: var(--text-secondary); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: var(--space-3); font-family: var(--font-mono); font-size: var(--text-xs); resize: vertical; }
+.diagnostics { display: flex; flex-direction: column; gap: var(--space-3); border-top: 1px solid var(--border-subtle); padding-top: var(--space-4); }
+.diagnostics__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.diagnostics__title { margin: 0; font-size: var(--text-lg); }
+.diagnostics .muted { margin: 0; }
 
 /* ---------- Welcome ---------- */
 .hero { background: linear-gradient(90deg, var(--surface-2), var(--surface-1)); border: 1px solid var(--border-subtle); border-left: 3px solid var(--color-gold); border-radius: var(--radius-md); padding: var(--space-5) var(--space-6); }

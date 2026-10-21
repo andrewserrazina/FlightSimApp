@@ -212,6 +212,7 @@ describe("Settings — cloud sync", () => {
     await act(async () => {
       await sync.enable();
     });
+    fireEvent.click(screen.getByRole("button", { name: "Show advanced diagnostics" }));
     const report = (screen.getByLabelText("Report (JSON)") as HTMLTextAreaElement).value;
     const parsed = JSON.parse(report);
     expect(parsed.cloud).toMatchObject({ auth: "signed_in", sync_enabled: true, session_storage: "secure_store" });
