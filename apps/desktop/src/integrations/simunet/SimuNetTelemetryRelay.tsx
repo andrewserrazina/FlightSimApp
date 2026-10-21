@@ -33,11 +33,10 @@ export function SimuNetTelemetryRelay() {
     lastSequence.current = id;
     lastSend.current = Date.now();
     sending.current = true;
-    recordSimuNetAttempt();
     void invoke<Status>("simunet_credential_status")
       .then((status) => {
-        if (!status.senderAvailable) { recordSimuNetFailure("not-configured"); return; }
-        if (!status.telemetryEnabled) { recordSimuNetFailure("not-authorized"); return; }
+        if (!status.senderAvailable || !status.telemetryEnabled) return;
+        recordSimuNetAttempt();
         return invoke<{ accepted: number; duplicates: number; rejected: number }>("simunet_telemetry_send", { frame: mapped })
           .then(recordSimuNetAcknowledgement);
       })
