@@ -28,6 +28,9 @@ keyring = { version = "3", features = ["windows-native", "apple-native", "linux-
 # Both are already in the lock file through Tauri; no new third-party code.
 dom_query = "0.28"
 sha2 = "0.10"
+# GSX receipt watcher (S2-06): file-system change notifications, used only as hints; periodic
+# reconciliation scans stay authoritative. macOS FSEvents backend disabled (kqueue instead).
+notify = { version = "6.1.1", default-features = false, features = ["macos_kqueue"] }
 
 [profile.release]
 strip = true

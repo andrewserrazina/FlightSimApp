@@ -16,7 +16,15 @@ import type {
   RevisionResolution,
   TurnaroundDto,
   TurnaroundOpenRequest,
+  WatcherHealthDto,
 } from "./types";
+
+export interface ReceiptEventHandlers {
+  /** The watcher's health changed. */
+  health(h: WatcherHealthDto): void;
+  /** The watcher imported new receipts in the background. */
+  imported(count: number): void;
+}
 
 export type TurnaroundAction = "close" | "abandon" | "interrupt" | "resume";
 
@@ -45,6 +53,12 @@ export interface OpsStore {
   voidExpense(id: string, reason: string): Promise<ExpenseDto>;
   associateExpense(id: string, flightId: string | null, turnaroundId: string | null): Promise<ExpenseDto>;
   listExpenses(flightId?: string): Promise<ExpenseDto[]>;
+
+  // ---- automatic receipt watcher (S2-06 PR 1): imports only; never matches, counts or confirms ----
+  watchStatus(): Promise<WatcherHealthDto>;
+  setWatchEnabled(enabled: boolean): Promise<WatcherHealthDto>;
+  /** Subscribe to watcher events; resolves to an unsubscribe function. */
+  subscribeReceipts(handlers: ReceiptEventHandlers): Promise<() => void>;
 }
 
 export async function createTauriOpsStore(): Promise<OpsStore> {
@@ -77,6 +91,35 @@ export async function createTauriOpsStore(): Promise<OpsStore> {
     voidExpense: (id, reason) => call("expense_void", { id, reason }),
     associateExpense: (id, flightId, turnaroundId) => call("expense_associate", { id, flightId, turnaroundId }),
     listExpenses: (flightId) => call("expenses_list", { flightId: flightId ?? null }),
+    watchStatus: () => call("receipts_watch_status"),
+    setWatchEnabled: (enabled) => call("receipts_watch_set_enabled", { enabled }),
+    subscribeReceipts: async (h) => {
+      const { listen } = await import("@tauri-apps/api/event");
+      const offs = await Promise.all([listen<WatcherHealthDto>("receipts://watch", (e) => h.health(e.payload)), listen<number>("receipts://imported", (e) => h.imported(e.payload))]);
+      return () => offs.forEach((off) => off());
+    },
+  };
+}
+
+export function idleWatch(): WatcherHealthDto {
+  return {
+    enabled: true,
+    state: "watching",
+    detail: null,
+    notifications: true,
+    lastScanAtUtc: null,
+    lastScanReason: null,
+    lastSuccessfulScanAtUtc: null,
+    lastImportAtUtc: null,
+    lastError: null,
+    lastErrorAtUtc: null,
+    pending: 0,
+    unstable: 0,
+    failed: 0,
+    vanished: 0,
+    importedSinceStart: 0,
+    duplicatesSinceStart: 0,
+    partialScan: false,
   };
 }
 
@@ -102,6 +145,8 @@ export class MemoryOpsStore implements OpsStore {
   /** Fail the next N calls of one method (e.g. { method: "recordGsx", message: "disk full", times: 1 }). */
   failMethod: { method: string; message: string; times: number } | null = null;
   calls: string[] = [];
+  watch: WatcherHealthDto = idleWatch();
+  private receiptHandlers = new Set<ReceiptEventHandlers>();
   private seq = 0;
   private clock = Date.parse("2026-10-17T16:00:00Z");
   private now = () => new Date((this.clock += 1000)).toISOString();
@@ -241,7 +286,7 @@ export class MemoryOpsStore implements OpsStore {
 
   async scanReceipts(): Promise<ImportReportDto> {
     this.enter("scanReceipts");
-    const report: ImportReportDto = { rootStatus: "found", detail: null, imported: 0, duplicates: 0, possibleRevisions: 0, notVerifiable: 0, skipped: [], truncated: false };
+    const report: ImportReportDto = { rootStatus: "found", detail: null, imported: 0, duplicates: 0, possibleRevisions: 0, notVerifiable: 0, skipped: [], truncated: false, pending: 0 };
     for (const r of this.pendingScan) {
       if (this.receipts.some((x) => x.sha256 === r.sha256)) {
         report.duplicates++;
@@ -409,6 +454,29 @@ export class MemoryOpsStore implements OpsStore {
     Object.assign(e, { flightId, turnaroundId });
     this.audit(e, "associated", `flight ${flightId ?? "none"} · turnaround ${turnaroundId ?? "none"}`);
     return clone(e);
+  }
+  async watchStatus() {
+    this.enter("watchStatus");
+    return clone(this.watch);
+  }
+  async setWatchEnabled(enabled: boolean) {
+    this.enter("setWatchEnabled");
+    this.watch = { ...this.watch, enabled, state: enabled ? "watching" : "disabled" };
+    return clone(this.watch);
+  }
+  async subscribeReceipts(h: ReceiptEventHandlers) {
+    this.receiptHandlers.add(h);
+    return () => void this.receiptHandlers.delete(h);
+  }
+  /** Test helper: the watcher reports new health. */
+  emitWatch(patch: Partial<WatcherHealthDto>) {
+    this.watch = { ...this.watch, ...patch };
+    this.receiptHandlers.forEach((h) => h.health(clone(this.watch)));
+  }
+  /** Test helper: the watcher imported `receipts` in the background. */
+  emitImported(receipts: ReceiptDto[]) {
+    this.receipts.push(...receipts.map((r) => clone(r)));
+    this.receiptHandlers.forEach((h) => h.imported(receipts.length));
   }
   async listExpenses(flightId?: string) {
     this.enter("listExpenses");

@@ -1,17 +1,18 @@
 import { flightDurationSeconds } from "@flightsim/flight-core";
 import { useState } from "react";
 import { formatDuration, fmtUtc } from "../domain/debrief";
+import { DiscardUnfinishedDialog, MoveAsideDialog } from "../recording/FlightDialogs";
 import { useRecorder, useRecorderView } from "../recording/RecorderContext";
 import { PHASE_LABEL } from "../pages/labels";
 import { Button } from "../ui/Button";
-import { ConfirmDialog } from "../ui/ConfirmDialog";
 import type { NavigateFn } from "./navigation";
 
 /**
  * App-wide decisions that must not be missed: an unfinished flight restored after a restart, and a
- * flight database that cannot be used. Shown above every page.
+ * flight database that cannot be used. Shown above every page (except Live Flight in the
+ * operations-center layout, whose attention bar carries the same problems and actions).
  */
-export function RecorderBanners({ navigate }: { navigate: NavigateFn }) {
+export function RecorderBanners({ navigate, hidden = false }: { navigate: NavigateFn; hidden?: boolean }) {
   const recorder = useRecorder();
   const view = useRecorderView();
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -20,6 +21,8 @@ export function RecorderBanners({ navigate }: { navigate: NavigateFn }) {
   const showRecovery = view.recovered && s.status === "interrupted";
   const store = view.store;
 
+  // The operations-center layout shows these problems itself, in plain language, on Live Flight.
+  if (hidden) return null;
   return (
     <>
       {store.state === "unavailable" && (
@@ -67,38 +70,8 @@ export function RecorderBanners({ navigate }: { navigate: NavigateFn }) {
           </div>
         </div>
       )}
-      {confirmDiscard && (
-        <ConfirmDialog
-          title="Discard the unfinished flight?"
-          onCancel={() => setConfirmDiscard(false)}
-          actions={
-            <>
-              <Button onClick={() => void recorder.discardFlight().then(() => setConfirmDiscard(false))}>Discard flight</Button>
-              <Button variant="quiet" data-autofocus onClick={() => setConfirmDiscard(false)}>
-                Keep flight
-              </Button>
-            </>
-          }
-        >
-          <p>The flight is kept in history marked as Discarded, with everything recorded so far. It will not be resumed.</p>
-        </ConfirmDialog>
-      )}
-      {confirmReset && (
-        <ConfirmDialog
-          title="Move the damaged database aside?"
-          onCancel={() => setConfirmReset(false)}
-          actions={
-            <>
-              <Button onClick={() => void recorder.resetDamagedStore().then(() => setConfirmReset(false))}>Move aside and start a new database</Button>
-              <Button variant="quiet" data-autofocus onClick={() => setConfirmReset(false)}>
-                Cancel
-              </Button>
-            </>
-          }
-        >
-          <p>The damaged file is renamed (not deleted) and kept next to the new database, so it can still be inspected or recovered. History will start empty.</p>
-        </ConfirmDialog>
-      )}
+      {confirmDiscard && <DiscardUnfinishedDialog onClose={() => setConfirmDiscard(false)} />}
+      {confirmReset && <MoveAsideDialog onClose={() => setConfirmReset(false)} />}
     </>
   );
 }

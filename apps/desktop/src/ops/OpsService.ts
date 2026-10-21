@@ -9,7 +9,7 @@
 import type { GsxService, GsxServiceState } from "@flightsim/contracts";
 import type { GsxFeedView, GsxFeedViewStatus } from "../gsx/feed";
 import type { OpsStore, TurnaroundAction } from "./store";
-import type { ExpenseDto, FeedLogKind, ImportReportDto, ManualExpenseRequest, ManualServiceStatus, ReceiptDto, RevisionResolution, TurnaroundDto, TurnaroundOpenRequest } from "./types";
+import type { ExpenseDto, FeedLogKind, ImportReportDto, ManualExpenseRequest, ManualServiceStatus, ReceiptDto, RevisionResolution, TurnaroundDto, TurnaroundOpenRequest, WatcherHealthDto } from "./types";
 
 export type Loadable<T> = { kind: "loading" } | { kind: "ready"; value: T } | { kind: "unavailable"; message: string };
 
@@ -26,6 +26,8 @@ export interface OpsView {
   /** Last failure while recording GSX observations into the turnaround (shown, never hidden). */
   gsxRecordError: string | null;
   flights: Readonly<Record<string, FlightLedgerState>>;
+  /** Automatic receipt watcher health; null outside the desktop app or before it reports. */
+  watch: WatcherHealthDto | null;
 }
 
 export type ActionResult = { ok: true } | { ok: false; message: string };
@@ -61,8 +63,8 @@ export class OpsService {
   constructor(private readonly store: OpsStore | null) {
     const unavailable = { kind: "unavailable", message: UNAVAILABLE } as const;
     this.view = store
-      ? { turnaround: { kind: "loading" }, recent: [], receipts: { kind: "loading" }, expenses: { kind: "loading" }, scan: { kind: "idle" }, gsxRecordError: null, flights: {} }
-      : { turnaround: unavailable, recent: [], receipts: unavailable, expenses: unavailable, scan: { kind: "idle" }, gsxRecordError: null, flights: {} };
+      ? { turnaround: { kind: "loading" }, recent: [], receipts: { kind: "loading" }, expenses: { kind: "loading" }, scan: { kind: "idle" }, gsxRecordError: null, flights: {}, watch: null }
+      : { turnaround: unavailable, recent: [], receipts: unavailable, expenses: unavailable, scan: { kind: "idle" }, gsxRecordError: null, flights: {}, watch: null };
   }
 
   subscribe = (l: () => void) => {
@@ -90,7 +92,42 @@ export class OpsService {
     } catch {
       // Shown through the load below if the store is unavailable.
     }
-    await Promise.all([this.reloadTurnaround(), this.reloadLedger()]);
+    await Promise.all([this.reloadTurnaround(), this.reloadLedger(), this.startReceiptWatch()]);
+  }
+
+  private unsubscribeReceipts: (() => void) | null = null;
+  private receiptWatchStarted = false;
+
+  /** Follow the native receipt watcher: show its health and refresh the queue when it imports. */
+  private async startReceiptWatch() {
+    // Set before any await: init can run twice (React StrictMode) and must subscribe once.
+    if (!this.store || this.receiptWatchStarted) return;
+    this.receiptWatchStarted = true;
+    try {
+      this.unsubscribeReceipts = await this.store.subscribeReceipts({
+        health: (watch) => this.set({ watch }),
+        imported: () => void this.reloadLedger(),
+      });
+      this.set({ watch: await this.store.watchStatus() });
+    } catch {
+      // The watcher is optional; manual scans keep working.
+    }
+  }
+
+  dispose() {
+    this.unsubscribeReceipts?.();
+    this.unsubscribeReceipts = null;
+    this.receiptWatchStarted = false;
+  }
+
+  async setWatchEnabled(enabled: boolean): Promise<ActionResult> {
+    if (!this.store) return { ok: false, message: UNAVAILABLE };
+    try {
+      this.set({ watch: await this.store.setWatchEnabled(enabled) });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, message: errText(e) };
+    }
   }
 
   private seed(t: TurnaroundDto | null) {

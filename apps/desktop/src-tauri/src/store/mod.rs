@@ -14,6 +14,7 @@ pub mod ledger;
 pub mod release;
 pub mod sync;
 pub mod turnaround;
+pub mod watch;
 
 use std::path::{Path, PathBuf};
 
@@ -30,6 +31,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (4, include_str!("../../migrations/0004_dispatch_release.sql")),
     (5, include_str!("../../migrations/0005_manual_milestone_clock.sql")),
     (6, include_str!("../../migrations/0006_turnaround_ledger.sql")),
+    (7, include_str!("../../migrations/0007_receipt_watcher.sql")),
 ];
 
 pub fn latest_schema_version() -> i64 {

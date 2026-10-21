@@ -548,11 +548,11 @@ fn plans_with_a_long_navlog_fit_and_oversized_plans_are_still_refused() {
 use super::release::MilestoneOutcome;
 
 /// Removes everything migration 6 added (dropping a table drops its indexes and triggers).
-const DROP_V6: &str = "DROP TABLE expense_audit; DROP TABLE expenses; DROP TABLE receipt_currency_confirmations; DROP TABLE gsx_receipts; \
+const DROP_V6: &str = "DROP TABLE app_settings; DROP TABLE receipt_files; DELETE FROM schema_migrations WHERE version = 7; DROP TABLE expense_audit; DROP TABLE expenses; DROP TABLE receipt_currency_confirmations; DROP TABLE gsx_receipts; \
     DROP TABLE turnaround_feed_log; DROP TABLE turnaround_service_events; DROP TABLE turnarounds; DELETE FROM schema_migrations WHERE version = 6;";
 
 /// Removes everything migrations 4 to 6 added (to build genuine older databases in tests).
-const DROP_V4: &str = "DROP TABLE expense_audit; DROP TABLE expenses; DROP TABLE receipt_currency_confirmations; DROP TABLE gsx_receipts; \
+const DROP_V4: &str = "DROP TABLE app_settings; DROP TABLE receipt_files; DELETE FROM schema_migrations WHERE version = 7; DROP TABLE expense_audit; DROP TABLE expenses; DROP TABLE receipt_currency_confirmations; DROP TABLE gsx_receipts; \
     DROP TABLE turnaround_feed_log; DROP TABLE turnaround_service_events; DROP TABLE turnarounds; DELETE FROM schema_migrations WHERE version = 6; \
     DELETE FROM schema_migrations WHERE version = 5; DROP TRIGGER flight_manual_milestones_immutable; DROP TABLE flight_manual_milestones; \
     DROP TRIGGER dispatch_releases_no_delete; DROP TRIGGER dispatch_releases_link_once; DROP TRIGGER dispatch_releases_state_transition; \

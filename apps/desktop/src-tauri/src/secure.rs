@@ -450,7 +450,6 @@ mod tests {
     }
 }
 
-
 // SimuNet credentials are a SECOND fixed keyring namespace, independent of
 // Turnline Supabase authentication and its separate flight cloud-sync consent.
 // The webview can only write/delete the fixed SimuNet credential; there is NO
