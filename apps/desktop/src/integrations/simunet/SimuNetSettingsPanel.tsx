@@ -51,13 +51,13 @@ export function SimuNetSettingsPanel() {
       setStatus(next);
       if (command === "simunet_credential_save") {
         setKeyInput("");
-        setMessage("Operator key saved in OS secure storage. No connection or telemetry upload has started.");
+        setMessage("Operator key saved in OS secure storage. Telemetry requires separate consent and an approved HTTPS endpoint.");
       } else if (command === "simunet_credential_disconnect") {
         setKeyInput("");
         setMessage("SimuNet key and telemetry consent cleared.");
       } else {
         setMessage(next.telemetryEnabled
-          ? "Consent saved. Telemetry sending remains unavailable until the secure sender is implemented."
+          ? "Consent saved. The native sender can transmit fresh flight telemetry only when configured for an approved SimuNet HTTPS endpoint."
           : "SimuNet telemetry consent disabled.");
       }
     } catch {
@@ -75,7 +75,7 @@ export function SimuNetSettingsPanel() {
         Turnline remains your only MSFS 2020/2024 connector.
       </p>
       <p role="status" className="muted">
-        {status.senderAvailable ? "Sender available" : "Preview setup only — flight telemetry is not sent to SimuNet in this build."}
+        {status.senderAvailable ? "Native sender configured" : "Native sender unavailable — this build has no approved SimuNet HTTPS endpoint."}
       </p>
       <p className="muted">
         Operator credential: {status.credentialSaved ? "Stored securely on this computer" : "Not connected"}

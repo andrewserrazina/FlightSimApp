@@ -2,6 +2,7 @@ mod bridge;
 mod bridge_log;
 mod receipts;
 mod secure;
+mod simunet_sender;
 mod store;
 
 pub fn run() {
@@ -14,6 +15,7 @@ pub fn run() {
             // S2-06: automatic GSX receipt import on its own thread; never on the recording path.
             app.manage(receipts::watch_service::start(app.handle().clone(), store_handle.clone()));
             app.manage(store_handle);
+            app.manage(simunet_sender::SenderState::default());
             bridge::start(app.handle().clone(), log_dir.and_then(|d| bridge_log::prepare(&d)));
             Ok(())
         })
@@ -80,7 +82,8 @@ pub fn run() {
             secure::simunet_credential_status,
             secure::simunet_credential_save,
             secure::simunet_credential_set_consent,
-            secure::simunet_credential_disconnect
+            secure::simunet_credential_disconnect,
+            simunet_sender::simunet_telemetry_send
         ])
         .run(tauri::generate_context!())
         .expect("error while running FlightSimApp");
