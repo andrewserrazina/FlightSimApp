@@ -7,11 +7,11 @@ import { useEffect, useState } from "react";
 import type { NavigateFn } from "../app/navigation";
 import { useRecorderView } from "../recording/RecorderContext";
 import { Button } from "../ui/Button";
-import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { KeyValueList } from "../ui/KeyValueList";
 import { Panel } from "../ui/Panel";
 import { Tag } from "../ui/Tag";
 import { useDispatch, useDispatchView } from "./DispatchContext";
+import { RecordMilestoneDialog } from "./RecordMilestoneDialog";
 import type { FlightOpsState, ReleaseEntry } from "./DispatchService";
 import type { ImportedFlightPlan } from "./model";
 import { flightTitle, fmtUtcTime, routeTitle, UNAVAILABLE } from "./presentation";
@@ -205,35 +205,7 @@ export function LiveOperations({ navigate }: { navigate: NavigateFn }) {
           {message.text}
         </p>
       )}
-      {confirm && flightId && (
-        <ConfirmDialog
-          title={confirm === "out" ? "Record OUT (off-block) now?" : "Record IN (on-block) now?"}
-          onCancel={() => setConfirm(null)}
-          actions={
-            <>
-              <Button onClick={() => setConfirm(null)} data-autofocus>
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={async () => {
-                  const which = confirm;
-                  setConfirm(null);
-                  const r = await dispatch.recordMilestone(flightId, which);
-                  setMessage(r.ok ? { ok: true, text: r.message ?? `${which.toUpperCase()} recorded manually.` } : { ok: false, text: `Could not record ${which.toUpperCase()}: ${r.message}` });
-                }}
-              >
-                Record {confirm.toUpperCase()}
-              </Button>
-            </>
-          }
-        >
-          <p>
-            The current real-world UTC time from this computer&apos;s clock is stored as a manually recorded {confirm === "out" ? "off-block" : "on-block"} time. Simulator time is not used. It is shown as
-            &quot;Manual · Real-world UTC&quot;, never as detected, and cannot be changed afterwards.
-          </p>
-        </ConfirmDialog>
-      )}
+      {confirm && flightId && <RecordMilestoneDialog which={confirm} flightId={flightId} onClose={() => setConfirm(null)} onResult={setMessage} />}
     </Panel>
   );
 }

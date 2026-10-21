@@ -180,11 +180,20 @@ describe("flight actions", () => {
     expect(acts({ lc: active("PREPARING"), opsReady: false })).toMatchObject({ primary: null, secondary: ["end"], idleNote: "No action needed" });
     expect(acts({ lc: active("CRUISE", { takeoffAt: "2026-10-15T14:56:00Z" }) })).toMatchObject({ primary: null, secondary: ["end"], idleNote: "No action needed" });
     expect(acts({ lc: active("TAXI_IN", { takeoffAt: "x", landingAt: "2026-10-15T17:04:00Z" }) })).toMatchObject({ primary: "record_in", secondary: ["end"] });
-    expect(acts({ lc: lc({ status: "interrupted", flightId: "f-1", phase: "INTERRUPTED", takeoffAt: "2026-10-15T14:56:00Z" }) })).toMatchObject({ primary: "resume", secondary: ["end", "discard"] });
+    expect(acts({ lc: lc({ status: "interrupted", flightId: "f-1", phase: "INTERRUPTED", takeoffAt: "2026-10-15T14:56:00Z", needsUserDecision: true }) })).toMatchObject({ primary: "resume", secondary: ["end", "discard"] });
     // Interrupted before takeoff: the existing rules still allow a manual OUT, so it stays reachable.
-    expect(acts({ lc: lc({ status: "interrupted", flightId: "f-1", phase: "INTERRUPTED" }) })).toMatchObject({ primary: "resume", secondary: ["record_out", "end", "discard"] });
+    expect(acts({ lc: lc({ status: "interrupted", flightId: "f-1", phase: "INTERRUPTED", needsUserDecision: true }) })).toMatchObject({ primary: "resume", secondary: ["record_out", "end", "discard"] });
+    // Automatic interruption: recording resumes on its own; Resume stays available but is not the primary.
+    expect(acts({ lc: lc({ status: "interrupted", flightId: "f-1", phase: "INTERRUPTED", takeoffAt: "x" }) })).toMatchObject({ primary: null, secondary: ["resume", "end", "discard"], idleNote: "Recording resumes automatically when data returns" });
     expect(acts({ lc: lc({ status: "completed", flightId: "f-1" }) })).toMatchObject({ primary: "start", secondary: ["open_debrief"] });
     expect(acts({ lc: lc({ status: "completed", flightId: "f-1" }), telemetryLive: false })).toMatchObject({ primary: "connect", secondary: ["open_debrief"] });
+  });
+
+  it("offer attaching an open release or an imported plan while a flight is open, as the Flight plan panel does", () => {
+    expect(acts({ lc: active("PREPARING"), basisKind: "release_open" }).secondary).toEqual(["attach_release", "end"]);
+    expect(acts({ lc: active("CRUISE", { takeoffAt: "x" }), basisKind: "imported_preview" }).secondary).toEqual(["attach_plan", "end"]);
+    expect(acts({ lc: active("PREPARING"), basisKind: "release_attached_current" }).secondary).toEqual(["end"]);
+    expect(acts({ lc: lc(), basisKind: "release_open" }).secondary).toEqual([]);
   });
 
   it("do not assume an order between Record IN and Confirm completion; both stay available", () => {
@@ -243,6 +252,7 @@ describe("health summary and attention", () => {
   it("covers unsaved data, interruptions, disconnection and a paused turnaround", () => {
     expect(h({ writeError: "busy", pendingItems: 23 }).attention[0]).toMatchObject({ id: "write", detail: "23 items are kept safely in memory and saving is retried automatically.", actions: ["retry_flush"] });
     expect(h({ lc: lc({ status: "interrupted", flightId: "f-1", needsUserDecision: true }) }).attention[0]).toMatchObject({ id: "interrupted", level: "action", actions: ["resume"] });
+    expect(h({ lc: lc({ status: "interrupted", flightId: "f-1", needsUserDecision: true, startedAt: "2026-10-15T14:00:00Z" }), recovered: true }).attention[0]).toMatchObject({ title: "Unfinished flight found.", actions: ["resume"] });
     expect(h({ lc: lc({ status: "interrupted", flightId: "f-1" }), freshness: STALE, simulatorConnected: true }).attention.map((a) => a.id)).toEqual(["interrupted", "stale"]);
     expect(h({ freshness: { kind: "stale", ageMs: 9000, reason: "disconnected" }, simulatorConnected: false }).attention[0]).toMatchObject({ id: "disconnected", actions: ["connect"] });
     expect(h({ lc: lc(), freshness: { kind: "none" }, simulatorConnected: false }).attention).toEqual([]);
