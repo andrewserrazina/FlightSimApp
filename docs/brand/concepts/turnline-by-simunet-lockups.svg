@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 980" font-family="Segoe UI, Inter, Arial, sans-serif">
+  <!-- CONCEPT SKETCH for the brand proposal (docs/brand/turnline-by-simunet.md). Not production artwork:
+       final lockups must be drawn by a designer from the official Turnline and SimuNet artwork. -->
+  <defs>
+    <g id="mark">
+      <rect width="32" height="32" rx="8" fill="#0b1f3a" stroke="#2a4a74"/>
+      <path d="M8 21.5c4.5-1 8.5-4.5 10.5-10.5" fill="none" stroke="#f4b400" stroke-width="2.6" stroke-linecap="round"/>
+      <path d="M14.5 10.5h5v5" fill="none" stroke="#f4b400" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="8" cy="21.5" r="2" fill="#fff"/>
+    </g>
+  </defs>
+  <rect width="1200" height="980" fill="#061426"/>
+  <text x="40" y="52" fill="#e6eaee" font-size="22" font-weight="700">Turnline by SimuNet: lockup and placement concepts</text>
+  <text x="40" y="78" fill="#9aacc0" font-size="14">Concept sketch for review. Not final artwork. The endorsement is text only, in cloud at 70% on navy, about 40% of the TURNLINE cap height, and never orange.</text>
+
+  <!-- 1. Horizontal -->
+  <text x="40" y="128" fill="#f4b400" font-size="13" font-weight="700" letter-spacing="2">1 · HORIZONTAL (PRIMARY): site header, installer, About</text>
+  <rect x="40" y="142" width="540" height="130" rx="12" fill="#0b1f3a" stroke="#1f4470"/>
+  <use href="#mark" transform="translate(80 175) scale(2)"/>
+  <text x="160" y="226" fill="#ffffff" font-size="40" font-weight="800" letter-spacing="6">TURNLINE</text>
+  <line x1="414" y1="190" x2="414" y2="236" stroke="#e6eaee" stroke-opacity=".35"/>
+  <text x="430" y="224" fill="#e6eaee" fill-opacity=".7" font-size="17">by SimuNet</text>
+
+  <!-- on light -->
+  <rect x="620" y="142" width="540" height="130" rx="12" fill="#e6eaee"/>
+  <use href="#mark" transform="translate(660 175) scale(2)"/>
+  <text x="740" y="226" fill="#0b1f3a" font-size="40" font-weight="800" letter-spacing="6">TURNLINE</text>
+  <line x1="994" y1="190" x2="994" y2="236" stroke="#4b5b6b" stroke-opacity=".5"/>
+  <text x="1010" y="224" fill="#4b5b6b" font-size="17">by SimuNet</text>
+
+  <!-- 2. Stacked + 3. Alone -->
+  <text x="40" y="322" fill="#f4b400" font-size="13" font-weight="700" letter-spacing="2">2 · STACKED: splash, social with caption</text>
+  <rect x="40" y="336" width="340" height="230" rx="12" fill="#0b1f3a" stroke="#1f4470"/>
+  <use href="#mark" transform="translate(178 360) scale(2)"/>
+  <text x="210" y="472" fill="#ffffff" font-size="36" font-weight="800" letter-spacing="6" text-anchor="middle">TURNLINE</text>
+  <text x="210" y="506" fill="#e6eaee" fill-opacity=".7" font-size="15" text-anchor="middle">by SimuNet</text>
+  <text x="210" y="540" fill="#9aacc0" font-size="12" text-anchor="middle">Every flight. The whole operation.</text>
+
+  <text x="420" y="322" fill="#f4b400" font-size="13" font-weight="700" letter-spacing="2">3 · TURNLINE ALONE: app icon, favicon, under 120 px</text>
+  <rect x="420" y="336" width="740" height="230" rx="12" fill="#0b1f3a" stroke="#1f4470"/>
+  <use href="#mark" transform="translate(460 380) scale(4)"/>
+  <text x="460" y="540" fill="#9aacc0" font-size="12">App icon: Turnline only</text>
+  <use href="#mark" transform="translate(640 420) scale(1.5)"/>
+  <text x="700" y="447" fill="#ffffff" font-size="26" font-weight="800" letter-spacing="4">TURNLINE</text>
+  <text x="640" y="540" fill="#9aacc0" font-size="12">Small sizes: endorsement dropped</text>
+  <use href="#mark" transform="translate(960 424) scale(1)"/>
+  <use href="#mark" transform="translate(1010 428) scale(.75)"/>
+  <text x="960" y="540" fill="#9aacc0" font-size="12">Favicon / taskbar</text>
+
+  <!-- In-app top bar: before / after -->
+  <text x="40" y="616" fill="#f4b400" font-size="13" font-weight="700" letter-spacing="2">DESKTOP TOP BAR: TODAY → PROPOSED (P3, frame only; Live Flight content is unchanged)</text>
+  <rect x="40" y="630" width="1120" height="56" fill="#081629" stroke="#1f4470"/>
+  <text x="62" y="665" fill="#f4b400" font-size="18">▲</text>
+  <text x="88" y="665" fill="#ffffff" font-size="18" font-weight="700">FlightSimApp</text>
+  <text x="212" y="664" fill="#9aacc0" font-size="12" letter-spacing="2">OPERATIONS</text>
+  <circle cx="330" cy="658" r="7" fill="none" stroke="#22c55e" stroke-width="2"/><text x="344" y="663" fill="#ffffff" font-size="14" font-weight="600">Connected</text>
+  <rect x="432" y="646" width="96" height="24" rx="4" fill="#f4b400"/><text x="480" y="663" fill="#081629" font-size="12" font-weight="800" text-anchor="middle">DEMO DATA</text>
+  <text x="1140" y="665" fill="#ffffff" font-size="18" text-anchor="end" font-family="Consolas, monospace">20:03:14 <tspan fill="#f4b400" font-size="12">UTC</tspan></text>
+  <text x="1164" y="704" fill="#9aacc0" font-size="12" text-anchor="end">Today</text>
+
+  <rect x="40" y="716" width="1120" height="56" fill="#081629" stroke="#f4b400" stroke-opacity=".5"/>
+  <use href="#mark" transform="translate(60 729) scale(.95)"/>
+  <text x="100" y="751" fill="#ffffff" font-size="18" font-weight="800" letter-spacing="3">TURNLINE</text>
+  <text x="226" y="750" fill="#e6eaee" fill-opacity=".7" font-size="12">by SimuNet</text>
+  <circle cx="330" cy="744" r="7" fill="none" stroke="#22c55e" stroke-width="2"/><text x="344" y="749" fill="#ffffff" font-size="14" font-weight="600">Connected</text>
+  <rect x="432" y="732" width="96" height="24" rx="4" fill="#f4b400"/><text x="480" y="749" fill="#081629" font-size="12" font-weight="800" text-anchor="middle">DEMO DATA</text>
+  <text x="1140" y="751" fill="#ffffff" font-size="18" text-anchor="end" font-family="Consolas, monospace">20:03:14 <tspan fill="#f4b400" font-size="12">UTC</tspan></text>
+  <text x="1164" y="790" fill="#9aacc0" font-size="12" text-anchor="end">Proposed: replaces "OPERATIONS"; the endorsement hides below 1100 px wide</text>
+
+  <!-- Don'ts -->
+  <text x="40" y="838" fill="#ff8a7a" font-size="13" font-weight="700" letter-spacing="2">DON'T</text>
+  <rect x="40" y="852" width="540" height="96" rx="12" fill="#0b1f3a" stroke="#d62839" stroke-dasharray="6 4"/>
+  <use href="#mark" transform="translate(66 884)"/>
+  <text x="110" y="908" fill="#ffffff" font-size="24" font-weight="800" letter-spacing="4">TURNLINE</text>
+  <text x="270" y="907" fill="#ff6b2c" font-size="22" font-weight="800">SimuNet ›››</text>
+  <text x="66" y="938" fill="#ff8a7a" font-size="12">No equal-weight co-brand, no orange chevrons, no SimuNet logo in Turnline UI</text>
+  <rect x="620" y="852" width="540" height="96" rx="12" fill="#0b1f3a" stroke="#d62839" stroke-dasharray="6 4"/>
+  <text x="646" y="886" fill="#ffffff" font-size="15" font-weight="700">Live Flight · Cruise</text>
+  <rect x="646" y="896" width="250" height="26" rx="5" fill="#ff6b2c"/><text x="771" y="914" fill="#1f232c" font-size="12" font-weight="800" text-anchor="middle">Get SimuNet PRO to earn more</text>
+  <text x="646" y="941" fill="#ff8a7a" font-size="12">No SimuNet promotion or clutter in the Operations Center</text>
+</svg>
