@@ -451,6 +451,16 @@ mod tests {
 }
 
 
+/// Only native integration code may retrieve the operator key; never exposed as a Tauri command.
+pub(crate) fn simunet_sender_key() -> Result<Option<String>, SecureError> {
+    locked(|| {
+        if KeyringStore.get(SIMUNET_CONSENT_ACCOUNT)?.as_deref() != Some("enabled") {
+            return Ok(None);
+        }
+        Ok(KeyringStore.get(SIMUNET_KEY_ACCOUNT)?.filter(|v| !v.trim().is_empty()))
+    })
+}
+
 // SimuNet credentials are a SECOND fixed keyring namespace, independent of
 // Turnline Supabase authentication and its separate flight cloud-sync consent.
 // The webview can only write/delete the fixed SimuNet credential; there is NO
