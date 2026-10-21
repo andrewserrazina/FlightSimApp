@@ -449,3 +449,83 @@ mod tests {
         println!("secure storage round-trip exercised with a 2972-char session");
     }
 }
+
+
+// SimuNet credentials are a SECOND fixed keyring namespace, independent of
+// Turnline Supabase authentication and its separate flight cloud-sync consent.
+// The webview can only write/delete the fixed SimuNet credential; there is NO
+// command that returns the credential text to JavaScript.
+#[cfg(not(test))]
+const SIMUNET_KEY_ACCOUNT: &str = "simunet-operator-api-key";
+#[cfg(test)]
+const SIMUNET_KEY_ACCOUNT: &str = "simunet-operator-api-key-test";
+#[cfg(not(test))]
+const SIMUNET_CONSENT_ACCOUNT: &str = "simunet-telemetry-consent";
+#[cfg(test)]
+const SIMUNET_CONSENT_ACCOUNT: &str = "simunet-telemetry-consent-test";
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SimuNetCredentialStatus {
+    pub credential_saved: bool,
+    pub telemetry_enabled: bool,
+    pub sender_available: bool,
+}
+
+fn simunet_status_from<S: CredStore>(store: &S) -> Result<SimuNetCredentialStatus, SecureError> {
+    let credential_saved = store.get(SIMUNET_KEY_ACCOUNT)?
+        .is_some_and(|value| !value.trim().is_empty());
+    let telemetry_enabled = credential_saved
+        && store.get(SIMUNET_CONSENT_ACCOUNT)?.as_deref() == Some("enabled");
+    Ok(SimuNetCredentialStatus {
+        credential_saved,
+        telemetry_enabled,
+        // A native allowlisted HTTPS sender is NOT implemented in this PR.
+        sender_available: false,
+    })
+}
+
+#[tauri::command]
+pub fn simunet_credential_status() -> Result<SimuNetCredentialStatus, SecureError> {
+    locked(|| simunet_status_from(&KeyringStore))
+}
+
+#[tauri::command]
+pub fn simunet_credential_save(value: String) -> Result<SimuNetCredentialStatus, SecureError> {
+    locked(|| {
+        if value.is_empty() || value.trim() != value || value.len() > 512
+            || value.chars().any(char::is_whitespace)
+        {
+            return Err(SecureError::new("Enter a valid SimuNet operator key."));
+        }
+        // A new operator key never inherits consent from the previous operator.
+        KeyringStore.delete(SIMUNET_CONSENT_ACCOUNT)?;
+        KeyringStore.set(SIMUNET_KEY_ACCOUNT, &value)?;
+        simunet_status_from(&KeyringStore)
+    })
+}
+
+#[tauri::command]
+pub fn simunet_credential_set_consent(enabled: bool) -> Result<SimuNetCredentialStatus, SecureError> {
+    locked(|| {
+        if enabled && !simunet_status_from(&KeyringStore)?.credential_saved {
+            return Err(SecureError::new("Save a SimuNet operator key before enabling consent."));
+        }
+        if enabled {
+            KeyringStore.set(SIMUNET_CONSENT_ACCOUNT, "enabled")?;
+        } else {
+            KeyringStore.delete(SIMUNET_CONSENT_ACCOUNT)?;
+        }
+        simunet_status_from(&KeyringStore)
+    })
+}
+
+#[tauri::command]
+pub fn simunet_credential_disconnect() -> Result<SimuNetCredentialStatus, SecureError> {
+    locked(|| {
+        // Revoke consent first. A failed credential deletion is still off.
+        KeyringStore.delete(SIMUNET_CONSENT_ACCOUNT)?;
+        KeyringStore.delete(SIMUNET_KEY_ACCOUNT)?;
+        simunet_status_from(&KeyringStore)
+    })
+}
