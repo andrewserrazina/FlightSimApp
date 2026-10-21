@@ -12,6 +12,7 @@ pub fn run() {
             let path = store::commands::database_path(app.handle());
             let log_dir = path.parent().map(|d| d.join("logs"));
             app.manage(store::actor::StoreHandle::spawn(path));
+            app.manage(simunet_sender::SenderState::default());
             bridge::start(app.handle().clone(), log_dir.and_then(|d| bridge_log::prepare(&d)));
             Ok(())
         })
@@ -75,7 +76,8 @@ pub fn run() {
             secure::simunet_credential_status,
             secure::simunet_credential_save,
             secure::simunet_credential_set_consent,
-            secure::simunet_credential_disconnect
+            secure::simunet_credential_disconnect,
+            simunet_sender::simunet_telemetry_send
         ])
         .run(tauri::generate_context!())
         .expect("error while running FlightSimApp");
