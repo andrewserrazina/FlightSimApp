@@ -14,6 +14,7 @@ import { DispatchProvider } from "./dispatch/DispatchContext";
 import { DispatchService } from "./dispatch/DispatchService";
 import type { DispatchStore } from "./dispatch/store";
 import { OpsProvider } from "./ops/OpsContext";
+import { RouteTrackerProvider } from "./route/RouteTrackerContext";
 import { OpsService } from "./ops/OpsService";
 import type { OpsStore } from "./ops/store";
 
@@ -83,7 +84,9 @@ export function App({ transport, storage, store = null, history, initialPage, re
           <FlightHistoryContext.Provider value={repository}>
             <DispatchProvider service={dispatch}>
               <OpsProvider service={ops}>
-                <AppShell {...(initialPage ? { initialPage } : {})} />
+                <RouteTrackerProvider>
+                  <AppShell {...(initialPage ? { initialPage } : {})} />
+                </RouteTrackerProvider>
               </OpsProvider>
             </DispatchProvider>
           </FlightHistoryContext.Provider>

@@ -6,7 +6,7 @@
  */
 import { readingValue } from "@flightsim/contracts";
 import type { FlightDetail } from "@flightsim/flight-core";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { NavigateFn } from "../app/navigation";
 import { useNow } from "../app/useNow";
 import { useBridgeState } from "../bridge/BridgeContext";
@@ -19,7 +19,6 @@ import { fixLabel, plannedRemainingNm, positionStatusOf, type NavFix, type PlanN
 import { fmtAltitude, fmtDuration, fmtUtcTime, fmtWeight, routeTitle, UNAVAILABLE } from "../dispatch/presentation";
 import { telemetryFreshness } from "../domain/freshness";
 import { usePreferences } from "../preferences/PreferencesContext";
-import { useRecorderView } from "../recording/RecorderContext";
 import type { SampleRowDto } from "../recording/types";
 import { Button } from "../ui/Button";
 import { Panel } from "../ui/Panel";
@@ -27,7 +26,8 @@ import { Tag } from "../ui/Tag";
 import type { LatLon } from "./geo";
 import { buildRouteGeometry, type RouteGeometry } from "./geometry";
 import { navObservations } from "./observations";
-import { INITIAL_TRACKER, OUTSIDE_CORRIDOR_CAUSES, routeProgress, stepTracker, type RouteProgress, type TrackerState } from "./progress";
+import { OUTSIDE_CORRIDOR_CAUSES, routeProgress, type RouteProgress } from "./progress";
+import { useRouteTracker } from "./RouteTrackerContext";
 
 const nm = (v: number | null, digits = 0) => (v === null ? UNAVAILABLE : `${v.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: digits })} nm`);
 const Unavail = ({ text = UNAVAILABLE }: { text?: string }) => <span className="unavailable">{text}</span>;
@@ -305,40 +305,13 @@ export function RouteMonitor({ navigate }: { navigate: NavigateFn }) {
   const state = useBridgeState();
   const now = useNow(1000);
   const { preferences } = usePreferences();
-  const dispatch = useDispatch();
-  const view = useDispatchView();
-  const lc = useRecorderView().lifecycle;
-  const flightOpen = (lc.status === "active" || lc.status === "interrupted") && lc.flightId !== null;
-  const flightId = flightOpen ? lc.flightId : null;
-  useEffect(() => {
-    if (flightId) void dispatch.loadSnapshot(flightId);
-  }, [dispatch, flightId]);
-  const snap = flightId ? view.snapshots[flightId] : undefined;
-  // Same basis as the Flight plan and Operations panels: attached snapshot, else the open release, else the imported preview.
-  const basis = planBasisForFlight({ snapshot: snap?.kind === "ready" ? snap.snapshot : null, flightOpen: flightOpen ? true : null, openRelease: dispatch.openRelease, importedPlan: view.plan.kind === "ready" ? view.plan.plan : null });
+  // Plan basis, geometry and tracker state live in RouteTrackerProvider, so tracking continues while other pages are open.
+  const { basis, geometry, tracker, flightOpen } = useRouteTracker();
   const plan = basis?.plan ?? null;
   const bound = basis !== null && (basis.kind === "release_attached_current" || basis.kind === "legacy_attached");
   const navlog = plan?.navlog ?? null;
-  const geometry = useMemo(() => (navlog ? buildRouteGeometry(navlog) : null), [navlog]);
-
-  // Tracker state lives here, outside the recorder; it restarts when the route changes.
-  const tracker = useRef<{ geometry: RouteGeometry | null; state: TrackerState; seq: number | null }>({ geometry: null, state: INITIAL_TRACKER, seq: null });
-  if (tracker.current.geometry !== geometry) tracker.current = { geometry, state: INITIAL_TRACKER, seq: null };
   const frame = state.lastFrame;
   const fresh = telemetryFreshness(state, now, preferences.staleWarningSeconds * 1000);
-  const [, force] = useState(0);
-  useEffect(() => {
-    if (!geometry || !frame || tracker.current.seq === frame.seq) return;
-    tracker.current.seq = frame.seq;
-    tracker.current.state = stepTracker(geometry, tracker.current.state, {
-      atUtc: frame.observed_at,
-      lat: readingValue(frame.readings.lat_deg),
-      lon: readingValue(frame.readings.lon_deg),
-      onGround: readingValue(frame.readings.on_ground),
-      usable: fresh.kind === "live",
-    });
-    force((x) => x + 1);
-  }, [geometry, frame, fresh.kind]);
 
   if (!plan || !basis) {
     return (
@@ -356,7 +329,7 @@ export function RouteMonitor({ navigate }: { navigate: NavigateFn }) {
     ? { status: "unavailable", reason: "The flight plan has no navigation log with waypoint positions." }
     : fresh.kind !== "live"
       ? { status: "unavailable", reason: fresh.kind === "none" ? "No telemetry received." : "Telemetry is stale or disconnected." }
-      : routeProgress(geometry, tracker.current.state);
+      : routeProgress(geometry, tracker);
   const pos = frame && fresh.kind === "live" ? { lat: readingValue(frame.readings.lat_deg), lon: readingValue(frame.readings.lon_deg) } : null;
   return (
     <Panel
