@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { Button } from "../../ui/Button";
 import { Panel } from "../../ui/Panel";
+import { useSimuNetDiagnostics } from "./diagnostics";
 
 interface SimuNetStatus {
   credentialSaved: boolean;
@@ -25,6 +26,7 @@ const absent: SimuNetStatus = {
  */
 export function SimuNetSettingsPanel() {
   const [status, setStatus] = useState<SimuNetStatus>(absent);
+  const delivery = useSimuNetDiagnostics();
   const [keyInput, setKeyInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -111,6 +113,12 @@ export function SimuNetSettingsPanel() {
         Off by default. Separate from Turnline cloud sync. Saving this permission does not
         transmit data; a future build will provide sender status and per-flight controls.
       </p>
+      <div aria-label="SimuNet telemetry delivery diagnostics" role="status">
+        <p className="muted">Delivery: {delivery.state}. {delivery.message}</p>
+        <p className="muted">Acknowledged: {delivery.accepted} frames; duplicates: {delivery.duplicates}; rejected: {delivery.rejected}; failed requests: {delivery.failedRequests}.</p>
+        <p className="muted">Last attempt (UTC): {delivery.lastAttemptAt ?? "None"}; last response (UTC): {delivery.lastAcknowledgedAt ?? "None"}.</p>
+        <p className="muted">Session-only counters; no API keys, raw telemetry, or error bodies are stored here.</p>
+      </div>
       {message && <p role="status" className="muted">{message}</p>}
     </Panel>
   );
