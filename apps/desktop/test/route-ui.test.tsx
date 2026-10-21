@@ -148,6 +148,24 @@ describe("Live Flight route monitoring", () => {
     expect(within(panel).getByRole("img", { name: "Route map KBOS → KORD" })).toBeInTheDocument();
   });
 
+  it("keeps tracking while another page is open (L2: the tracker no longer resets on navigation)", async () => {
+    const { svc } = await serviceWith("ofp-v2-navlog.json");
+    const t = await renderApp({ dispatch: svc, page: "live" });
+    const leg = buildRouteGeometry(navPlan().navlog!).legs[2]!; // TOC → TLNB2
+    await flyFrames(t, [0.2, 0.21].map((f) => interpolate(leg.from, leg.to, f)));
+    // Leave Live Flight; the third confirming position arrives while Settings is shown.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Settings/ }));
+    });
+    await flyFrames(t, [interpolate(leg.from, leg.to, 0.22)], 3);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Live Flight/ }));
+    });
+    const panel = screen.getByRole("region", { name: "Route monitoring" });
+    expect(within(panel).getByText("TOC → TLNB2")).toBeInTheDocument();
+    expect(within(panel).getByText("On track")).toBeInTheDocument();
+  });
+
   it("never shows a progress figure when the aircraft is flying elsewhere", async () => {
     const { svc } = await serviceWith("ofp-v2-navlog.json");
     const t = await renderApp({ dispatch: svc, page: "live" });
