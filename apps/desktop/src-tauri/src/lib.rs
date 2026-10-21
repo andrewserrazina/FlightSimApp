@@ -2,6 +2,7 @@ mod bridge;
 mod bridge_log;
 mod receipts;
 mod secure;
+mod simunet_sender;
 mod store;
 
 pub fn run() {
