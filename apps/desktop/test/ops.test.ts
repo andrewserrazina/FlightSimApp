@@ -262,3 +262,21 @@ describe("failed GSX writes stay retryable (no history lost, nothing doubled)", 
     expect(gsxEvents(store)).toEqual([]);
   });
 });
+
+describe("receipt watcher events", () => {
+  it("subscribes once even when init runs twice, and reloads the ledger on a background import", async () => {
+    const store = new MemoryOpsStore();
+    const ops = new OpsService(store);
+    await Promise.all([ops.init(), ops.init()]);
+    expect(ops.getView().watch?.state).toBe("watching");
+    const before = store.calls.filter((c) => c === "listReceipts").length;
+    store.emitImported([]);
+    await settle();
+    expect(store.calls.filter((c) => c === "listReceipts").length - before).toBe(1);
+    store.emitWatch({ state: "access_denied" });
+    expect(ops.getView().watch?.state).toBe("access_denied");
+    ops.dispose();
+    store.emitWatch({ state: "watching" });
+    expect(ops.getView().watch?.state).toBe("access_denied");
+  });
+});

@@ -232,3 +232,53 @@ describe("Debrief", () => {
     expect(pending).toHaveTextContent("printed $ 28,022.40");
   });
 });
+
+describe("Automatic receipt import (S2-06 watcher)", () => {
+  it("shows watcher health, refreshes the queue on background imports and never counts automatically", async () => {
+    const store = new MemoryOpsStore();
+    store.watch = { ...store.watch, state: "watching", lastSuccessfulScanAtUtc: "2026-10-18T16:30:00.000Z", lastScanReason: "startup" };
+    await renderApp("expenses", store);
+    const status = screen.getByRole("region", { name: "Automatic receipt import" });
+    expect(status).toHaveTextContent("Watching");
+    expect(status).toHaveTextContent("Last successful scan 2026-10-18 16:30:00Z (startup)");
+    expect(within(status).getByRole("checkbox", { name: "Import new GSX receipts automatically" })).toBeChecked();
+    expect(screen.queryByRole("article", { name: /Fuel receipt/ })).toBeNull();
+
+    // A receipt arrives in the background: it appears in the review queue without pressing Scan.
+    await act(async () => store.emitImported([kbosReceipt()]));
+    await act(flush);
+    const card = screen.getByRole("article", { name: /Fuel receipt GSX-20261017T164423Z-KBOS/ });
+    expect(within(card).getByText("Currency to confirm")).toBeInTheDocument();
+    expect(store.receipts[0]!.confirmations).toEqual([]);
+    expect(store.receipts[0]!.flightId).toBeNull();
+    expect(store.expenses).toEqual([]);
+    expect(store.calls).not.toContain("scanReceipts");
+  });
+
+  it("reports folder problems and files still being written, separately from deletion", async () => {
+    const store = new MemoryOpsStore();
+    await renderApp("expenses", store);
+    await act(async () => store.emitWatch({ state: "folder_missing", detail: "The GSX Receipts folder was not found.", lastSuccessfulScanAtUtc: null }));
+    const status = screen.getByRole("region", { name: "Automatic receipt import" });
+    expect(status).toHaveTextContent("Folder not found");
+    expect(status).toHaveTextContent("No successful scan yet");
+    await act(async () => store.emitWatch({ state: "watching", detail: null, pending: 1, failed: 1, lastError: "could not read Fuel/a.html: in use by another program", lastErrorAtUtc: "2026-10-18T16:31:00.000Z" }));
+    expect(status).toHaveTextContent("1 file(s) being written, waiting until complete");
+    expect(status).toHaveTextContent("1 file(s) could not be read; retried at the next scan");
+    expect(status).toHaveTextContent("Last problem (2026-10-18 16:31:00Z): could not read Fuel/a.html");
+  });
+
+  it("can be turned off and on; manual Scan keeps working", async () => {
+    const store = new MemoryOpsStore();
+    await renderApp("expenses", store);
+    const status = screen.getByRole("region", { name: "Automatic receipt import" });
+    await click(within(status).getByRole("checkbox", { name: "Import new GSX receipts automatically" }));
+    expect(store.watch.enabled).toBe(false);
+    expect(status).toHaveTextContent("Off");
+    store.pendingScan = [kbosReceipt()];
+    await click(screen.getByRole("button", { name: "Scan GSX receipts" }));
+    expect(store.receipts).toHaveLength(1);
+    await click(within(status).getByRole("checkbox", { name: "Import new GSX receipts automatically" }));
+    expect(store.watch.enabled).toBe(true);
+  });
+});
