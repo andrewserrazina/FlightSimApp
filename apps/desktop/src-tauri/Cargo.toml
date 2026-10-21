@@ -28,6 +28,7 @@ keyring = { version = "3", features = ["windows-native", "apple-native", "linux-
 # Both are already in the lock file through Tauri; no new third-party code.
 dom_query = "0.28"
 sha2 = "0.10"
+chrono = "0.4"
 # Native-only HTTPS client; API keys never enter the webview or browser networking.
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 
