@@ -43,6 +43,8 @@ pub struct SendResult {
 }
 
 fn validate(frame: &Frame) -> Result<(), &'static str> {
+    // Optional on-ground observation is forwarded unchanged to the backend.
+    let _on_ground_observation = frame.sim.on_ground;
     if frame.sim.source != "turnline"
         || !matches!(frame.sim.simulator.as_str(), "msfs2020" | "msfs2024")
         || frame.session_id.len() < 8 || frame.session_id.len() > 128
