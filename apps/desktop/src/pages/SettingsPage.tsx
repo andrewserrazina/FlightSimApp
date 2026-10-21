@@ -9,6 +9,7 @@ import { usePreferences } from "../preferences/PreferencesContext";
 import { RETENTION_MAX, RETENTION_MIN, STALE_MAX_S, STALE_MIN_S } from "../preferences/preferences";
 import { useRecorderView } from "../recording/RecorderContext";
 import { AccountPanel } from "../cloud/AccountPanel";
+import { SimuNetSettingsPanel } from "../integrations/simunet/SimuNetSettingsPanel";
 import { useAuthView, useCloud, useSyncView } from "../cloud/CloudContext";
 import { CloudSyncPanel } from "../cloud/CloudSyncPanel";
 import { Button } from "../ui/Button";
@@ -49,6 +50,7 @@ export function SettingsPage() {
       <div className="grid grid--settings">
         <AccountPanel />
         <CloudSyncPanel />
+        <SimuNetSettingsPanel />
         <Panel title="Simulator connection">
           <CheckboxField
             label="Mock mode (demo data)"
