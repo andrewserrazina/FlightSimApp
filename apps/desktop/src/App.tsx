@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { BridgeProvider } from "./bridge/BridgeContext";
+import { SimuNetTelemetryRelay } from "./integrations/simunet/SimuNetTelemetryRelay";
 import type { BridgeTransport } from "./bridge/transport";
 import { AppShell } from "./app/AppShell";
 import type { PageId } from "./app/navigation";
@@ -80,6 +81,7 @@ export function App({ transport, storage, store = null, history, initialPage, re
       <RecorderProvider recorder={recorder}>
         <RetentionSync recorder={recorder} />
         <BridgeProvider transport={transport} onAction={(a) => recorder.observe(a)}>
+          <SimuNetTelemetryRelay />
           <FlightHistoryContext.Provider value={repository}>
             <DispatchProvider service={dispatch}>
               <OpsProvider service={ops}>
