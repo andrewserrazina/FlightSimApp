@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef } from "react";
 import { useBridgeState } from "../../bridge/BridgeContext";
 import { toSimuNetTelemetry } from "./telemetry";
+import { recordSimuNetAttempt, recordSimuNetAcknowledgement, recordSimuNetFailure } from "./diagnostics";
 
 type Status = { credentialSaved: boolean; telemetryEnabled: boolean; senderAvailable: boolean };
 const SEND_FLOOR_MS = 5000;
@@ -34,12 +35,14 @@ export function SimuNetTelemetryRelay() {
     sending.current = true;
     void invoke<Status>("simunet_credential_status")
       .then((status) => {
-        if (!status.telemetryEnabled || !status.senderAvailable) return;
-        return invoke("simunet_telemetry_send", { frame: mapped });
+        if (!status.senderAvailable || !status.telemetryEnabled) return;
+        recordSimuNetAttempt();
+        return invoke<{ accepted: number; duplicates: number; rejected: number }>("simunet_telemetry_send", { frame: mapped })
+          .then(recordSimuNetAcknowledgement);
       })
       .catch(() => {
         // Never impact the local recorder or reveal a credential in logs.
-        // Errors/retries and counters are surfaced by a later diagnostics UI.
+        recordSimuNetFailure("delivery-failed");
       })
       .finally(() => { sending.current = false; });
   }, [bridge.lastFrame, bridge.lastFrameReceivedAt, bridge.connection?.state,
