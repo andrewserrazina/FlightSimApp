@@ -262,11 +262,35 @@ describe("settings", () => {
   it("shows diagnostics counters and a report without secrets", async () => {
     const { transport } = await renderApp({ page: "settings" });
     await send(transport, helloOk(), connState("CONNECTED"), "garbage");
+    fireEvent.click(screen.getByRole("button", { name: "Show advanced diagnostics" }));
     expect(screen.getByText("Invalid messages dropped by app").closest(".kv__item")).toHaveTextContent("1");
     const report = (screen.getByLabelText("Report (JSON)") as HTMLTextAreaElement).value;
     expect(report).not.toContain("7d1c6a52-2f1e-4b8a-9c0d-3e5f6a7b8c9d");
     expect(report).not.toMatch(/token/i);
     expect(screen.getAllByRole("row").length).toBeGreaterThan(1); // connection event log
+  });
+
+  it("keeps technical detail in a collapsed Advanced diagnostics section (L3)", async () => {
+    const { transport } = await renderApp({ page: "settings" });
+    await send(transport, helloOk(), connState("CONNECTED"), frame(7));
+    const toggle = screen.getByRole("button", { name: "Show advanced diagnostics" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Bridge information")).toBeNull();
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Hide advanced diagnostics" })).toHaveAttribute("aria-expanded", "true");
+    // Every technical item the new Live Flight layout leaves out is available here.
+    for (const title of ["Connection status", "Bridge information", "Data quality", "Identifiers and timing", "Recording storage", "Live readings (raw)", "GSX raw values", "Connection events", "Diagnostic report"]) {
+      expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
+    }
+    const ids = screen.getByRole("heading", { name: "Identifiers and timing" }).closest("section")!;
+    expect(within(ids).getByText("Frame sequence").closest(".kv__item")).toHaveTextContent("7");
+    expect(ids).toHaveTextContent("Mock simulator (demo data)");
+    const readings = screen.getByRole("table", { name: "Raw telemetry readings" });
+    expect(within(readings).getByRole("row", { name: /Pressure altitude/ })).toHaveTextContent("420");
+    expect(within(readings).getByRole("row", { name: /Latitude/ })).toHaveTextContent("47.4502");
+    expect(within(readings).getAllByRole("row")).toHaveLength(17); // header + title + type + 14 readings
+    expect(screen.getByRole("table", { name: "GSX raw values" })).toHaveTextContent("Boarding");
+    expect(screen.getByText("Track points dropped (memory bound)")).toBeInTheDocument();
   });
 
   it("form controls have accessible labels", async () => {

@@ -53,6 +53,7 @@ export function AppShell({ initialPage = "welcome" }: { initialPage?: Navigation
   useAdapterSync();
   const bridge = useBridgeState();
   const presentation = presentConnection(bridge);
+  const { preferences } = usePreferences();
   const demo = (bridge.adapter ?? bridge.configuredAdapter) === "mock";
   const [nav, setNav] = useState<NavigationState>({ page: initialPage, debriefFlightId: null });
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -140,7 +141,7 @@ export function AppShell({ initialPage = "welcome" }: { initialPage?: Navigation
           {current.title}
         </h1>
         <ErrorBoundary label="Flight recording notices">
-          <RecorderBanners navigate={navigate} />
+          <RecorderBanners navigate={navigate} hidden={nav.page === "live" && preferences.opsCenterLayout} />
         </ErrorBoundary>
         <ErrorBoundary key={nav.page} label={current.label}>
           {nav.page === "welcome" && <WelcomePage navigate={navigate} />}

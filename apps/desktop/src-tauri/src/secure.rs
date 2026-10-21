@@ -450,7 +450,6 @@ mod tests {
     }
 }
 
-
 // SimuNet credentials are a SECOND fixed keyring namespace, independent of
 // Turnline Supabase authentication and its separate flight cloud-sync consent.
 // The webview can only write/delete the fixed SimuNet credential; there is NO
@@ -529,7 +528,6 @@ pub fn simunet_credential_disconnect() -> Result<SimuNetCredentialStatus, Secure
         simunet_status_from(&KeyringStore)
     })
 }
-
 
 /// Native-only: JS can never read the API key or derive this capability.
 /// The network sender re-checks consent/credential on every batch.

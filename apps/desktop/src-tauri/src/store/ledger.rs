@@ -21,7 +21,7 @@ use crate::receipts::gsx_fuel;
 use crate::receipts::import::{decide, ImportDecision, KnownReceipt};
 use crate::receipts::money::{known_currencies, minor_exponent, CurrencyRecognition};
 use crate::receipts::review::{confirm_currency, ConfirmationRefusal, CurrencyConfirmation};
-use crate::receipts::scan::{RootStatus, ScanResult, Skipped};
+use crate::receipts::scan::{RootStatus, ScanResult, ScannedFile, Skipped};
 
 /// The local profile; Turnline has one user per installation.
 pub const ACTOR: &str = "local";
@@ -38,6 +38,8 @@ pub struct ImportReport {
     pub not_verifiable: usize,
     pub skipped: Vec<Skipped>,
     pub truncated: bool,
+    /// Files still being written when a manual scan returned (watcher); imported once stable.
+    pub pending: usize,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -315,6 +317,58 @@ fn insert_invoiced(tx: &Transaction<'_>, id: &str, row: &ReceiptRow, c: &Countab
     Ok(())
 }
 
+/// Outcome of importing one file's bytes.
+pub(crate) enum ImportedOne {
+    /// Identical content (same SHA-256) is already stored.
+    Duplicate { receipt_id: String },
+    New { receipt_id: String, possible_revision: bool, verified: bool },
+}
+
+/// Import one file inside `tx`: dedup by exact SHA-256, keep the original bytes, flag possible revisions.
+pub(crate) fn import_one(tx: &Transaction<'_>, file: &ScannedFile) -> Result<ImportedOne, StoreError> {
+    let parsed = parse_bytes(&file.bytes);
+    if let Some(id) = tx.query_row("SELECT id FROM gsx_receipts WHERE sha256 = ?1", [&parsed.sha256], |r| r.get::<_, String>(0)).optional()? {
+        return Ok(ImportedOne::Duplicate { receipt_id: id });
+    }
+    let number = parsed.fields.receipt_id.clone().filter(|n| n.len() <= 128);
+    let known: Vec<KnownReceipt> = match &number {
+        Some(n) => {
+            let mut stmt = tx.prepare("SELECT id, sha256, receipt_number FROM gsx_receipts WHERE receipt_number = ?1")?;
+            let rows = stmt.query_map([n], |r| Ok(KnownReceipt { id: r.get(0)?, sha256: r.get(1)?, receipt_id: r.get(2)? }))?.collect::<Result<Vec<_>, _>>()?;
+            rows
+        }
+        None => vec![],
+    };
+    let revisions = match decide(&known, &parsed.sha256, number.as_deref()) {
+        ImportDecision::DuplicateContent { existing } => return Ok(ImportedOne::Duplicate { receipt_id: existing }),
+        ImportDecision::PossibleRevision { existing } => Some(serde_json::to_string(&existing).map_err(|e| invalid(e.to_string()))?),
+        ImportDecision::New => None,
+    };
+    let json = serde_json::to_string(&parsed).map_err(|e| invalid(e.to_string()))?;
+    let id = new_uuid()?;
+    tx.execute(
+        "INSERT INTO gsx_receipts (id, sha256, group_name, file_name, file_size, file_modified_at_utc, imported_at_utc, receipt_number, layout, parser_version, parse_status, parsed_json, raw_source, possible_revision_of) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        params![
+            id,
+            parsed.sha256,
+            file.group.chars().take(64).collect::<String>(),
+            file.file_name.chars().take(260).collect::<String>(),
+            file.size as i64,
+            file.modified_at_utc,
+            now_utc_ms(),
+            number,
+            parsed.layout,
+            parsed.parser_version,
+            status_name(&parsed.status),
+            json,
+            file.bytes,
+            revisions
+        ],
+    )?;
+    Ok(ImportedOne::New { receipt_id: id, possible_revision: revisions.is_some(), verified: parsed.status == ParseStatus::Verified })
+}
+
 impl Store {
     /// Import scanned files: new content is stored with its parse result; identical content is skipped.
     pub fn receipts_import(&mut self, scan: ScanResult) -> Result<ImportReport, StoreError> {
@@ -327,59 +381,18 @@ impl Store {
             not_verifiable: 0,
             skipped: scan.skipped.clone(),
             truncated: scan.truncated,
+            pending: 0,
         };
         let tx = self.conn.transaction()?;
         for file in scan.files {
-            let parsed = parse_bytes(&file.bytes);
-            if tx.query_row("SELECT 1 FROM gsx_receipts WHERE sha256 = ?1", [&parsed.sha256], |_| Ok(())).optional()?.is_some() {
-                report.duplicates += 1;
-                continue;
+            match import_one(&tx, &file)? {
+                ImportedOne::Duplicate { .. } => report.duplicates += 1,
+                ImportedOne::New { possible_revision, verified, .. } => {
+                    report.imported += 1;
+                    report.possible_revisions += usize::from(possible_revision);
+                    report.not_verifiable += usize::from(!verified);
+                }
             }
-            let number = parsed.fields.receipt_id.clone().filter(|n| n.len() <= 128);
-            let known: Vec<KnownReceipt> = match &number {
-                Some(n) => {
-                    let mut stmt = tx.prepare("SELECT id, sha256, receipt_number FROM gsx_receipts WHERE receipt_number = ?1")?;
-                    let rows = stmt.query_map([n], |r| Ok(KnownReceipt { id: r.get(0)?, sha256: r.get(1)?, receipt_id: r.get(2)? }))?.collect::<Result<Vec<_>, _>>()?;
-                    rows
-                }
-                None => vec![],
-            };
-            let revisions = match decide(&known, &parsed.sha256, number.as_deref()) {
-                ImportDecision::DuplicateContent { .. } => {
-                    report.duplicates += 1;
-                    continue;
-                }
-                ImportDecision::PossibleRevision { existing } => {
-                    report.possible_revisions += 1;
-                    Some(serde_json::to_string(&existing).map_err(|e| invalid(e.to_string()))?)
-                }
-                ImportDecision::New => None,
-            };
-            if parsed.status != ParseStatus::Verified {
-                report.not_verifiable += 1;
-            }
-            let json = serde_json::to_string(&parsed).map_err(|e| invalid(e.to_string()))?;
-            tx.execute(
-                "INSERT INTO gsx_receipts (id, sha256, group_name, file_name, file_size, file_modified_at_utc, imported_at_utc, receipt_number, layout, parser_version, parse_status, parsed_json, raw_source, possible_revision_of) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
-                params![
-                    new_uuid()?,
-                    parsed.sha256,
-                    file.group.chars().take(64).collect::<String>(),
-                    file.file_name.chars().take(260).collect::<String>(),
-                    file.size as i64,
-                    file.modified_at_utc,
-                    now_utc_ms(),
-                    number,
-                    parsed.layout,
-                    parsed.parser_version,
-                    status_name(&parsed.status),
-                    json,
-                    file.bytes,
-                    revisions
-                ],
-            )?;
-            report.imported += 1;
         }
         tx.commit()?;
         Ok(report)

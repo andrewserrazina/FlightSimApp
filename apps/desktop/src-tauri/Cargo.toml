@@ -28,8 +28,12 @@ keyring = { version = "3", features = ["windows-native", "apple-native", "linux-
 # Both are already in the lock file through Tauri; no new third-party code.
 dom_query = "0.28"
 sha2 = "0.10"
+# GSX receipt watcher (S2-06): file-system change notifications, used only as hints; periodic
+# reconciliation scans stay authoritative. macOS FSEvents backend disabled (kqueue instead).
+notify = { version = "6.1.1", default-features = false, features = ["macos_kqueue"] }
+
 chrono = "0.4"
-# Native-only HTTPS client; API keys never enter the webview or browser networking.
+# Native-only HTTPS client; API keys never enter webview or browser networking.
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 
 [profile.release]
