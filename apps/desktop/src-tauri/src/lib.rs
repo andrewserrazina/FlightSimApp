@@ -75,7 +75,8 @@ pub fn run() {
             secure::simunet_credential_status,
             secure::simunet_credential_save,
             secure::simunet_credential_set_consent,
-            secure::simunet_credential_disconnect
+            secure::simunet_credential_disconnect,
+            simunet_sender::simunet_send_dev_frame
         ])
         .run(tauri::generate_context!())
         .expect("error while running FlightSimApp");
