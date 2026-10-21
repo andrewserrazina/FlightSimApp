@@ -12,7 +12,7 @@ const MAX_AGE: i64 = 60;
 const MAX_FUTURE_SECONDS: i64 = 15;
 const MAX_BODY_BYTES: usize = 4096;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Frame {
     session_id: String,
     ts: String,
