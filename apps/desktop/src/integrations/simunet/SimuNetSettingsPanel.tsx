@@ -31,6 +31,8 @@ export function SimuNetSettingsPanel() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [connectionTest, setConnectionTest] = useState<string | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -70,6 +72,19 @@ export function SimuNetSettingsPanel() {
     }
   }
 
+  async function testConnection() {
+    setTesting(true);
+    setConnectionTest(null);
+    try {
+      const result = await invoke<{ state: string; message: string }>("simunet_connection_test");
+      setConnectionTest(result.message);
+    } catch {
+      setConnectionTest("The connection test could not be completed.");
+    } finally {
+      setTesting(false);
+    }
+  }
+
   return (
     <Panel title="SimuNet economy integration">
       <p className="muted">
@@ -103,6 +118,10 @@ export function SimuNetSettingsPanel() {
           Disconnect SimuNet
         </Button>
       </div>
+      <Button variant="quiet" disabled={busy || testing || !loaded || !status.credentialSaved}
+        onClick={() => void testConnection()}>{testing ? "Testing connection…" : "Test SimuNet connection"}</Button>
+      {connectionTest && <p role="status" className="muted">{connectionTest}</p>}
+      <p className="muted">Read-only authentication check; does not enable sharing, upload flight data, or modify assignments.</p>
       <label className="field__label">
         <input type="checkbox" checked={status.telemetryEnabled}
           disabled={busy || !loaded || !status.credentialSaved}
