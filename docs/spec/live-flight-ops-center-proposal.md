@@ -416,6 +416,9 @@ so you can compare the old and new layouts on the same flight.
 
 ### 7.2 Real MSFS 2020 + GSX acceptance (owner, after L7, with the toggle on)
 
+The step-by-step checklist to run is [docs/testing/ops-center-owner-acceptance.md](../testing/ops-center-owner-acceptance.md); it
+follows the wording the layout uses after L5–L7. The table below is the original summary.
+
 | # | Check | Pass when |
 |---|---|---|
 | 1 | Secondary monitor at 1920×1080, 1280×1024 and about 1100 px wide; Windows scaling 100 and 125% | No horizontal scroll. Identity, tiles, route and milestones are visible without scrolling at 1920×1080. |
