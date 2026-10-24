@@ -15,6 +15,7 @@ import { ErrorBoundary } from "../ui/ErrorBoundary";
 import { localTime } from "../ui/format";
 import { StatusIndicator } from "../ui/StatusIndicator";
 import { Tag } from "../ui/Tag";
+import { NavIcon } from "./NavIcon";
 import { PAGES, pageForShortcut, type NavigateFn, type NavigationState } from "./navigation";
 import { RecorderBanners } from "./RecorderBanners";
 import { useAdapterSync } from "./useAdapterSync";
@@ -86,9 +87,12 @@ export function AppShell({ initialPage = "welcome" }: { initialPage?: Navigation
   }, [navigate]);
 
   const current = PAGES.find((p) => p.id === nav.page)!;
+  // The operations-center preview (opt-in) brings the compact navigation: below 1440 px the side nav
+  // becomes a labelled icon rail (CSS). The classic shell is unchanged.
+  const compactNav = preferences.opsCenterLayout;
 
   return (
-    <div className="shell">
+    <div className={compactNav ? "shell shell--compact-nav" : "shell"}>
       <ErrorBoundary label="GSX turnaround recording">
         <GsxTurnaroundSync />
       </ErrorBoundary>
@@ -120,8 +124,14 @@ export function AppShell({ initialPage = "welcome" }: { initialPage?: Navigation
         <ul>
           {PAGES.map((p) => (
             <li key={p.id}>
-              <button type="button" className="sidenav__item" aria-current={nav.page === p.id ? "page" : undefined} onClick={() => navigate(p.id)} aria-keyshortcuts={`Alt+${p.shortcut}`}>
+              <button type="button" className="sidenav__item" aria-label={p.label} aria-current={nav.page === p.id ? "page" : undefined} onClick={() => navigate(p.id)} aria-keyshortcuts={`Alt+${p.shortcut}`} title={compactNav ? `${p.label} (Alt+${p.shortcut})` : undefined}>
+                {compactNav && <NavIcon page={p.id} />}
                 <span className="sidenav__label">{p.label}</span>
+                {compactNav && (
+                  <span className="sidenav__short" aria-hidden="true">
+                    {p.short}
+                  </span>
+                )}
                 <kbd className="sidenav__kbd" aria-hidden="true">
                   Alt+{p.shortcut}
                 </kbd>
@@ -130,7 +140,8 @@ export function AppShell({ initialPage = "welcome" }: { initialPage?: Navigation
           ))}
         </ul>
         <p className="sidenav__footer">
-          v{__APP_VERSION__} · Sprint 1 preview
+          v{__APP_VERSION__}
+          <span className="sidenav__footer-more"> · Sprint 1 preview</span>
           <br />
           Not for real-world navigation
         </p>

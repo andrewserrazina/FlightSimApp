@@ -102,11 +102,9 @@ describe("operations-center layout (L4, opt-in)", () => {
     expect(tiles[0]).toHaveTextContent("Release or attach a plan to use its schedule");
     expect(screen.getByRole("region", { name: "Route" })).toHaveTextContent("No flight plan imported.");
     expect(within(screen.getByRole("list", { name: "OUT, OFF, ON and IN" })).getAllByRole("listitem").map((c) => c.textContent?.slice(0, 3))).toEqual(["OUT", "OFF", "ON—", "IN—"]);
-    // The plan baseline and every live reading are kept under Flight details.
-    const details = screen.getByText("Flight details: plan baseline and all live readings").closest("details")!;
+    // The aircraft, plan baseline and every live reading are kept under Flight details (closed by default; L7 covers its content).
+    const details = screen.getByText("Flight details").closest("details")!;
     expect(details.open).toBe(false);
-    expect(within(details).getByRole("region", { name: "Aircraft" })).toBeInTheDocument();
-    expect(within(details).getByRole("region", { name: "Position" })).toBeInTheDocument();
   });
 
   it("keeps the recording state next to the phase", async () => {

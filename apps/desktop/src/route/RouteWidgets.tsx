@@ -26,6 +26,7 @@ import { Panel } from "../ui/Panel";
 import { Tag } from "../ui/Tag";
 import type { LatLon } from "./geo";
 import { buildRouteGeometry, type RouteGeometry } from "./geometry";
+import { placeLabels } from "./labels";
 import { navObservations } from "./observations";
 import { OUTSIDE_CORRIDOR_CAUSES, type RouteProgress } from "./progress";
 import { useRouteTracker } from "./RouteTrackerContext";
@@ -71,22 +72,30 @@ function PositionCell({ f, unverified }: { f: NavFix; unverified: boolean }) {
 
 /** Dispatch: the imported navigation log, as planned by SimBrief. */
 export function NavlogPanel({ plan }: { plan: ImportedFlightPlan }) {
-  const n = plan.navlog;
-  const [expanded, setExpanded] = useState(false);
-  const geometry = useMemo(() => (n ? buildRouteGeometry(n) : null), [n]);
-  if (!n) {
+  if (!plan.navlog) {
     return (
       <Panel title="Navigation log" className="span-all">
         <p className="unavailable-text">This flight plan has no navigation log. Plans imported before waypoint support, or OFPs without a navlog, show no waypoints. Re-import the OFP to get them.</p>
       </Panel>
     );
   }
+  return (
+    <Panel title="Navigation log" className="span-all" actions={<Tag tone="info">SimBrief plan</Tag>}>
+      <NavlogBody plan={plan} navlog={plan.navlog} showMap />
+    </Panel>
+  );
+}
+
+/** The navigation log summary and table; the Ops Center route disclosure shows it under its own live map. */
+export function NavlogBody({ plan, navlog: n, showMap }: { plan: ImportedFlightPlan; navlog: PlanNavlog; showMap: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const geometry = useMemo(() => buildRouteGeometry(n), [n]);
   const remaining = plannedRemainingNm(n);
-  const unverified = new Set(geometry?.unverifiedFixIndexes ?? []);
+  const unverified = new Set(geometry.unverifiedFixIndexes);
   const positioned = n.fixes.filter((f, i) => f.lat !== null && !unverified.has(i)).length;
   const rows = expanded ? n.fixes : n.fixes.slice(0, 12);
   return (
-    <Panel title="Navigation log" className="span-all" actions={<Tag tone="info">SimBrief plan</Tag>}>
+    <>
       <dl className="navlog-summary">
         <div>
           <dt>Waypoints</dt>
@@ -104,7 +113,7 @@ export function NavlogPanel({ plan }: { plan: ImportedFlightPlan }) {
         </div>
         <div>
           <dt>Route geometry</dt>
-          <dd>{geometry && geometry.legs.length > 0 ? `${geometry.legs.length} legs · ${nm(geometry.totalNm)} straight-line` : <Unavail />}</dd>
+          <dd>{geometry.legs.length > 0 ? `${geometry.legs.length} legs · ${nm(geometry.totalNm)} straight-line` : <Unavail />}</dd>
         </div>
       </dl>
       {n.droppedRecords > 0 && <p className="muted">{n.droppedRecords} navlog record(s) could not be read and were left out.</p>}
@@ -114,7 +123,7 @@ export function NavlogPanel({ plan }: { plan: ImportedFlightPlan }) {
           {[...unverified].filter((i) => i >= 0).length} waypoint position(s) contradict SimBrief&apos;s own leg distances, so they are unverified and not used for the route geometry or progress. The coordinates are shown exactly as imported.
         </p>
       )}
-      {geometry && geometry.legs.length > 0 && <RouteMap geometry={geometry} label={`Planned route ${routeTitle(plan)}`} />}
+      {showMap && geometry.legs.length > 0 && <RouteMap geometry={geometry} label={`Planned route ${routeTitle(plan)}`} />}
       <div className="table-wrap">
         <table className="table table--compact navlog-table">
           <thead>
@@ -161,7 +170,7 @@ export function NavlogPanel({ plan }: { plan: ImportedFlightPlan }) {
         </div>
       )}
       <p className="muted">Planned values come from the SimBrief OFP. Remaining distance is derived from SimBrief&apos;s leg distances and is unavailable once a leg distance is missing.</p>
-    </Panel>
+    </>
   );
 }
 
@@ -172,6 +181,9 @@ export function NavlogPanel({ plan }: { plan: ImportedFlightPlan }) {
  * by cos(mid-latitude)), drawn from the real waypoint coordinates. Longitudes are unwrapped from
  * the first point so a date-line crossing draws continuously. No tiles or external services.
  */
+/** Label size in map units (the map is 1000 units wide); matches .route-map__label. */
+export const LABEL_FONT = 16;
+
 export function RouteMap({ geometry, position, label }: { geometry: RouteGeometry; position?: LatLon | null; label: string }) {
   const pts = [geometry.legs[0]!.from, ...geometry.legs.map((l) => l.to)];
   const lon0 = pts[0]!.lon;
@@ -205,6 +217,12 @@ export function RouteMap({ geometry, position, label }: { geometry: RouteGeometr
   const tx = (p: { x: number; y: number }) => ({ x: offX + (p.x - minX + pad) * scale, y: offY + (p.y - minY + pad) * scale });
   const screen = xy.map(tx);
   const pos = position ? tx(proj(position)) : null;
+  // Labels never overlap each other or another fix; a label with no free spot is left out.
+  const labels = placeLabels(
+    screen.map((p, i) => ({ ...p, text: pts[i]!.ident })),
+    { width: W, height: H, fontSize: LABEL_FONT, markerRadius: 6, obstacles: pos ? [{ ...pos, r: 9 }] : [] },
+  );
+  const hidden = screen.length - labels.length;
   return (
     <figure className="route-map">
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label} preserveAspectRatio="xMidYMid meet">
@@ -212,18 +230,18 @@ export function RouteMap({ geometry, position, label }: { geometry: RouteGeometr
           <line key={l.index} x1={screen[i]!.x} y1={screen[i]!.y} x2={screen[i + 1]!.x} y2={screen[i + 1]!.y} className={l.unreliable ? "route-map__leg route-map__leg--gap" : "route-map__leg"} />
         ))}
         {screen.map((p, i) => (
-          <g key={`${pts[i]!.fixIndex}-${i}`}>
-            <circle cx={p.x} cy={p.y} r={i === 0 || i === screen.length - 1 ? 6 : 3.5} className="route-map__fix" />
-            {(i === 0 || i === screen.length - 1 || screen.length <= 30) && (
-              <text x={p.x + 7} y={p.y - 7} className="route-map__label">
-                {pts[i]!.ident}
-              </text>
-            )}
-          </g>
+          <circle key={`${pts[i]!.fixIndex}-${i}`} cx={p.x} cy={p.y} r={i === 0 || i === screen.length - 1 ? 6 : 3.5} className="route-map__fix" />
+        ))}
+        {labels.map((l) => (
+          <text key={`label-${l.index}`} x={l.x} y={l.y} textAnchor={l.anchor} className="route-map__label">
+            {pts[l.index]!.ident}
+          </text>
         ))}
         {pos && <circle cx={pos.x} cy={pos.y} r={8} className="route-map__aircraft" />}
       </svg>
-      <figcaption className="muted">Planned route drawn from waypoint coordinates (projection centred on the route). Dashed legs cross waypoints without a usable position.{pos ? " Gold dot: aircraft position from telemetry." : ""}</figcaption>
+      <figcaption className="muted">Planned route drawn from waypoint coordinates (projection centred on the route). Dashed legs cross waypoints without a usable position.{pos ? " Gold dot: aircraft position from telemetry." : ""}
+        {hidden > 0 ? ` ${hidden} waypoint label${hidden === 1 ? " is" : "s are"} hidden where they would overlap; every waypoint is in the navigation log.` : ""}
+      </figcaption>
     </figure>
   );
 }
