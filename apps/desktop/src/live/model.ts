@@ -8,7 +8,7 @@
  * `availableActions` and the timeline's `manualEligibility`, milestones from `buildMilestones`, plan
  * basis from `planBasisForFlight`, GSX state from `gsxFeedView`.
  */
-import { readingValue, type GsxService, type GsxServiceState, type Reading, type SimulatorId, type TelemetryFrameV1, type Unit } from "@flightsim/contracts";
+import { readingValue, type GsxService, type GsxServiceState, type Reading, type ReadingKey, type ReadingQuality, type SimulatorId, type TelemetryFrameV1, type TelemetryReadingsV1, type Unit } from "@flightsim/contracts";
 import { availableActions, DEFAULT_LIFECYCLE_CONFIG, type LifecycleState } from "@flightsim/flight-core";
 import type { PlanBasis, PlanBasisKind } from "../dispatch/planBasis";
 import type { ImportedFlightPlan } from "../dispatch/model";
@@ -21,6 +21,7 @@ import { PHASE_LABEL, SIMULATOR_SHORT, STATUS_LABEL } from "../pages/labels";
 import type { NavFix } from "../dispatch/navlog";
 import { routeProgress, type RouteProgress, type TrackerState } from "../route/progress";
 import type { RouteGeometry } from "../route/geometry";
+import { formatReading } from "../ui/format";
 
 // ---------------------------------------------------------------- formatting
 
@@ -634,4 +635,45 @@ export function gsxSummary(gsx: GsxFeedView, turnaround: TurnaroundDto | null): 
     ready = { done: r.done.length, total: r.done.length + r.pending.length };
   }
   return { status: gsx.status, inactive, rows, turnaroundLine: line, turnaroundStatus: turnaround?.status ?? null, historyCount: turnaround?.events.length ?? 0, readiness: ready };
+}
+
+// ---------------------------------------------------------------- flight details (L7)
+
+export type ReadingQualityLabel = "Measured" | "Estimated" | "Not reported";
+
+export interface ReadingRow {
+  key: ReadingKey;
+  label: string;
+  /** Formatted value with its unit, or "Unavailable". Never 0 for a missing reading. */
+  value: string;
+  quality: ReadingQualityLabel;
+}
+
+const QUALITY_LABEL: Record<ReadingQuality, ReadingQualityLabel> = { ok: "Measured", estimated: "Estimated", unavailable: "Not reported" };
+
+/** Every reading of the telemetry contract, in a fixed reading order, with its label and decimals. */
+export const READING_ROWS: ReadonlyArray<{ key: ReadingKey; label: string; digits?: number }> = [
+  { key: "on_ground", label: "On ground" },
+  { key: "parking_brake_set", label: "Parking brake set" },
+  { key: "engine_count", label: "Engines installed" },
+  { key: "engines_running_count", label: "Engines running" },
+  { key: "indicated_altitude_ft", label: "Indicated altitude" },
+  { key: "pressure_altitude_ft", label: "Pressure altitude" },
+  { key: "radio_altitude_ft", label: "Radio altitude" },
+  { key: "indicated_airspeed_kt", label: "Indicated airspeed" },
+  { key: "ground_speed_kt", label: "Ground speed" },
+  { key: "vertical_speed_fpm", label: "Vertical speed" },
+  { key: "heading_true_deg", label: "Heading (true)", digits: 1 },
+  { key: "lat_deg", label: "Latitude", digits: 4 },
+  { key: "lon_deg", label: "Longitude", digits: 4 },
+  { key: "total_fuel_kg", label: "Total fuel on board" },
+];
+
+/** All 14 readings of a frame with how each was obtained; unavailable stays "Unavailable". */
+export function allReadings(readings: TelemetryReadingsV1): ReadingRow[] {
+  return READING_ROWS.map(({ key, label, digits }) => {
+    const r = readings[key];
+    const f = formatReading(r, digits ?? 0);
+    return { key, label, value: f.available && f.unit ? `${f.text}${f.unit === "°" ? "°" : ` ${f.unit}`}` : f.text, quality: QUALITY_LABEL[r.quality] };
+  });
 }

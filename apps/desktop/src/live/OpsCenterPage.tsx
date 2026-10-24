@@ -1,13 +1,13 @@
 /**
  * Live Flight, operations-center preview (Ops Center L4–L5, opt-in). The header, metric tiles,
  * route card and milestone strip replace the classic Operations, Route monitoring and live-reading
- * panels, and the Ground services card (L6) replaces the classic Turnaround panel; the plan baseline
- * and every raw reading stay available under Flight details. The classic page stays the default.
+ * panels, and the Ground services card (L6) replaces the classic Turnaround panel; the aircraft, the
+ * plan baseline and every raw reading stay available under Flight details (L7). The classic page
+ * stays the default.
  */
 import type { NavigateFn } from "../app/navigation";
-import { FlightPlanBaseline } from "../dispatch/PlanWidgets";
-import { TelemetryPanels } from "../pages/LiveFlightPage";
 import { ErrorBoundary } from "../ui/ErrorBoundary";
+import { FlightDetails } from "./FlightDetails";
 import { GroundServicesCard } from "./GroundServicesCard";
 import { MetricTiles } from "./MetricTiles";
 import { MilestoneStrip } from "./MilestoneStrip";
@@ -40,13 +40,9 @@ function OpsCenterBody({ navigate }: { navigate: NavigateFn }) {
           <ErrorBoundary label="Route">
             <RouteCard route={m.route} basis={m.basis} cells={m.milestones.cells} flightOpen={m.flightId !== null} navigate={navigate} />
           </ErrorBoundary>
-          <details className="ops-details">
-            <summary>Flight details: plan baseline and all live readings</summary>
-            <div className="ops-details__body">
-              <FlightPlanBaseline flightId={m.flightId} navigate={navigate} />
-              <TelemetryPanels showTiming={false} />
-            </div>
-          </details>
+          <ErrorBoundary label="Flight details">
+            <FlightDetails flightId={m.flightId} navigate={navigate} />
+          </ErrorBoundary>
         </div>
         <div className="ops-side">
           <ErrorBoundary label="Milestones">

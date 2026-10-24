@@ -1,13 +1,16 @@
 /**
  * Route card (Ops Center L5): planned route progress from the shared route tracker, the next
- * waypoints, and an ETA only when the documented rule allows one. The map stays behind a
- * disclosure. Progress is Turnline's own computation from the plan and the simulator position.
+ * waypoints, and an ETA only when the documented rule allows one. The map and the full navigation
+ * log stay behind a disclosure (L7). Progress is Turnline's own computation from the plan and the
+ * simulator position.
  */
+import { useState } from "react";
 import type { NavigateFn } from "../app/navigation";
-import { fixLabel } from "../dispatch/navlog";
+import type { ImportedFlightPlan } from "../dispatch/model";
+import { fixLabel, type PlanNavlog } from "../dispatch/navlog";
 import { PLAN_BASIS_LABEL, PLAN_BASIS_TAG, type PlanBasis } from "../dispatch/planBasis";
 import type { LatLon } from "../route/geo";
-import { RouteMap } from "../route/RouteWidgets";
+import { NavlogBody, RouteMap } from "../route/RouteWidgets";
 import { Button } from "../ui/Button";
 import { Panel } from "../ui/Panel";
 import type { MilestoneCell } from "./model";
@@ -125,13 +128,24 @@ export function RouteCard({ route, basis, cells, flightOpen, navigate }: { route
       </p>
       {!bound && flightOpen && <p className="muted ops-route__hint">This plan is a preview for this flight until it is attached (More → Attach).</p>}
 
-      {geometry && geometry.legs.length > 0 && (
-        <details className="ops-route__map">
-          <summary>Route map</summary>
-          <RouteMap geometry={geometry} position={pos} label={`Route map ${title}`} />
-          <p className="muted">Route progress is computed by Turnline from the planned waypoints and the simulator position. It is not read from the aircraft FMS, and it never affects recording.</p>
-        </details>
-      )}
+      {plan.navlog && <RouteDisclosure plan={plan} navlog={plan.navlog} geometry={geometry} position={pos} title={title} />}
     </Panel>
+  );
+}
+
+/** Map and full navigation log, rendered only while open. */
+function RouteDisclosure({ plan, navlog, geometry, position, title }: { plan: ImportedFlightPlan; navlog: PlanNavlog; geometry: Route["geometry"]; position: LatLon | null; title: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details className="ops-route__map" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>Route map and full navigation log</summary>
+      {open && (
+        <>
+          {geometry && geometry.legs.length > 0 ? <RouteMap geometry={geometry} position={position} label={`Route map ${title}`} /> : <p className="unavailable-text">No waypoint has a usable position, so the route cannot be drawn.</p>}
+          <p className="muted">Route progress is computed by Turnline from the planned waypoints and the simulator position. It is not read from the aircraft FMS, and it never affects recording.</p>
+          <NavlogBody plan={plan} navlog={navlog} showMap={false} />
+        </>
+      )}
+    </details>
   );
 }
