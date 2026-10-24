@@ -17,7 +17,7 @@ const desktop = join(repo, "apps/desktop");
 const stage = process.argv[2];
 const outArg = process.argv.indexOf("--out");
 const out = outArg > 0 ? process.argv[outArg + 1] : join(repo, "docs/screenshots/ops-center", stage ?? "");
-const STAGES = { l3: stageL3, l4: stageL4, l5: stageL5, l6: stageL6 };
+const STAGES = { l3: stageL3, l4: stageL4, l5: stageL5, l6: stageL6, l7: stageL7 };
 if (!STAGES[stage]) {
   console.error(`usage: node scripts/ops-center-screens.mjs <${Object.keys(STAGES).join("|")}> [--out dir]`);
   process.exit(2);
@@ -40,8 +40,8 @@ const errors = [];
 const written = [];
 
 /** Open the harness at a width, connected to the recorded mock flight's first frames. */
-async function open(width, { page = "live", height = 1000, prefs = null, adapter = "mock" } = {}) {
-  const p = await browser.newPage({ viewport: { width, height }, reducedMotion: "reduce" });
+async function open(width, { page = "live", height = 1000, prefs = null, adapter = "mock", scale = 1 } = {}) {
+  const p = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: scale, reducedMotion: "reduce" });
   p.on("pageerror", (e) => errors.push(e.message));
   await p.clock.setFixedTime(new Date(frames[0].data.observed_at));
   const q = new URLSearchParams({ page, ...(prefs ? { prefs: JSON.stringify(prefs) } : {}) });
@@ -166,6 +166,30 @@ async function assertNothingCutOff(p, name) {
   if (cut.length) errors.push(`${name}: text cut off: ${cut.join(" | ")}`);
 }
 
+/**
+ * Review-only frames: copies of a recorded cruise frame moved onto one planned leg at 300 kt, 5 s
+ * apart, so the route card can be seen tracking. Used in sessions kept separate from the recording.
+ */
+async function flyAlongPlannedLeg(p, base, count = 12) {
+  for (let i = 0; i < count; i++) {
+    const at = new Date(Date.parse(base.data.observed_at) + (i + 1) * 5000);
+    await p.clock.setFixedTime(at);
+    await p.evaluate(({ base, i, at }) => {
+      const fixes = window.__harness.dispatch.currentPlan.navlog.fixes.filter((f) => f.lat !== null && f.lon !== null);
+      const a = fixes[Math.floor(fixes.length / 2)], b = fixes[Math.floor(fixes.length / 2) + 1];
+      const legNm = Math.hypot((b.lat - a.lat) * 60, (b.lon - a.lon) * 60 * Math.cos((a.lat * Math.PI) / 180));
+      const t = 0.3 + (i * 300 * (5 / 3600)) / legNm;
+      const f = structuredClone(base);
+      f.data.seq = base.data.seq + 1 + i;
+      f.data.observed_at = at;
+      f.data.readings.lat_deg.value = a.lat + (b.lat - a.lat) * t;
+      f.data.readings.lon_deg.value = a.lon + (b.lon - a.lon) * t;
+      window.__harness.transport.emit(f);
+    }, { base, i, at: at.toISOString() });
+  }
+  await p.waitForTimeout(1300);
+}
+
 async function stageL5() {
   const conn = (state, at) => env("connection.state", { state, simulator: "mock", since: at, attempt: 0, next_retry_at: null, reason: state === "CONNECTED" ? null : { code: "simulator_closed", message: "The simulator connection was lost." }, schema_version: 1 });
   const ofp = await screenshotOfp();
@@ -222,23 +246,7 @@ async function stageL5() {
     await p.locator(".ops-toast").waitFor({ state: "detached", timeout: 10_000 });
     await replay(p, 3, cruiseAt);
     const base = frames[cruiseAt];
-    for (let i = 0; i < 12; i++) {
-      const at = new Date(Date.parse(base.data.observed_at) + (i + 1) * 5000);
-      await p.clock.setFixedTime(at);
-      await p.evaluate(({ base, i, at }) => {
-        const fixes = window.__harness.dispatch.currentPlan.navlog.fixes.filter((f) => f.lat !== null && f.lon !== null);
-        const a = fixes[Math.floor(fixes.length / 2)], b = fixes[Math.floor(fixes.length / 2) + 1];
-        const legNm = Math.hypot((b.lat - a.lat) * 60, (b.lon - a.lon) * 60 * Math.cos((a.lat * Math.PI) / 180));
-        const t = 0.3 + (i * 300 * (5 / 3600)) / legNm;
-        const f = structuredClone(base);
-        f.data.seq = base.data.seq + 1 + i;
-        f.data.observed_at = at;
-        f.data.readings.lat_deg.value = a.lat + (b.lat - a.lat) * t;
-        f.data.readings.lon_deg.value = a.lon + (b.lon - a.lon) * t;
-        window.__harness.transport.emit(f);
-      }, { base, i, at: at.toISOString() });
-    }
-    await p.waitForTimeout(1300);
+    await flyAlongPlannedLeg(p, base);
     await capture(p, `route-tracking-review-${width}`, screen);
     // A genuine manual-resume case: the connection drops for over 30 s and data then returns from the
     // recorded flight's real position, far from the leg above. The recorder sees a position jump
@@ -332,6 +340,89 @@ async function stageL6() {
     await capture(p, `ground-arrival-${width}`, { full: true });
     await p.close();
   }
+}
+
+/** Fails the run on horizontal scrolling, or on route-map labels that overlap as rendered. */
+async function assertLayout(p, name) {
+  const r = await p.evaluate(() => {
+    const main = document.getElementById("main-content");
+    const hScroll = document.documentElement.scrollWidth > window.innerWidth + 1 || main.scrollWidth > main.clientWidth + 1;
+    const boxes = [...document.querySelectorAll(".route-map__label")].map((t) => t.getBoundingClientRect());
+    const overlaps = [];
+    boxes.forEach((a, i) => boxes.slice(i + 1).forEach((b, j) => {
+      if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) overlaps.push(`${i}/${i + 1 + j}`);
+    }));
+    // A marker whose centre lies inside a label: the label is drawn over another fix or the aircraft.
+    const dots = [...document.querySelectorAll(".route-map__fix, .route-map__aircraft")].map((c) => c.getBoundingClientRect()).map((b) => ({ x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 }));
+    const covered = dots.filter((d) => boxes.some((b) => d.x > b.left && d.x < b.right && d.y > b.top && d.y < b.bottom)).length;
+    return { hScroll, overlaps, covered, labels: boxes.length };
+  });
+  if (r.hScroll) errors.push(`${name}: horizontal scrolling`);
+  if (r.overlaps.length) errors.push(`${name}: ${r.overlaps.length} overlapping route-map labels`);
+  if (r.covered) errors.push(`${name}: ${r.covered} route-map markers under a label`);
+  return r;
+}
+
+/**
+ * L7: Flight details and the route map + navigation log disclosures, the icon rail below 1440 px, and
+ * the breakpoints at window widths 1100, 1280, 1440 and 1920 px, plus Windows display scaling of 125
+ * and 150% (a 1920 × 1080 monitor at 125% is a 1536 × 864 CSS-pixel window rendered at 1.25 device
+ * pixels per CSS pixel; at 150% it is 1280 × 720). The flight is the recorded demo flight; the route
+ * scenes use the review-only frames moved onto a planned leg (as in L5's tracking session).
+ */
+async function stageL7() {
+  const ofp = await screenshotOfp();
+  const check = async (p, name) => {
+    await assertNothingCutOff(p, name);
+    return assertLayout(p, name);
+  };
+  const scenes = [
+    { name: "1100", width: 1100, height: 900 },
+    { name: "1280", width: 1280, height: 1024 },
+    { name: "1440", width: 1440, height: 900 },
+    { name: "1920", width: 1920, height: 1080 },
+    { name: "1920x1080-at-125pct", width: 1536, height: 864, scale: 1.25 },
+    { name: "1920x1080-at-150pct", width: 1280, height: 720, scale: 1.5 },
+    { name: "1280x1024-at-125pct", width: 1024, height: 819, scale: 1.25 },
+  ];
+  const summary = [];
+  for (const sc of scenes) {
+    const p = await open(sc.width, { prefs: OPS, height: sc.height, scale: sc.scale ?? 1 });
+    await p.evaluate(async (o) => {
+      window.__ofpOverride = o;
+      const d = window.__harness.dispatch;
+      await d.importLatest("username", "test_pilot");
+      await d.release({ warnings: [], unavailableInformational: [] });
+    }, ofp);
+    await p.getByRole("button", { name: "Start flight" }).click();
+    await p.locator(".ops-toast").waitFor({ state: "detached", timeout: 10_000 });
+    await replay(p, 3, cruiseAt);
+    await flyAlongPlannedLeg(p, frames[cruiseAt]);
+    // What the monitor shows without scrolling.
+    await check(p, `cruise-${sc.name}`);
+    await shot(p, `cruise-${sc.name}`, { full: false });
+    // Both disclosures open, whole page.
+    await p.getByText("Route map and full navigation log").click();
+    await p.locator(".ops-details > summary").click();
+    await p.getByRole("table", { name: /All 14 telemetry readings/ }).waitFor();
+    const r = await check(p, `details-open-${sc.name}`);
+    summary.push(`${sc.name}: ${r.labels} route-map labels, ${r.overlaps.length} overlapping, ${r.covered} markers covered; ${r.hScroll ? "HORIZONTAL SCROLL" : "no horizontal scroll"}`);
+    if (["1280", "1920", "1920x1080-at-150pct"].includes(sc.name)) await shot(p, `details-open-${sc.name}-full-page`);
+    if (sc.name === "1920") {
+      const map = p.locator(".ops-route__map .route-map");
+      await map.scrollIntoViewIfNeeded();
+      const file = join(out, "route-map-labels-1920.jpg");
+      await map.screenshot({ path: file, type: "jpeg", quality: 88 });
+      written.push(file);
+    }
+    await p.close();
+  }
+  // The classic layout (toggle off) keeps the full side navigation at 1280.
+  const p = await open(1280, { height: 1024 });
+  await check(p, "classic-1280");
+  await shot(p, "classic-layout-unchanged-1280", { full: false });
+  await p.close();
+  console.log(summary.join("\n"));
 }
 
 try {
