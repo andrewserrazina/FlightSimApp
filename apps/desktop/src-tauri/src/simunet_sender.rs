@@ -126,3 +126,46 @@ pub async fn simunet_telemetry_send(
         rejected: result["rejected"].as_u64().unwrap_or(0),
     })
 }
+
+/// Explicit operator-initiated, read-only auth test. No telemetry, job claim,
+/// heartbeat, or economy transaction is created by this GET request.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionTestResult {
+    pub state: &'static str,
+    pub message: &'static str,
+}
+
+#[tauri::command]
+pub async fn simunet_connection_test() -> ConnectionTestResult {
+    let failed = |state, message| ConnectionTestResult { state, message };
+    let Some(url) = destination() else {
+        return failed("not_configured", "No approved HTTPS endpoint is configured in this build.");
+    };
+    let key = match crate::secure::simunet_probe_key() {
+        Ok(Some(value)) => value,
+        Ok(None) => return failed("missing_credential", "Save an operator API key before testing."),
+        Err(_) => return failed("credential_unavailable", "Secure credential storage is unavailable."),
+    };
+    let endpoint = match url.join("v1/connectors/status") {
+        Ok(value) => value,
+        Err(_) => return failed("not_configured", "Invalid approved endpoint configuration."),
+    };
+    let client = match reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(6))
+        .build() {
+            Ok(value) => value,
+            Err(_) => return failed("unreachable", "Could not initialize the secure HTTPS connection."),
+        };
+    match client.get(endpoint).header("x-api-key", key).send().await {
+        Ok(response) if response.status().is_success() =>
+            failed("connected", "SimuNet authenticated this operator. No flight telemetry was sent."),
+        Ok(response) if response.status().as_u16() == 401 || response.status().as_u16() == 403 =>
+            failed("unauthorized", "SimuNet rejected the operator credential."),
+        Ok(response) if response.status().is_redirection() =>
+            failed("endpoint_error", "The staging endpoint redirected unexpectedly."),
+        Ok(_) => failed("endpoint_error", "SimuNet returned an unexpected response."),
+        Err(_) => failed("unreachable", "Could not reach the approved SimuNet API over HTTPS."),
+    }
+}

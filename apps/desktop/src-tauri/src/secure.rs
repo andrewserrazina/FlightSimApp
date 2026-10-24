@@ -539,3 +539,9 @@ pub(crate) fn simunet_sender_key() -> Result<Option<String>, SecureError> {
         Ok(KeyringStore.get(SIMUNET_KEY_ACCOUNT)?.filter(|v| !v.is_empty()))
     })
 }
+
+/// Native-only credential access for explicit read-only connectivity probes.
+/// This does not enable consent or telemetry transmission.
+pub(crate) fn simunet_probe_key() -> Result<Option<String>, SecureError> {
+    locked(|| KeyringStore.get(SIMUNET_KEY_ACCOUNT).map(|key| key.filter(|v| !v.is_empty())))
+}
