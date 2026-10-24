@@ -94,6 +94,19 @@ body {
   .content { padding: var(--space-4); }
 }
 @media (max-width: 1000px) { .span-2 { grid-column: auto; } }
+/* Operations-center preview: below 1440 px the side nav becomes a labelled icon rail. */
+.sidenav__icon { flex: none; }
+.sidenav__short { display: none; }
+@media (max-width: 1439px) {
+  .shell--compact-nav { --sidebar-width: 84px; }
+  .shell--compact-nav .brand { min-width: 0; }
+  .shell--compact-nav .brand__edition { display: none; }
+  .shell--compact-nav .sidenav { padding: var(--space-3) var(--space-2); }
+  .shell--compact-nav .sidenav__item { flex-direction: column; justify-content: center; gap: 3px; min-height: 58px; padding: var(--space-2) 2px; text-align: center; border-left-width: 3px; }
+  .shell--compact-nav .sidenav__label, .shell--compact-nav .sidenav__kbd, .shell--compact-nav .sidenav__footer-more { display: none; }
+  .shell--compact-nav .sidenav__short { display: block; font-size: var(--text-xs); line-height: 1.2; font-weight: 600; overflow-wrap: anywhere; }
+  .shell--compact-nav .sidenav__footer { margin: var(--space-4) 0 0; text-align: center; font-size: 10px; }
+}
 
 /* ---------- Panel ---------- */
 .panel { background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); min-width: 0; }
@@ -446,10 +459,26 @@ details > summary { cursor: pointer; color: var(--text-muted); font-size: var(--
 .ops-strip__cell--none .ops-strip__time { color: var(--text-unavailable); }
 .ops-strip__label { font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
 .ops-strip p { margin: 0 0 var(--space-2); font-size: var(--text-sm); }
+/* The side column is its own container, so the strip tightens when the column is narrow. */
+.ops-side { container-type: inline-size; }
+@container (max-width: 440px) {
+  .ops-strip__cells { gap: 6px; }
+  .ops-strip__cell { padding: var(--space-2); }
+  .ops-strip__time { font-size: var(--text-md); }
+}
 .ops-details { background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: 10px; padding: var(--space-3) var(--space-4); }
-.ops-details__body { display: grid; gap: var(--space-4); margin-top: var(--space-3); }
-@container (min-width: 1200px) {
-  .ops-grid { grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr); }
+.ops-details summary { cursor: pointer; font-weight: 600; }
+.ops-details summary .muted { font-weight: 400; font-size: var(--text-sm); }
+.ops-details__body { display: grid; gap: var(--space-4); margin-top: var(--space-3); min-width: 0; }
+.ops-details__pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-4); }
+.ops-details .metric__value { font-size: var(--text-md); font-weight: 600; overflow-wrap: anywhere; }
+.ops-route__map .navlog-summary { margin-top: var(--space-4); }
+.ops-details__frame { margin: 0 0 var(--space-2); font-size: var(--text-sm); }
+.ops-readings th[scope="row"] { font-weight: 500; text-align: left; }
+.ops-readings__row--none td, .ops-readings__row--none th { color: var(--text-unavailable); }
+.is-stale .ops-readings td.num { opacity: .6; }
+@container (min-width: 1100px) {
+  .ops-grid { grid-template-columns: minmax(0, 2fr) minmax(340px, 1fr); }
 }
 .ops-ground p { margin: 0 0 var(--space-2); }
 .ops-ground__line { font-weight: 600; color: var(--text-primary); }
@@ -470,12 +499,12 @@ details > summary { cursor: pointer; color: var(--text-muted); font-size: var(--
 .ops-ground__manage { margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border-subtle); }
 .ops-ground__manage .form-row { flex-wrap: wrap; }
 /* One column: flatten the columns so Flight details can follow the milestones and turnaround. */
-@container (max-width: 1199px) {
+@container (max-width: 1099px) {
   .ops-main, .ops-side { display: contents; }
   .ops-details { order: 1; }
 }
 /* Medium widths: milestones and ground services side by side under the route card. */
-@container (min-width: 820px) and (max-width: 1199px) {
+@container (min-width: 820px) and (max-width: 1099px) {
   .ops-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .ops-grid .ops-tiles, .ops-grid .ops-route, .ops-grid .ops-details { grid-column: 1 / -1; }
 }
