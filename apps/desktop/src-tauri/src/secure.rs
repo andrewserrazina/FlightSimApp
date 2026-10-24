@@ -480,7 +480,7 @@ fn simunet_status_from<S: CredStore>(store: &S) -> Result<SimuNetCredentialStatu
         credential_saved,
         telemetry_enabled,
         // A native allowlisted HTTPS sender is NOT implemented in this PR.
-        sender_available: false,
+        sender_available: crate::simunet_sender::sender_configured(),
     })
 }
 
@@ -527,4 +527,21 @@ pub fn simunet_credential_disconnect() -> Result<SimuNetCredentialStatus, Secure
         KeyringStore.delete(SIMUNET_KEY_ACCOUNT)?;
         simunet_status_from(&KeyringStore)
     })
+}
+
+/// Native-only: JS can never read the API key or derive this capability.
+/// The network sender re-checks consent/credential on every batch.
+pub(crate) fn simunet_sender_key() -> Result<Option<String>, SecureError> {
+    locked(|| {
+        if KeyringStore.get(SIMUNET_CONSENT_ACCOUNT)?.as_deref() != Some("enabled") {
+            return Ok(None);
+        }
+        Ok(KeyringStore.get(SIMUNET_KEY_ACCOUNT)?.filter(|v| !v.is_empty()))
+    })
+}
+
+/// Native-only credential access for explicit read-only connectivity probes.
+/// This does not enable consent or telemetry transmission.
+pub(crate) fn simunet_probe_key() -> Result<Option<String>, SecureError> {
+    locked(|| KeyringStore.get(SIMUNET_KEY_ACCOUNT).map(|key| key.filter(|v| !v.is_empty())))
 }

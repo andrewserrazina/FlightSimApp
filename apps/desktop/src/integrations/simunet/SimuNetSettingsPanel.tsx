@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { Button } from "../../ui/Button";
 import { Panel } from "../../ui/Panel";
+import { useSimuNetDiagnostics } from "./diagnostics";
 
 interface SimuNetStatus {
   credentialSaved: boolean;
@@ -25,10 +26,13 @@ const absent: SimuNetStatus = {
  */
 export function SimuNetSettingsPanel() {
   const [status, setStatus] = useState<SimuNetStatus>(absent);
+  const delivery = useSimuNetDiagnostics();
   const [keyInput, setKeyInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [connectionTest, setConnectionTest] = useState<string | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -51,13 +55,13 @@ export function SimuNetSettingsPanel() {
       setStatus(next);
       if (command === "simunet_credential_save") {
         setKeyInput("");
-        setMessage("Operator key saved in OS secure storage. No connection or telemetry upload has started.");
+        setMessage("Operator key saved in OS secure storage. Telemetry requires separate consent and an approved HTTPS endpoint.");
       } else if (command === "simunet_credential_disconnect") {
         setKeyInput("");
         setMessage("SimuNet key and telemetry consent cleared.");
       } else {
         setMessage(next.telemetryEnabled
-          ? "Consent saved. Telemetry sending remains unavailable until the secure sender is implemented."
+          ? "Consent saved. The native sender can transmit fresh flight telemetry only when configured for an approved SimuNet HTTPS endpoint."
           : "SimuNet telemetry consent disabled.");
       }
     } catch {
@@ -68,6 +72,19 @@ export function SimuNetSettingsPanel() {
     }
   }
 
+  async function testConnection() {
+    setTesting(true);
+    setConnectionTest(null);
+    try {
+      const result = await invoke<{ state: string; message: string }>("simunet_connection_test");
+      setConnectionTest(result.message);
+    } catch {
+      setConnectionTest("The connection test could not be completed.");
+    } finally {
+      setTesting(false);
+    }
+  }
+
   return (
     <Panel title="SimuNet economy integration">
       <p className="muted">
@@ -75,7 +92,7 @@ export function SimuNetSettingsPanel() {
         Turnline remains your only MSFS 2020/2024 connector.
       </p>
       <p role="status" className="muted">
-        {status.senderAvailable ? "Sender available" : "Preview setup only — flight telemetry is not sent to SimuNet in this build."}
+        {status.senderAvailable ? "Native sender configured" : "Native sender unavailable — this build has no approved SimuNet HTTPS endpoint."}
       </p>
       <p className="muted">
         Operator credential: {status.credentialSaved ? "Stored securely on this computer" : "Not connected"}
@@ -101,6 +118,10 @@ export function SimuNetSettingsPanel() {
           Disconnect SimuNet
         </Button>
       </div>
+      <Button variant="quiet" disabled={busy || testing || !loaded || !status.credentialSaved}
+        onClick={() => void testConnection()}>{testing ? "Testing connection…" : "Test SimuNet connection"}</Button>
+      {connectionTest && <p role="status" className="muted">{connectionTest}</p>}
+      <p className="muted">Read-only authentication check; does not enable sharing, upload flight data, or modify assignments.</p>
       <label className="field__label">
         <input type="checkbox" checked={status.telemetryEnabled}
           disabled={busy || !loaded || !status.credentialSaved}
@@ -111,6 +132,12 @@ export function SimuNetSettingsPanel() {
         Off by default. Separate from Turnline cloud sync. Saving this permission does not
         transmit data; a future build will provide sender status and per-flight controls.
       </p>
+      <div aria-label="SimuNet telemetry delivery diagnostics" role="status">
+        <p className="muted">Delivery: {delivery.state}. {delivery.message}</p>
+        <p className="muted">Acknowledged: {delivery.accepted} frames; duplicates: {delivery.duplicates}; rejected: {delivery.rejected}; failed requests: {delivery.failedRequests}.</p>
+        <p className="muted">Last attempt (UTC): {delivery.lastAttemptAt ?? "None"}; last response (UTC): {delivery.lastAcknowledgedAt ?? "None"}.</p>
+        <p className="muted">Session-only counters; no API keys, raw telemetry, or error bodies are stored here.</p>
+      </div>
       {message && <p role="status" className="muted">{message}</p>}
     </Panel>
   );
