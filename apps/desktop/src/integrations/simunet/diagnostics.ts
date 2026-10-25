@@ -46,12 +46,46 @@ export function recordSimuNetAcknowledgement(result: { accepted: number; duplica
     message: rejected > 0 ? "SimuNet rejected a telemetry sample." : "SimuNet acknowledged telemetry.",
   });
 }
-export function recordSimuNetFailure(kind: "not-configured" | "not-authorized" | "delivery-failed") {
+export type SimuNetFailureKind = "not-configured" | "not-authorized" | "skipped" | "cancelled" | "delivery-failed";
+
+/** Coarse codes returned by the native sender (`SendError` in simunet_sender.rs). */
+const SEND_ERROR_KIND: Record<string, SimuNetFailureKind> = {
+  not_configured: "not-configured",
+  disabled: "not-authorized",
+  credential_unavailable: "not-authorized",
+  unauthorized: "not-authorized",
+  // Refused locally before anything was sent: not a failed request.
+  rate_limited: "skipped",
+  invalid_frame: "skipped",
+  unsupported_source: "skipped",
+  stale_frame: "skipped",
+  too_large: "skipped",
+  cancelled: "cancelled",
+  network: "delivery-failed",
+  server_rate_limited: "delivery-failed",
+  redirected: "delivery-failed",
+  rejected: "delivery-failed",
+  invalid_response: "delivery-failed",
+};
+
+/** Maps a native error to a diagnostics kind. Anything unrecognised counts as a failed delivery. */
+export function classifySimuNetError(error: unknown): SimuNetFailureKind {
+  return typeof error === "string" && Object.hasOwn(SEND_ERROR_KIND, error) ? SEND_ERROR_KIND[error]! : "delivery-failed";
+}
+
+export function recordSimuNetFailure(kind: SimuNetFailureKind) {
   // Never store exception messages: native errors can contain environment details.
+  if (kind === "skipped") {
+    // A sample refused locally (rate limit, stale or invalid frame) is not a delivery failure.
+    update({ state: snapshot.state === "sending" ? "idle" : snapshot.state });
+    return;
+  }
   const message = kind === "not-configured"
     ? "Sender is not configured in this build."
     : kind === "not-authorized"
-      ? "Telemetry sharing is disabled or the operator credential is unavailable."
-      : "Delivery failed; inspect the staging API and connection.";
-  update({ state: "unavailable", failedRequests: snapshot.failedRequests + 1, message });
+      ? "Telemetry sharing is disabled or the operator credential was refused."
+      : kind === "cancelled"
+        ? "Sharing was turned off or the credential changed; the request in progress was stopped and not counted."
+        : "Delivery failed; inspect the staging API and connection.";
+  update({ state: "unavailable", failedRequests: snapshot.failedRequests + (kind === "cancelled" ? 0 : 1), message });
 }
