@@ -1,101 +1,19 @@
 import type { GsxService } from "@flightsim/contracts";
 import { useState } from "react";
 import type { NavigateFn } from "../app/navigation";
-import { useNow } from "../app/useNow";
-import { useBridgeState } from "../bridge/BridgeContext";
 import { useDispatchView } from "../dispatch/DispatchContext";
-import { GSX_SERVICES, gsxFeedView, isOwnerVerified } from "../gsx/feed";
+import { GSX_SERVICES } from "../gsx/feed";
 import { useRecorderView } from "../recording/RecorderContext";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { SelectField, TextField } from "../ui/Fields";
-import { utcDateTime, utcTime } from "../ui/format";
-import { Panel } from "../ui/Panel";
 import { Tag } from "../ui/Tag";
 import { formatMinor, totalsByCurrency } from "./money";
 import { useOps, useOpsView } from "./OpsContext";
-import { describeEvent, FEED_STATUS, GSX_STATE_LABEL, latestByService, MANUAL_LABEL, readiness, SERVICE_LABEL } from "./presentation";
+import { MANUAL_LABEL, readiness, SERVICE_LABEL } from "./presentation";
 import type { ManualServiceStatus, TurnaroundDto, TurnaroundSide } from "./types";
 
-const LINK_LABEL: Record<TurnaroundDto["flightLink"], string> = {
-  unlinked: "Not linked to a flight",
-  recording_at_open: "Linked: flight being recorded when it opened",
-  user_confirmed: "Linked by you",
-};
-
-/** Live Flight → Turnaround: GSX services live, the open turnaround, manual entries and its simulated expenses. */
-export function TurnaroundPanel({ navigate }: { navigate: NavigateFn }) {
-  const ops = useOpsView();
-  const bridge = useBridgeState();
-  const now = useNow(1000);
-  const feed = gsxFeedView(bridge, now);
-  const status = FEED_STATUS[feed.status];
-  const t = ops.turnaround.kind === "ready" ? ops.turnaround.value : null;
-
-  return (
-    <Panel title="Turnaround" className="span-all turnaround" actions={<Tag tone={status.tone} title={status.detail}>{status.label}</Tag>}>
-      <p className="muted" role="status" aria-live="polite">
-        {status.detail}
-        {feed.lastDataAt && feed.status !== "sim_not_connected" ? ` Last GSX data ${utcTime(feed.lastDataAt)}.` : ""}
-      </p>
-      {ops.turnaround.kind === "unavailable" && <p className="unavailable-text">{ops.turnaround.message}</p>}
-      {ops.gsxRecordError && (
-        <div className="banner banner--warn" role="alert">
-          GSX observations could not be saved to the turnaround: {ops.gsxRecordError}
-        </div>
-      )}
-      <ServiceTable turnaround={t} feed={feed} />
-      {ops.turnaround.kind === "ready" && (t ? <OpenTurnaround t={t} navigate={navigate} /> : <StartTurnaround />)}
-    </Panel>
-  );
-}
-
-function ServiceTable({ turnaround, feed }: { turnaround: TurnaroundDto | null; feed: ReturnType<typeof gsxFeedView> }) {
-  const latest = turnaround ? latestByService(turnaround) : {};
-  return (
-    <div className="table-wrap">
-      <table className="table table--compact" aria-label="Ground services">
-        <thead>
-          <tr>
-            <th scope="col">Service</th>
-            <th scope="col">GSX now</th>
-            {turnaround && <th scope="col">Last recorded</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {GSX_SERVICES.map((s) => {
-            const live = feed.services.find((x) => x.service === s)!;
-            const rec = latest[s];
-            return (
-              <tr key={s}>
-                <th scope="row">{SERVICE_LABEL[s]}</th>
-                <td>
-                  {live.state ? (
-                    <>
-                      {GSX_STATE_LABEL[live.state]}{" "}
-                      {!isOwnerVerified(s, live.raw) && (
-                        <Tag tone="neutral" title={`GSX value ${live.raw} follows GSX documentation but has not been confirmed on a real MSFS + GSX session yet.`}>
-                          unverified value
-                        </Tag>
-                      )}
-                    </>
-                  ) : (
-                    <span className="unavailable" title={live.detail}>
-                      {live.quality === "unsupported" ? "Not supported" : live.quality === "invalid" ? "Invalid reading" : "—"}
-                    </span>
-                  )}
-                </td>
-                {turnaround && <td>{rec ? `${describeEvent(rec)} · ${utcTime(rec.observedAtUtc)}` : <span className="unavailable">Nothing recorded</span>}</td>}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/** The start-a-turnaround form (shared by the classic panel and the Ground services card). */
+/** The start-a-turnaround form, opened from the Ground services card. */
 export function StartTurnaround() {
   const ops = useOps();
   const dispatch = useDispatchView();
@@ -156,42 +74,6 @@ export function StartTurnaround() {
           Start turnaround
         </Button>
       </div>
-    </section>
-  );
-}
-
-function OpenTurnaround({ t, navigate }: { t: TurnaroundDto; navigate: NavigateFn }) {
-  const [error, setError] = useState<string | null>(null);
-
-  return (
-    <section className="subsection" aria-label="Current turnaround">
-      <div className="turnaround__head">
-        <Tag tone={t.status === "open" ? "ok" : "warn"}>{t.status === "open" ? "OPEN" : "INTERRUPTED"}</Tag>
-        <span>
-          {t.side === "departure" ? "Departure" : "Arrival"}
-          {t.airportIcao ? ` · ${t.airportIcao}` : ""}
-          {t.airportSource ? ` (${t.airportSource === "plan" ? "from plan" : "entered"})` : ""}
-          {t.gateText ? ` · gate ${t.gateText}` : ""}
-        </span>
-        <span className="muted">Opened {utcDateTime(t.openedAtUtc)}</span>
-        <span className="muted">{LINK_LABEL[t.flightLink]}</span>
-      </div>
-      {t.status === "interrupted" && (
-        <div className="banner banner--warn" role="status">
-          This turnaround was interrupted{t.feedLog.at(-1)?.feed === "app_restarted" ? " because Turnline restarted" : ""}. GSX changes during the gap were not observed and are not filled in. Resume to continue recording.
-        </div>
-      )}
-      <ReadinessAdvisory t={t} />
-
-      {t.status === "open" && <ManualEntry t={t} onError={setError} />}
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
-
-      <TurnaroundControls t={t} />
-      <TurnaroundExpenses t={t} navigate={navigate} />
     </section>
   );
 }

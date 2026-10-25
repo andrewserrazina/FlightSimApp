@@ -9,7 +9,6 @@ import { App } from "../src/App";
 import { DispatchService } from "../src/dispatch/DispatchService";
 import { MemoryDispatchStore } from "../src/dispatch/store";
 import { allReadings, READING_ROWS } from "../src/live/model";
-import { STORAGE_KEY } from "../src/preferences/preferences";
 import type { RouteGeometry } from "../src/route/geometry";
 import { labelsOverlap, placeLabels, type LabelPoint } from "../src/route/labels";
 import { LABEL_FONT, RouteMap } from "../src/route/RouteWidgets";
@@ -19,10 +18,9 @@ afterEach(cleanup);
 
 const fx = (name: string): any => JSON.parse(readFileSync(join(__dirname, "../../../fixtures/simbrief", name), "utf8"));
 
-async function renderApp(opts: { optIn: boolean; dispatch?: DispatchService }) {
+async function renderApp(opts: { dispatch?: DispatchService } = {}) {
   const transport = new FakeTransport();
   const storage = new MemoryStorage();
-  if (opts.optIn) storage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: 1, opsCenterLayout: true }));
   render(<App transport={transport} storage={storage} initialPage="live" {...(opts.dispatch ? { dispatch: opts.dispatch } : {})} />);
   await act(flush);
   await act(flush);
@@ -62,7 +60,7 @@ describe("Flight details disclosure (L7)", () => {
   });
 
   it("is closed by default and, when opened, shows the aircraft, recording, plan baseline and all 14 readings", async () => {
-    const t = await renderApp({ optIn: true });
+    const t = await renderApp();
     await send(
       t,
       helloOk(),
@@ -93,7 +91,7 @@ describe("Route map and navigation log disclosure (L7)", () => {
     const dispatch = new DispatchService({ store, fetch: vi.fn(async () => new Response(JSON.stringify(fx("ofp-v2-navlog.json")))) as unknown as typeof fetch, now: () => Date.parse("2026-10-15T13:00:00Z") });
     await dispatch.init();
     await dispatch.importLatest("username", "test_pilot");
-    await renderApp({ optIn: true, dispatch });
+    await renderApp({ dispatch });
     const route = screen.getByRole("region", { name: "Route" });
     const d = within(route).getByText("Route map and full navigation log").closest("details")!;
     expect(within(d).queryByRole("img")).toBeNull();
@@ -142,24 +140,18 @@ describe("Route map labels (L7)", () => {
   });
 });
 
-describe("Compact navigation rail (L7)", () => {
-  it("is part of the opt-in preview only; page names stay the accessible names", async () => {
-    await renderApp({ optIn: true });
+describe("Navigation rail (L7)", () => {
+  it("gives every page an icon and a short label; page names stay the accessible names", async () => {
+    await renderApp();
     const nav = screen.getByRole("navigation", { name: "Primary" });
-    expect(nav.closest(".shell")).toHaveClass("shell--compact-nav");
     expect(nav.querySelectorAll("svg.sidenav__icon")).toHaveLength(7);
+    expect(within(nav).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Connection", "Dispatch", "Live Flight", "Flight History", "Debrief", "Receipts & Expenses", "Settings"]);
     expect(within(nav).getByRole("button", { name: "Receipts & Expenses" })).toHaveTextContent("Expenses");
     expect(within(nav).getByRole("button", { name: "Live Flight" })).toHaveAttribute("aria-current", "page");
-  });
-
-  it("leaves the classic shell unchanged", async () => {
-    await renderApp({ optIn: false });
-    const nav = screen.getByRole("navigation", { name: "Primary" });
-    expect(nav.closest(".shell")).not.toHaveClass("shell--compact-nav");
-    expect(nav.querySelector("svg")).toBeNull();
-    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["ConnectionAlt+1", "DispatchAlt+6", "Live FlightAlt+2", "Flight HistoryAlt+3", "DebriefAlt+4", "Receipts & ExpensesAlt+7", "SettingsAlt+5"]);
+    expect(within(nav).getByRole("button", { name: "Live Flight" })).toHaveAttribute("title", "Live Flight (Alt+2)");
   });
 });
+
 
 describe("Route map labels keep clear of markers (L7)", () => {
   const opts = { width: 1000, height: 400, fontSize: LABEL_FONT, markerRadius: 6 };

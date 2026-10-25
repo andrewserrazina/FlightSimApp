@@ -13,12 +13,9 @@ import { connState, FakeTransport, flush, frame, helloOk, MemoryStorage } from "
 
 afterEach(cleanup);
 
-const OPT_IN = JSON.stringify({ schemaVersion: 1, opsCenterLayout: true });
-
-async function renderApp(opts: { optIn?: boolean; page?: "live" | "settings"; store?: MemoryFlightStore; storage?: MemoryStorage } = {}) {
+async function renderApp(opts: { page?: "live" | "settings"; store?: MemoryFlightStore; storage?: MemoryStorage } = {}) {
   const transport = new FakeTransport();
   const storage = opts.storage ?? new MemoryStorage();
-  if (opts.optIn) storage.setItem(STORAGE_KEY, OPT_IN);
   const store = opts.store ?? new MemoryFlightStore();
   const dispatchStore = new MemoryDispatchStore();
   const dispatch = new DispatchService({ store: dispatchStore });
@@ -39,26 +36,21 @@ const settle = async () => {
   for (let i = 0; i < 4; i++) await act(flush);
 };
 
-describe("operations-center layout (L4, opt-in)", () => {
-  it("is off by default; the classic Live Flight page is unchanged", async () => {
-    await renderApp();
-    expect(screen.getByRole("region", { name: "Flight summary" })).toBeInTheDocument();
-    expect(screen.queryByRole("list", { name: "Operational health" })).toBeNull();
-  });
-
-  it("is switched on from Settings → Telemetry & display and remembered", async () => {
-    const { storage } = await renderApp({ page: "settings" });
-    const box = screen.getByRole("checkbox", { name: /New Live Flight layout \(preview\)/ });
-    expect(box).not.toBeChecked();
-    fireEvent.click(box);
-    expect(JSON.parse(storage.getItem(STORAGE_KEY)!).opsCenterLayout).toBe(true);
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Primary" })).getByRole("button", { name: /Live Flight/ }));
+describe("operations-center layout (L4; the default since L8)", () => {
+  it("is the Live Flight page: there is no classic page and no layout toggle, and an old stored choice is ignored", async () => {
+    const storage = new MemoryStorage();
+    // Preferences saved by a build that still had the preview toggle, with the classic layout chosen.
+    storage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: 1, opsCenterLayout: false }));
+    await renderApp({ storage });
     expect(screen.getByRole("list", { name: "Operational health" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Flight summary" })).toBeNull();
+    expect(screen.queryByText(/Preview layout/)).toBeNull();
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Primary" })).getByRole("button", { name: "Settings" }));
+    expect(screen.queryByRole("checkbox", { name: /New Live Flight layout/ })).toBeNull();
   });
 
   it("shows one primary action that follows the recorder and milestone rules, with the rest under More", async () => {
-    const { transport, store, dispatchStore } = await renderApp({ optIn: true });
+    const { transport, store, dispatchStore } = await renderApp();
     await send(transport, helloOk(), connState("CONNECTED"), liveFrame(1));
     expect(within(header()).getByRole("button", { name: "Start flight" })).toBeEnabled();
     fireEvent.click(within(header()).getByRole("button", { name: "Start flight" }));
@@ -93,7 +85,7 @@ describe("operations-center layout (L4, opt-in)", () => {
   });
 
   it("replaces the classic panels with tiles, the route card and the milestone strip; details stay one click away", async () => {
-    const { transport } = await renderApp({ optIn: true });
+    const { transport } = await renderApp();
     await send(transport, helloOk(), connState("CONNECTED"), liveFrame(1));
     expect(screen.queryByRole("region", { name: "Operations" })).toBeNull();
     expect(screen.queryByRole("region", { name: "Route monitoring" })).toBeNull();
@@ -108,7 +100,7 @@ describe("operations-center layout (L4, opt-in)", () => {
   });
 
   it("keeps the recording state next to the phase", async () => {
-    const { transport } = await renderApp({ optIn: true });
+    const { transport } = await renderApp();
     await send(transport, helloOk(), connState("CONNECTED"), liveFrame(1));
     expect(within(header()).getByRole("status")).toHaveTextContent("Not recording");
     fireEvent.click(within(header()).getByRole("button", { name: "Start flight" }));
@@ -118,7 +110,7 @@ describe("operations-center layout (L4, opt-in)", () => {
   });
 
   it("keeps identifiers and technical terms out of the header", async () => {
-    const { transport, store } = await renderApp({ optIn: true });
+    const { transport, store } = await renderApp();
     await send(transport, helloOk(), connState("CONNECTED"), liveFrame(1));
     fireEvent.click(within(header()).getByRole("button", { name: "Start flight" }));
     await settle();
@@ -132,7 +124,7 @@ describe("operations-center layout (L4, opt-in)", () => {
   it("shows recording problems in plain language on Live Flight instead of the technical banners", async () => {
     const store = new MemoryFlightStore();
     store.statusValue = { state: "unavailable", kind: "corrupt", message: "file is not a database", location: "C:/Users/pilot/AppData/flightsim.db", canReset: true };
-    await renderApp({ optIn: true, store });
+    await renderApp({ store });
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent("Flight recording is unavailable. Flights can't be saved until the flight database is available again.");
     expect(alert).not.toHaveTextContent("flightsim.db");
@@ -146,7 +138,7 @@ describe("operations-center layout (L4, opt-in)", () => {
   });
 
   it("shows a confirmation such as \"Flight started.\" briefly, then removes it", async () => {
-    const { transport } = await renderApp({ optIn: true });
+    const { transport } = await renderApp();
     await send(transport, helloOk(), connState("CONNECTED"), liveFrame(1));
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {

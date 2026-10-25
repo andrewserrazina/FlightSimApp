@@ -92,6 +92,7 @@ async function stageL3() {
   await p.close();
 }
 
+// The layout preference L4–L7 needed; ignored since L8 made the Ops Center layout the default.
 const OPS = { schemaVersion: 1, opsCenterLayout: true };
 /** Index of the first recorded frame whose detected phase is reached, from the recording's markers. */
 const firstFrameAtOrAfter = (iso) => frames.findIndex((f) => f.data.observed_at >= iso);
@@ -417,11 +418,6 @@ async function stageL7() {
     }
     await p.close();
   }
-  // The classic layout (toggle off) keeps the full side navigation at 1280.
-  const p = await open(1280, { height: 1024 });
-  await check(p, "classic-1280");
-  await shot(p, "classic-layout-unchanged-1280", { full: false });
-  await p.close();
   console.log(summary.join("\n"));
 }
 

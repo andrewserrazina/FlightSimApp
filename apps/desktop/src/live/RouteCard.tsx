@@ -111,7 +111,16 @@ export function RouteCard({ route, basis, cells, flightOpen, navigate }: { route
       ) : (
         <p className="ops-route__status" role="status">
           <strong>{progress.status === "outside_corridor" ? "Outside the planned route corridor." : "Route progress unavailable."}</strong> {progressReason(progress.reason)}
+          {progress.status === "outside_corridor" && progress.crossTrackNm !== null && progress.lastLeg && (
+            <>
+              {" "}
+              {Math.abs(progress.crossTrackNm).toFixed(1)} nm {progress.crossTrackNm >= 0 ? "right" : "left"} of {progress.lastLeg.from.ident} → {progress.lastLeg.to.ident}. Route progress resumes when the aircraft is back within the corridor of a leg ahead.
+            </>
+          )}
         </p>
+      )}
+      {progress.status === "tracking" && progress.remainingNm === null && (
+        <p className="muted ops-route__hint">Remaining distance is unavailable because a later leg crosses a waypoint without a usable position.</p>
       )}
 
       <p className="ops-route__eta">

@@ -180,6 +180,13 @@ async function recordingFlight(nowRef: { t: number }) {
 }
 
 describe("release on Live Flight", () => {
+  const header = () => screen.getByRole("region", { name: "Flight" });
+  const routeCard = () => screen.getByRole("region", { name: "Route" });
+  const more = () => {
+    fireEvent.click(within(header()).getByRole("button", { name: "More ▾" }));
+    return screen.getByRole("list", { name: "More flight actions" });
+  };
+
   it("attaches the open release to the recording flight and records OUT as a manual entry", async () => {
     const nowRef = { t: Date.parse("2026-10-15T14:30:00Z") };
     const { rec, flightId } = await recordingFlight(nowRef);
@@ -189,28 +196,26 @@ describe("release on Live Flight", () => {
     nav(/Live Flight/);
     await act(flush);
 
-    const ops = screen.getByRole("region", { name: "Operations" });
-    expect(within(ops).getByRole("status", { name: /Recording (in progress|interrupted)/ })).toBeInTheDocument();
-    expect(within(ops).getByText("Released · available to attach")).toBeInTheDocument();
-    const plan = screen.getByRole("region", { name: "Flight plan" });
-    fireEvent.click(within(plan).getByRole("button", { name: "Attach release R-ABCDEF12 to this flight" }));
+    expect(within(header()).getByText(/^(● Recording|‖ Recording paused|! Resume needed)/)).toBeInTheDocument();
+    expect(within(routeCard()).getByText("Released · available to attach")).toBeInTheDocument();
+    fireEvent.click(within(more()).getByRole("button", { name: "Attach release to this flight" }));
     await act(flush);
     await act(flush);
     expect(store.releases[0]!.flightId).toBe(flightId);
-    expect(within(screen.getByRole("region", { name: "Flight plan" })).getByText("Released · attached to this flight")).toBeInTheDocument();
-    expect(within(screen.getByRole("region", { name: "Operations" })).getByText("Released · attached to this flight")).toBeInTheDocument();
+    expect(within(routeCard()).getByText("Released · attached to this flight")).toBeInTheDocument();
 
     // Timeline: scheduled/estimated from the plan; OUT/IN not recorded; OFF/ON not yet detected.
-    const track = within(screen.getByRole("region", { name: "Operations" })).getByRole("list", { name: "Operational milestones" });
+    const track = screen.getByRole("list", { name: "Operational milestones" });
     const out = within(track).getByRole("listitem", { name: "OUT Off-block" });
     expect(out).toHaveTextContent(/Scheduled14:35Z · 15 Oct 2026/);
     expect(out).toHaveTextContent(/ActualNot recorded/);
     expect(within(track).getByRole("listitem", { name: "OFF Takeoff" })).toHaveTextContent(/ActualNot yet detected/);
     expect(within(track).getByRole("listitem", { name: "ON Landing" })).toHaveTextContent(/Estimated17:11Z/);
-    expect(screen.getByRole("button", { name: "Record IN (on-block) now" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /Record IN/ })).toBeNull(); // not offered before OUT and landing
 
     nowRef.t = Date.parse("2026-10-15T14:36:00Z");
-    fireEvent.click(screen.getByRole("button", { name: "Record OUT (off-block) now" }));
+    // The test bridge sends no frames, so the flight shows as interrupted: Resume is primary and Record OUT is under More.
+    fireEvent.click(within(more()).getByRole("button", { name: "Record OUT (off-block)" }));
     const dialog = screen.getByRole("dialog", { name: "Record OUT (off-block) now?" });
     expect(dialog).toHaveTextContent(/never as detected/);
     expect(dialog).toHaveTextContent(/real-world UTC time from this computer's clock/);
@@ -222,7 +227,7 @@ describe("release on Live Flight", () => {
     expect(outAfter).toHaveTextContent(/Actual14:36Z · 15 Oct 2026/);
     expect(within(outAfter).getByText("MANUAL · REAL-WORLD UTC")).toBeInTheDocument();
     expect(within(outAfter).queryByText(/DETECTED/)).toBeNull();
-    expect(screen.getByRole("button", { name: "Record OUT (off-block) now" })).toBeDisabled();
+    expect(within(more()).queryByRole("button", { name: "Record OUT (off-block)" })).toBeNull();
     expect(store.manual.get(flightId)).toEqual([{ milestone: "out", occurredAtUtc: "2026-10-15T14:36:00Z", recordedAtUtc: "2026-10-15T14:36:00Z", clockSource: "real_world_utc" }]);
   });
 
@@ -230,13 +235,13 @@ describe("release on Live Flight", () => {
     const nowRef = { t: Date.parse("2026-10-15T14:30:00Z") };
     const { rec } = await recordingFlight(nowRef);
     await renderApp({ recorder: rec, page: "live" });
-    const ops = screen.getByRole("region", { name: "Operations" });
-    expect(within(ops).getByRole("status", { name: /Recording (in progress|interrupted)/ })).toBeInTheDocument();
-    const track = within(ops).getByRole("list", { name: "Operational milestones" });
+    expect(within(header()).getByText(/^(● Recording|‖ Recording paused|! Resume needed)/)).toBeInTheDocument();
+    const track = screen.getByRole("list", { name: "Operational milestones" });
     expect(within(track).getAllByText("No plan")).toHaveLength(8);
     expect(rec.getView().writeError).toBeNull();
   });
 });
+
 
 describe("Debrief with a dispatch release", () => {
   const summary = (id: string): FlightSummary =>
@@ -308,10 +313,20 @@ describe("released-plan labels are the same on every screen (S2-04)", () => {
     expect(ofp()).toHaveTextContent("Imported plan preview — not attached to flight.");
     nav(/Live Flight/);
     await act(flush);
-    expect(within(screen.getByRole("region", { name: "Operations" })).getByText(PREVIEW)).toBeInTheDocument();
-    expect(within(screen.getByRole("region", { name: "Flight plan" })).getByText(PREVIEW)).toBeInTheDocument();
-    expect(within(screen.getByRole("region", { name: "Route monitoring" })).getByText(PREVIEW)).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Flight summary" })).toHaveTextContent("KBOS → KORD (imported plan, preview)");
+    const routeTag = () => within(screen.getByRole("region", { name: "Route" }));
+    const planPanel = async () => {
+      const d = screen.getByText("Flight details").closest("details")!;
+      if (!d.open) {
+        await act(async () => {
+          d.open = true;
+          d.dispatchEvent(new Event("toggle"));
+        });
+        await act(flush);
+      }
+      return within(screen.getByRole("region", { name: "Flight plan" }));
+    };
+    expect(routeTag().getByText(PREVIEW)).toBeInTheDocument();
+    expect((await planPanel()).getByText(PREVIEW)).toBeInTheDocument();
     expect(screen.queryByText(ATTACHED)).toBeNull();
     expect(store.snapshots.size).toBe(0);
 
@@ -324,17 +339,18 @@ describe("released-plan labels are the same on every screen (S2-04)", () => {
     expect(within(screen.getByRole("region", { name: "Release log" })).getByText(OPEN)).toBeInTheDocument();
     nav(/Live Flight/);
     await act(flush);
-    for (const name of ["Operations", "Flight plan", "Route monitoring"]) expect(within(screen.getByRole("region", { name })).getByText(OPEN)).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Flight summary" })).toHaveTextContent("KBOS → KORD (released plan, not yet attached)");
+    expect(routeTag().getByText(OPEN)).toBeInTheDocument();
+    expect((await planPanel()).getByText(OPEN)).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Operational health" })).getByText("Released, not attached")).toBeInTheDocument();
     expect(screen.queryByText(ATTACHED)).toBeNull();
 
     // Attached to the recording flight.
-    fireEvent.click(within(screen.getByRole("region", { name: "Flight plan" })).getByRole("button", { name: "Attach release R-ABCDEF12 to this flight" }));
+    fireEvent.click((await planPanel()).getByRole("button", { name: "Attach release R-ABCDEF12 to this flight" }));
     await act(flush);
     await act(flush);
     expect(store.releases[0]!.flightId).toBe(flightId);
-    for (const name of ["Operations", "Flight plan", "Route monitoring"]) expect(within(screen.getByRole("region", { name })).getByText(ATTACHED)).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Flight summary" })).toHaveTextContent("KBOS → KORD (attached released plan)");
+    expect(routeTag().getByText(ATTACHED)).toBeInTheDocument();
+    expect((await planPanel()).getByText(ATTACHED)).toBeInTheDocument();
     nav(/Dispatch/);
     await act(flush);
     expect(within(screen.getByRole("region", { name: "Release log" })).getByText(ATTACHED)).toBeInTheDocument();

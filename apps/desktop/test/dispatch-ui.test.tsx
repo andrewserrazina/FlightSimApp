@@ -236,10 +236,17 @@ describe("associating a plan with a flight", () => {
 
     fireEvent.click(within(screen.getByRole("navigation", { name: "Primary" })).getByRole("button", { name: /Live Flight/ }));
     await act(flush);
+    expect(within(screen.getByRole("region", { name: "Flight" })).getByText("KBOS → KORD")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Route" })).getByText("Legacy attachment · no release")).toBeInTheDocument();
+    const details = screen.getByText("Flight details").closest("details")!;
+    await act(async () => {
+      details.open = true;
+      details.dispatchEvent(new Event("toggle"));
+    });
+    await act(flush);
     const panel = screen.getByRole("region", { name: "Flight plan" });
     expect(within(panel).getByText("Legacy attachment · no release")).toBeInTheDocument();
     expect(panel).toHaveTextContent("Legacy attached plan — imported and attached without a dispatch release.");
-    expect(screen.getByText("KBOS → KORD (attached plan)")).toBeInTheDocument();
   });
 
   it("Debrief compares planned and detected times for a flight with an attached plan", async () => {

@@ -10,7 +10,7 @@ import { OpsProvider } from "../src/ops/OpsContext";
 import { OpsService } from "../src/ops/OpsService";
 import { MemoryOpsStore } from "../src/ops/store";
 import type { ReceiptDto } from "../src/ops/types";
-import { connState, fixture, FakeTransport, flush, helloOk, MemoryStorage, SESSION } from "./support";
+import { FakeTransport, flush, MemoryStorage } from "./support";
 
 afterEach(cleanup);
 
@@ -154,45 +154,9 @@ describe("Receipts & Expenses", () => {
   });
 });
 
-describe("Live Flight turnaround", () => {
-  it("starts before recording, records GSX observations and manual entries separately", async () => {
-    const { store, transport } = await renderApp("live");
-    const panel = screen.getByRole("region", { name: "Turnaround" });
-    expect(within(panel).getByText("Simulator not connected")).toBeInTheDocument();
-    await click(within(panel).getByRole("button", { name: "Start turnaround" }));
-    expect(store.turnarounds[0]).toMatchObject({ side: "departure", flightLink: "unlinked", status: "open" });
-    expect(within(panel).getByText("OPEN")).toBeInTheDocument();
-    expect(within(panel).getByLabelText("Servicing readiness")).toHaveTextContent("Pushback is not part of this check");
+// The Live Flight turnaround flow (start, GSX recording, manual entries, abandon) is covered through the
+// Ground services card in ops-center-ground.test.tsx.
 
-    // GSX live on MSFS: valid states are recorded into the open turnaround.
-    const gsx = fixture("valid/gsx-state.live.json");
-    gsx.data.session_id = SESSION;
-    await act(async () => {
-      transport.emit(helloOk(SESSION, "msfs2020"));
-      transport.emit(connState("CONNECTED", { simulator: "msfs2020" }));
-      transport.emit(gsx);
-    });
-    for (let i = 0; i < 4; i++) await act(flush);
-    expect(within(panel).getByText("GSX live")).toBeInTheDocument();
-    const recorded = store.turnarounds[0]!.events;
-    expect(recorded.every((e) => e.source === "gsx")).toBe(true);
-    expect(recorded.find((e) => e.service === "deboarding")).toMatchObject({ gsxState: "being_performed", gsxRaw: 5, observedAtUtc: "2026-10-17T16:40:05.000Z" });
-
-    const manual = within(panel).getByRole("region", { name: "Record a service manually" });
-    expect(within(manual).getByRole("button", { name: "Record entry" })).toBeDisabled();
-    fireEvent.change(within(manual).getByRole("combobox", { name: "Service" }), { target: { value: "refueling" } });
-    fireEvent.change(within(manual).getByRole("textbox", { name: "Note (required)" }), { target: { value: "Fuel truck finished" } });
-    await click(within(manual).getByRole("button", { name: "Record entry" }));
-    expect(store.turnarounds[0]!.events.at(-1)).toMatchObject({ source: "manual", service: "refueling", manualStatus: "completed", note: "Fuel truck finished", gsxState: null });
-
-    await click(within(panel).getByRole("button", { name: "Abandon…" }));
-    const dialog = screen.getByRole("dialog", { name: "Abandon turnaround?" });
-    expect(within(dialog).getByRole("button", { name: "Abandon" })).toBeDisabled();
-    fireEvent.change(within(dialog).getByRole("textbox", { name: "Reason (required)" }), { target: { value: "Aircraft swap" } });
-    await click(within(dialog).getByRole("button", { name: "Abandon" }));
-    expect(store.turnarounds[0]).toMatchObject({ status: "abandoned", closeReason: "Aircraft swap" });
-  });
-});
 
 describe("isolation", () => {
   it("a failing turnaround/ledger store is shown in its panel and leaves flight controls alone", async () => {
@@ -200,9 +164,10 @@ describe("isolation", () => {
       get: (target, key) => (typeof (target as any)[key] === "function" ? async () => { throw new Error("database locked"); } : (target as any)[key]),
     });
     await renderApp("live", broken as MemoryOpsStore);
-    const panel = screen.getByRole("region", { name: "Turnaround" });
+    const panel = screen.getByRole("region", { name: "Ground services" });
     expect(within(panel).getByText("database locked")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start flight" })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Flight" })).getByRole("button", { name: "Go to connection" })).toBeInTheDocument();
+    expect(screen.queryByText(/Operational records for this flight couldn't be read/)).toBeNull(); // no flight open: nothing to say yet
   });
 });
 

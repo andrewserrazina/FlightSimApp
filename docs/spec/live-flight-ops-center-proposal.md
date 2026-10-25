@@ -364,7 +364,7 @@ styles/live.css                     tokens only; container queries for the break
 | **L5** | Metric tiles, Route card (with the ETA rule), milestone strip, in the new layout | Opt-in |
 | **L6** | Ground services card, service history, start and manage turnaround dialogs, receipt cross-link | Opt-in |
 | **L7** | Flight details and route-map disclosures, responsive breakpoints and icon rail, route-map label fix | Opt-in |
-| **L8** | After owner acceptance: new layout **on by default**, old panels removed from Live Flight, top bar "Turnline", footer cleanup | Default |
+| **L8** | After owner acceptance: new layout **on by default**, old panels removed from Live Flight, top bar "Turnline", footer cleanup | Default. Layout default and classic removal implemented, held for the acceptance run; the top-bar name and footer wait for the owner's branding approval. |
 
 Each PR updates the existing tests it touches and adds its own. The tester kit carries the toggle from L4 onwards,
 so you can compare the old and new layouts on the same flight.

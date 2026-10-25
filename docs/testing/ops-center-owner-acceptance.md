@@ -25,6 +25,7 @@ which predates the L5 recording-state wording and the L7 disclosures.
    Verify `SHA256SUMS.txt` and install ([tester-build.md](../release/tester-build.md)).
 2. In SimBrief, generate an OFP for the flight you'll fly (any route with a navlog).
 3. In Turnline: **Settings → Telemetry & display → New Live Flight layout (preview)**: on. Open **Live Flight**.
+   (On a build that includes L8 the layout is always on and this setting is gone; skip this step and row 1.5.)
 4. Note your monitor setup (resolution and Windows display scaling) in the record below.
 
 ## 1. Display and layout

@@ -1,25 +1,17 @@
 /**
- * S2-03 route UI: the airline-style navigation log, a geographic route map, live route monitoring
- * and the navigation debrief. Planning data (from SimBrief) and live computed values (Turnline) are
- * always labelled as such. Route monitoring reads bridge telemetry only; it never touches the
- * recorder or the bridge.
+ * S2-03 route UI: the airline-style navigation log, a geographic route map and the navigation
+ * debrief. Planning data (from SimBrief) and computed values (Turnline) are always labelled as such.
+ * Live route progress is shown on the Live Flight route card (live/RouteCard.tsx).
  */
-import { readingValue } from "@flightsim/contracts";
 import type { FlightDetail } from "@flightsim/flight-core";
 import { useEffect, useMemo, useState } from "react";
-import type { NavigateFn } from "../app/navigation";
-import { useNow } from "../app/useNow";
-import { useBridgeState } from "../bridge/BridgeContext";
 import { useFlightHistory } from "../data/flightHistory";
 import { useDispatch, useDispatchView } from "../dispatch/DispatchContext";
 import type { ImportedFlightPlan } from "../dispatch/model";
 import { planBasisForFlight } from "../dispatch/planBasis";
-import { PlanBasisNote, PlanBasisTag } from "../dispatch/PlanBasisWidgets";
+import { PlanBasisTag } from "../dispatch/PlanBasisWidgets";
 import { fixLabel, plannedRemainingNm, positionStatusOf, type NavFix, type PlanNavlog, type PositionStatus } from "../dispatch/navlog";
 import { fmtAltitude, fmtDuration, fmtUtcTime, fmtWeight, routeTitle, UNAVAILABLE } from "../dispatch/presentation";
-import { telemetryFreshness } from "../domain/freshness";
-import { liveRouteProgress } from "../live/model";
-import { usePreferences } from "../preferences/PreferencesContext";
 import type { SampleRowDto } from "../recording/types";
 import { Button } from "../ui/Button";
 import { Panel } from "../ui/Panel";
@@ -28,8 +20,7 @@ import type { LatLon } from "./geo";
 import { buildRouteGeometry, type RouteGeometry } from "./geometry";
 import { placeLabels } from "./labels";
 import { navObservations } from "./observations";
-import { OUTSIDE_CORRIDOR_CAUSES, type RouteProgress } from "./progress";
-import { useRouteTracker } from "./RouteTrackerContext";
+import { OUTSIDE_CORRIDOR_CAUSES } from "./progress";
 
 const nm = (v: number | null, digits = 0) => (v === null ? UNAVAILABLE : `${v.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: digits })} nm`);
 const Unavail = ({ text = UNAVAILABLE }: { text?: string }) => <span className="unavailable">{text}</span>;
@@ -243,126 +234,6 @@ export function RouteMap({ geometry, position, label }: { geometry: RouteGeometr
         {hidden > 0 ? ` ${hidden} waypoint label${hidden === 1 ? " is" : "s are"} hidden where they would overlap; every waypoint is in the navigation log.` : ""}
       </figcaption>
     </figure>
-  );
-}
-
-// ---------------------------------------------------------------- live monitoring
-
-
-function ProgressBody({ progress, navlog }: { progress: RouteProgress; navlog: PlanNavlog }) {
-  if (progress.status === "unavailable") {
-    return (
-      <div className="route-status route-status--unavailable" role="status">
-        <strong>Route progress unavailable.</strong> {progress.reason}
-      </div>
-    );
-  }
-  if (progress.status === "outside_corridor") {
-    return (
-      <div className="route-status route-status--outside" role="status">
-        <strong>Outside planned route corridor.</strong> {progress.reason}
-        {progress.crossTrackNm !== null && progress.lastLeg && (
-          <span>
-            {" "}
-            {Math.abs(progress.crossTrackNm).toFixed(1)} nm {progress.crossTrackNm >= 0 ? "right" : "left"} of {progress.lastLeg.from.ident} → {progress.lastLeg.to.ident}. Route progress resumes when the aircraft is back within the corridor of a leg ahead.
-          </span>
-        )}
-      </div>
-    );
-  }
-  const upcoming = navlog.fixes.slice(progress.leg.to.fixIndex, progress.leg.to.fixIndex + 6);
-  const xt = progress.crossTrackNm;
-  return (
-    <>
-      <dl className="route-metrics">
-        <div>
-          <dt>Current leg</dt>
-          <dd className="mono">
-            {progress.leg.from.ident} → {progress.leg.to.ident}
-          </dd>
-        </div>
-        <div>
-          <dt>Next fix</dt>
-          <dd className="mono">{progress.leg.to.ident}</dd>
-        </div>
-        <div>
-          <dt>Distance to next fix</dt>
-          <dd className="num">{nm(progress.distanceToNextNm, 1)}</dd>
-        </div>
-        <div>
-          <dt>Remaining (planned route)</dt>
-          <dd className="num">{progress.remainingNm === null ? <Unavail /> : nm(progress.remainingNm)}</dd>
-        </div>
-        <div>
-          <dt>Along-track progress</dt>
-          <dd className="num">
-            {nm(progress.flownNm)} · {Math.round(progress.fraction * 100)}%
-          </dd>
-        </div>
-        <div>
-          <dt>Cross-track</dt>
-          <dd className="num">{Math.abs(xt) < 0.05 ? "On track" : `${Math.abs(xt).toFixed(1)} nm ${xt > 0 ? "right" : "left"}`}</dd>
-        </div>
-      </dl>
-      {progress.remainingNm === null && <p className="muted">Remaining distance is unavailable because a later leg crosses a waypoint without a usable position.</p>}
-      <h3 className="subsection__title">Upcoming waypoints (planned)</h3>
-      <ol className="route-upcoming">
-        {upcoming.map((f) => (
-          <li key={f.seq}>
-            <span className="mono">{fixLabel(f)}</span>
-            <span className="num">{val(fmtAltitude(f.plannedAltitudeFt))}</span>
-            <span className="num">{val(fmtDuration(f.elapsedTimeS))}</span>
-          </li>
-        ))}
-      </ol>
-    </>
-  );
-}
-
-/** Live Flight: route monitoring against the attached plan (or an unbound preview of the imported plan). */
-export function RouteMonitor({ navigate }: { navigate: NavigateFn }) {
-  const state = useBridgeState();
-  const now = useNow(1000);
-  const { preferences } = usePreferences();
-  // Plan basis, geometry and tracker state live in RouteTrackerProvider, so tracking continues while other pages are open.
-  const { basis, geometry, tracker, flightOpen } = useRouteTracker();
-  const plan = basis?.plan ?? null;
-  const bound = basis !== null && (basis.kind === "release_attached_current" || basis.kind === "legacy_attached");
-  const navlog = plan?.navlog ?? null;
-  const frame = state.lastFrame;
-  const fresh = telemetryFreshness(state, now, preferences.staleWarningSeconds * 1000);
-
-  if (!plan || !basis) {
-    return (
-      <Panel title="Route monitoring" className="span-all">
-        <p className="muted">
-          No flight plan imported.{" "}
-          <Button variant="quiet" onClick={() => navigate("dispatch")}>
-            Import from SimBrief on the Dispatch page
-          </Button>
-        </p>
-      </Panel>
-    );
-  }
-  const live = liveRouteProgress(geometry, tracker, fresh);
-  const pos = frame && fresh.kind === "live" ? { lat: readingValue(frame.readings.lat_deg), lon: readingValue(frame.readings.lon_deg) } : null;
-  return (
-    <Panel
-      title="Route monitoring"
-      className="span-all"
-      actions={
-        <>
-          <Tag tone="neutral">{routeTitle(plan)}</Tag>
-          <PlanBasisTag basis={basis} />
-        </>
-      }
-    >
-      <PlanBasisNote basis={basis} />
-      {!bound && flightOpen && <p className="muted">Attach a plan to this flight to make it the flight&apos;s baseline. Until then this is a preview.</p>}
-      {navlog ? <ProgressBody progress={live} navlog={navlog} /> : <p className="unavailable-text">This flight plan has no navigation log, so route progress is unavailable. Plans imported before waypoint support have none.</p>}
-      {geometry && geometry.legs.length > 0 && <RouteMap geometry={geometry} position={pos && pos.lat !== null && pos.lon !== null ? { lat: pos.lat, lon: pos.lon } : null} label={`Route map ${routeTitle(plan)}`} />}
-      <p className="muted">Route progress is computed by Turnline from the planned waypoints and the simulator position. It is not read from the aircraft FMS, and it never affects recording.</p>
-    </Panel>
   );
 }
 
