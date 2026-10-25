@@ -497,7 +497,9 @@ pub fn simunet_credential_save(value: String) -> Result<SimuNetCredentialStatus,
         {
             return Err(SecureError::new("Enter a valid SimuNet operator key."));
         }
-        // A new operator key never inherits consent from the previous operator.
+        // A new operator key never inherits consent from the previous operator, and nothing
+        // already in flight under the old key is reported as sent.
+        crate::simunet_sender::revoke_in_flight();
         KeyringStore.delete(SIMUNET_CONSENT_ACCOUNT)?;
         KeyringStore.set(SIMUNET_KEY_ACCOUNT, &value)?;
         simunet_status_from(&KeyringStore)
@@ -513,6 +515,8 @@ pub fn simunet_credential_set_consent(enabled: bool) -> Result<SimuNetCredential
         if enabled {
             KeyringStore.set(SIMUNET_CONSENT_ACCOUNT, "enabled")?;
         } else {
+            // Withdrawing consent also stops a request already in flight.
+            crate::simunet_sender::revoke_in_flight();
             KeyringStore.delete(SIMUNET_CONSENT_ACCOUNT)?;
         }
         simunet_status_from(&KeyringStore)
@@ -522,7 +526,8 @@ pub fn simunet_credential_set_consent(enabled: bool) -> Result<SimuNetCredential
 #[tauri::command]
 pub fn simunet_credential_disconnect() -> Result<SimuNetCredentialStatus, SecureError> {
     locked(|| {
-        // Revoke consent first. A failed credential deletion is still off.
+        // Revoke consent first (and any request in flight). A failed credential deletion is still off.
+        crate::simunet_sender::revoke_in_flight();
         KeyringStore.delete(SIMUNET_CONSENT_ACCOUNT)?;
         KeyringStore.delete(SIMUNET_KEY_ACCOUNT)?;
         simunet_status_from(&KeyringStore)
