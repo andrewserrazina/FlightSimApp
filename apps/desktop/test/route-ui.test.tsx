@@ -123,29 +123,36 @@ describe("Dispatch navigation log", () => {
   });
 });
 
-describe("Live Flight route monitoring", () => {
+describe("Live Flight route card", () => {
+  const card = () => screen.getByRole("region", { name: "Route" });
+  const openMap = async () => {
+    const d = within(card()).getByText("Route map and full navigation log").closest("details")!;
+    await act(async () => {
+      d.open = true;
+      d.dispatchEvent(new Event("toggle"));
+    });
+    return d;
+  };
+
   it("labels an imported plan as an unbound preview and withholds progress without telemetry", async () => {
     const { svc } = await serviceWith("ofp-v2-navlog.json");
     await renderApp({ dispatch: svc, page: "live" });
-    const panel = screen.getByRole("region", { name: "Route monitoring" });
-    expect(within(panel).getByText("Imported · preview")).toBeInTheDocument();
-    expect(panel).toHaveTextContent("Imported plan preview — not attached to flight.");
-    expect(within(panel).getByRole("status")).toHaveTextContent("Route progress unavailable. No telemetry received.");
-    expect(panel).toHaveTextContent(/not read from the aircraft FMS/);
+    expect(within(card()).getByText("Imported · preview")).toHaveAttribute("title", expect.stringMatching(/preview/i));
+    expect(within(card()).getByRole("status")).toHaveTextContent("Route progress unavailable. No telemetry received.");
+    expect(within(card()).getByText(/^ETA/).parentElement).toHaveTextContent("Not shown");
+    expect(await openMap()).toHaveTextContent(/not read from the aircraft FMS/);
   });
 
-  it("tracks the planned route from live positions: current leg, next fix, distances and upcoming fixes", async () => {
+  it("tracks the planned route from live positions: distances, cross-track and the next fixes", async () => {
     const { svc } = await serviceWith("ofp-v2-navlog.json");
     const t = await renderApp({ dispatch: svc, page: "live" });
     const leg = buildRouteGeometry(navPlan().navlog!).legs[2]!; // TOC → TLNB2
     await flyFrames(t, [0.2, 0.21, 0.22].map((f) => interpolate(leg.from, leg.to, f)));
-    const panel = screen.getByRole("region", { name: "Route monitoring" });
-    expect(within(panel).getByText("TOC → TLNB2")).toBeInTheDocument();
-    expect(within(panel).getByText("On track")).toBeInTheDocument();
-    const upcoming = within(panel).getByRole("heading", { name: "Upcoming waypoints (planned)" }).nextElementSibling!;
-    expect(within(upcoming as HTMLElement).getAllByRole("listitem")[0]).toHaveTextContent(/TLNB2/);
-    expect(within(panel).getByText(/Remaining distance is unavailable because a later leg crosses a waypoint without a usable position/)).toBeInTheDocument();
-    expect(within(panel).getByRole("img", { name: "Route map KBOS → KORD" })).toBeInTheDocument();
+    expect(within(card()).getByText("On track")).toBeInTheDocument();
+    const fixes = within(card()).getByText("Next fixes").nextElementSibling!;
+    expect(fixes.textContent).toMatch(/^TLNB2 \d+ nm/);
+    expect(within(card()).getByText(/Remaining distance is unavailable because a later leg crosses a waypoint without a usable position/)).toBeInTheDocument();
+    expect(within(await openMap()).getByRole("img", { name: "Route map KBOS → KORD" })).toBeInTheDocument();
   });
 
   it("keeps tracking while another page is open (L2: the tracker no longer resets on navigation)", async () => {
@@ -161,9 +168,8 @@ describe("Live Flight route monitoring", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /^Live Flight/ }));
     });
-    const panel = screen.getByRole("region", { name: "Route monitoring" });
-    expect(within(panel).getByText("TOC → TLNB2")).toBeInTheDocument();
-    expect(within(panel).getByText("On track")).toBeInTheDocument();
+    expect(within(card()).getByText("On track")).toBeInTheDocument();
+    expect(within(card()).getByText("Next fixes").nextElementSibling!.textContent).toMatch(/^TLNB2/);
   });
 
   it("never shows a progress figure when the aircraft is flying elsewhere", async () => {
@@ -174,9 +180,9 @@ describe("Live Flight route monitoring", () => {
       { lat: 30.01, lon: -100 },
       { lat: 30.02, lon: -100 },
     ]);
-    const panel = screen.getByRole("region", { name: "Route monitoring" });
-    expect(within(panel).getByRole("status")).toHaveTextContent("Route progress unavailable. Not within the planned route corridor");
-    expect(within(panel).queryByText("Current leg")).toBeNull();
+    expect(within(card()).getByRole("status")).toHaveTextContent("Route progress unavailable. Not within the planned route corridor");
+    expect(within(card()).queryByText("Flown")).toBeNull();
+    expect(within(card()).getByRole("progressbar")).not.toHaveAttribute("aria-valuenow");
   });
 
   it("describes leaving the corridor neutrally, with possible (unverified) causes and no progress figure", async () => {
@@ -190,13 +196,12 @@ describe("Live Flight route monitoring", () => {
       pts.push({ lat: p.lat + k / 60, lon: p.lon });
     }
     await flyFrames(t, pts);
-    const panel = screen.getByRole("region", { name: "Route monitoring" });
-    const status = within(panel).getByRole("status");
-    expect(status).toHaveTextContent(/^Outside planned route corridor\./);
+    const status = within(card()).getByRole("status");
+    expect(status).toHaveTextContent(/^Outside the planned route corridor\./);
     expect(status).toHaveTextContent(/Possible causes include ATC vectors, holding, weather avoidance or a direct-to clearance; Turnline cannot verify the cause\./);
-    expect(status).toHaveTextContent(/nm right of TOC → TLNB2/);
+    expect(status).toHaveTextContent(/nm right of TOC → TLNB2\. Route progress resumes when the aircraft is back within the corridor of a leg ahead\./);
     expect(status).not.toHaveTextContent(/deviation|violation|error|off route/i);
-    expect(within(panel).queryByText("Current leg")).toBeNull();
+    expect(within(card()).queryByText("Flown")).toBeNull();
   });
 
   it("uses the flight's attached plan, not a newer import, and recording is unaffected", async () => {
@@ -219,15 +224,15 @@ describe("Live Flight route monitoring", () => {
     await later.init();
     await later.importLatest("username", "test_pilot");
     await renderApp({ dispatch: later, page: "live", recorder: rec });
-    const panel = screen.getByRole("region", { name: "Route monitoring" });
-    expect(within(panel).getByText("Legacy attachment · no release")).toBeInTheDocument();
-    expect(panel).toHaveTextContent(/KBOS → KORD/);
-    expect(within(panel).queryByText(/Preview/)).toBeNull();
+    expect(within(card()).getByText("Legacy attachment · no release")).toBeInTheDocument();
+    expect(card()).toHaveTextContent(/KBOS.*KORD/);
+    expect(within(card()).queryByText(/preview/i)).toBeNull();
     expect(rec.getView().writeError).toBeNull();
     // Still open (the test transport has no bridge, so the recorder may mark it interrupted); never closed.
     expect(["active", "interrupted"]).toContain(flightStore.flights.get("00000000-0000-4000-8000-000000000077")!.status);
   });
 });
+
 
 describe("Debrief navigation", () => {
   const summary = (id: string): FlightSummary =>

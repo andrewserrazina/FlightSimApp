@@ -3,7 +3,7 @@
  * and the release log. Every value carries its provenance; nothing is inferred to fill a gap.
  */
 import type { FlightDetail } from "@flightsim/flight-core";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import type { NavigateFn } from "../app/navigation";
 import { useRecorderView } from "../recording/RecorderContext";
 import { Button } from "../ui/Button";
@@ -11,15 +11,13 @@ import { KeyValueList } from "../ui/KeyValueList";
 import { Panel } from "../ui/Panel";
 import { Tag } from "../ui/Tag";
 import { useDispatch, useDispatchView } from "./DispatchContext";
-import { RecordMilestoneDialog } from "./RecordMilestoneDialog";
 import type { FlightOpsState, ReleaseEntry } from "./DispatchService";
-import type { ImportedFlightPlan } from "./model";
 import { flightTitle, fmtUtcTime, routeTitle, UNAVAILABLE } from "./presentation";
 import { planBasisForFlight, planBasisForRelease } from "./planBasis";
 import { PlanBasisNote, PlanBasisTag } from "./PlanBasisWidgets";
 import { releaseLabel, releaseStateLabel, type DispatchRelease } from "./release";
-import { operationalStatus, type OperationalStatus } from "./status";
-import { buildMilestones, manualEligibility, NO_MANUAL, PROVENANCE_TEXT, type ManualMilestones, type MilestoneRow } from "./timeline";
+import type { OperationalStatus } from "./status";
+import { buildMilestones, NO_MANUAL, PROVENANCE_TEXT, type ManualMilestones, type MilestoneRow } from "./timeline";
 
 export function StatusPill({ status }: { status: OperationalStatus }) {
   return (
@@ -133,81 +131,6 @@ function manualOf(ops: FlightOpsState | undefined): ManualMilestones {
 
 function releaseOf(ops: FlightOpsState | undefined): ReleaseEntry | null {
   return ops?.kind === "ready" ? ops.release : null;
-}
-
-/** Live Flight: operational status, milestone timeline and explicit OUT/IN recording. */
-export function LiveOperations({ navigate }: { navigate: NavigateFn }) {
-  const dispatch = useDispatch();
-  const view = useDispatchView();
-  const lc = useRecorderView().lifecycle;
-  const flightOpen = (lc.status === "active" || lc.status === "interrupted") && lc.flightId !== null;
-  const flightId = flightOpen ? lc.flightId : null;
-  const [confirm, setConfirm] = useState<"out" | "in" | null>(null);
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-
-  useEffect(() => {
-    if (flightId) {
-      void dispatch.loadFlightOps(flightId);
-      void dispatch.loadSnapshot(flightId);
-    }
-  }, [dispatch, flightId]);
-
-  const ops = flightId ? view.flightOps[flightId] : undefined;
-  const snap = flightId ? view.snapshots[flightId] : undefined;
-  const open = dispatch.openRelease;
-  const basis = planBasisForFlight({ snapshot: snap?.kind === "ready" ? snap.snapshot : null, flightOpen: flightOpen ? true : null, openRelease: open, importedPlan: view.plan.kind === "ready" ? view.plan.plan : null });
-  // Scheduled times come from an attached plan or an open release; an unreleased import is only a preview.
-  const plan: ImportedFlightPlan | null = basis && basis.kind !== "imported_preview" ? basis.plan : null;
-  const planNote = !basis || basis.kind === "imported_preview" ? null : basis.kind === "release_open" ? `released plan ${basis.release}, not yet attached` : basis.release ? `attached released plan ${basis.release}` : "legacy attached plan";
-  const manual = manualOf(ops);
-  const status = operationalStatus({ planImported: view.plan.kind === "ready", openRelease: open !== null, lifecycle: lc });
-  const rows = buildMilestones({ plan, takeoffAtUtc: lc.takeoffAt, landingAtUtc: lc.landingAt, startedAirborne: lc.startedAirborne, manual, flightOpen, hasFlight: flightOpen });
-  const airborne = ["TAKEOFF", "CLIMB", "CRUISE", "DESCENT", "APPROACH"].includes(lc.phase);
-  const eligible = manualEligibility({ flightOpen: flightOpen && ops?.kind === "ready", takeoffAtUtc: lc.takeoffAt, landingAtUtc: lc.landingAt, airborne, manual });
-  const rel = releaseOf(ops);
-
-  return (
-    <Panel
-      title="Operations"
-      className="span-all"
-      actions={basis ? <PlanBasisTag basis={basis} /> : flightOpen ? <Tag tone="neutral">No plan attached</Tag> : undefined}
-    >
-      <StatusPill status={status} />
-      {ops?.kind === "error" && (
-        <p className="unavailable-text" role="alert">
-          Operational records for this flight could not be read: {ops.message}. Recording is not affected.
-        </p>
-      )}
-      <MilestoneTimeline rows={rows} planNote={planNote} />
-      {lc.status === "interrupted" && <p className="muted">Telemetry is interrupted. A takeoff or landing during the gap cannot be detected.</p>}
-      {flightOpen ? (
-        <div className="button-row">
-          <Button onClick={() => setConfirm("out")} disabled={!eligible.out}>
-            Record OUT (off-block) now
-          </Button>
-          <Button onClick={() => setConfirm("in")} disabled={!eligible.in}>
-            Record IN (on-block) now
-          </Button>
-        </div>
-      ) : (
-        <p className="muted">
-          Start a flight to track its milestones.{" "}
-          {!open && view.plan.kind === "ready" && (
-            <Button variant="quiet" onClick={() => navigate("dispatch")}>
-              Review and release the plan on Dispatch
-            </Button>
-          )}
-        </p>
-      )}
-      {flightOpen && <p className="muted">OUT can be recorded before takeoff is detected; IN after a landing is detected. Both are stored as manual entries with this computer&apos;s real-world UTC time and cannot be changed later.</p>}
-      {message && (
-        <p className={message.ok ? "muted" : "unavailable-text"} role="status">
-          {message.text}
-        </p>
-      )}
-      {confirm && flightId && <RecordMilestoneDialog which={confirm} flightId={flightId} onClose={() => setConfirm(null)} onResult={setMessage} />}
-    </Panel>
-  );
 }
 
 /** Debrief: dispatch release summary and the milestone timeline for a recorded flight. */

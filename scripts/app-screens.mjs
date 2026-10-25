@@ -56,6 +56,8 @@ for (let i = 3; i < frames.length; i += 20) {
   await emit(batch);
 }
 await page.waitForTimeout(500);
+// Parked after landing, Record IN is the primary action and Confirm completion is under More.
+if (!(await page.getByRole("button", { name: "Confirm completion" }).isVisible())) await page.getByRole("button", { name: "More ▾" }).click();
 await page.getByRole("button", { name: "Confirm completion" }).click();
 await page.getByText("Flight completed and saved.").waitFor();
 

@@ -7,7 +7,6 @@ import { OpsService } from "../src/ops/OpsService";
 import { MemoryOpsStore } from "../src/ops/store";
 import { GSX_STATE_LABEL, receiptsWaiting } from "../src/ops/presentation";
 import type { ReceiptDto } from "../src/ops/types";
-import { STORAGE_KEY } from "../src/preferences/preferences";
 import { connState, fixture, FakeTransport, flush, helloOk, MemoryStorage, SESSION } from "./support";
 
 afterEach(cleanup);
@@ -15,7 +14,6 @@ afterEach(cleanup);
 async function renderOpsCenter(store = new MemoryOpsStore()) {
   const transport = new FakeTransport();
   const storage = new MemoryStorage();
-  storage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: 1, opsCenterLayout: true }));
   const ops = new OpsService(store);
   render(<App transport={transport} storage={storage} initialPage="live" ops={ops} />);
   await act(flush);
@@ -43,7 +41,7 @@ async function gsxLive(transport: FakeTransport) {
   for (let i = 0; i < 4; i++) await act(flush);
 }
 
-describe("Ground services card (L6, opt-in layout)", () => {
+describe("Ground services card (L6)", () => {
   it("replaces the classic Turnaround panel instead of adding to it", async () => {
     await renderOpsCenter();
     expect(card()).toBeInTheDocument();

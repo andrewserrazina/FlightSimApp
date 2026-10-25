@@ -7,7 +7,6 @@ import { DispatchPage } from "../pages/DispatchPage";
 import { ExpensesPage } from "../pages/ExpensesPage";
 import { GsxTurnaroundSync } from "../ops/OpsContext";
 import { FlightHistoryPage } from "../pages/FlightHistoryPage";
-import { LiveFlightPage } from "../pages/LiveFlightPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { WelcomePage } from "../pages/WelcomePage";
 import { usePreferences } from "../preferences/PreferencesContext";
@@ -15,6 +14,7 @@ import { ErrorBoundary } from "../ui/ErrorBoundary";
 import { localTime } from "../ui/format";
 import { StatusIndicator } from "../ui/StatusIndicator";
 import { Tag } from "../ui/Tag";
+import { OpsCenterPage } from "../live/OpsCenterPage";
 import { NavIcon } from "./NavIcon";
 import { PAGES, pageForShortcut, type NavigateFn, type NavigationState } from "./navigation";
 import { RecorderBanners } from "./RecorderBanners";
@@ -54,7 +54,6 @@ export function AppShell({ initialPage = "welcome" }: { initialPage?: Navigation
   useAdapterSync();
   const bridge = useBridgeState();
   const presentation = presentConnection(bridge);
-  const { preferences } = usePreferences();
   const demo = (bridge.adapter ?? bridge.configuredAdapter) === "mock";
   const [nav, setNav] = useState<NavigationState>({ page: initialPage, debriefFlightId: null });
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -87,12 +86,8 @@ export function AppShell({ initialPage = "welcome" }: { initialPage?: Navigation
   }, [navigate]);
 
   const current = PAGES.find((p) => p.id === nav.page)!;
-  // The operations-center preview (opt-in) brings the compact navigation: below 1440 px the side nav
-  // becomes a labelled icon rail (CSS). The classic shell is unchanged.
-  const compactNav = preferences.opsCenterLayout;
-
   return (
-    <div className={compactNav ? "shell shell--compact-nav" : "shell"}>
+    <div className="shell">
       <ErrorBoundary label="GSX turnaround recording">
         <GsxTurnaroundSync />
       </ErrorBoundary>
@@ -124,14 +119,12 @@ export function AppShell({ initialPage = "welcome" }: { initialPage?: Navigation
         <ul>
           {PAGES.map((p) => (
             <li key={p.id}>
-              <button type="button" className="sidenav__item" aria-label={p.label} aria-current={nav.page === p.id ? "page" : undefined} onClick={() => navigate(p.id)} aria-keyshortcuts={`Alt+${p.shortcut}`} title={compactNav ? `${p.label} (Alt+${p.shortcut})` : undefined}>
-                {compactNav && <NavIcon page={p.id} />}
+              <button type="button" className="sidenav__item" aria-label={p.label} aria-current={nav.page === p.id ? "page" : undefined} onClick={() => navigate(p.id)} aria-keyshortcuts={`Alt+${p.shortcut}`} title={`${p.label} (Alt+${p.shortcut})`}>
+                <NavIcon page={p.id} />
                 <span className="sidenav__label">{p.label}</span>
-                {compactNav && (
-                  <span className="sidenav__short" aria-hidden="true">
-                    {p.short}
-                  </span>
-                )}
+                <span className="sidenav__short" aria-hidden="true">
+                  {p.short}
+                </span>
                 <kbd className="sidenav__kbd" aria-hidden="true">
                   Alt+{p.shortcut}
                 </kbd>
@@ -152,12 +145,12 @@ export function AppShell({ initialPage = "welcome" }: { initialPage?: Navigation
           {current.title}
         </h1>
         <ErrorBoundary label="Flight recording notices">
-          <RecorderBanners navigate={navigate} hidden={nav.page === "live" && preferences.opsCenterLayout} />
+          <RecorderBanners navigate={navigate} hidden={nav.page === "live"} />
         </ErrorBoundary>
         <ErrorBoundary key={nav.page} label={current.label}>
           {nav.page === "welcome" && <WelcomePage navigate={navigate} />}
           {nav.page === "dispatch" && <DispatchPage navigate={navigate} />}
-          {nav.page === "live" && <LiveFlightPage navigate={navigate} />}
+          {nav.page === "live" && <OpsCenterPage navigate={navigate} />}
           {nav.page === "history" && <FlightHistoryPage navigate={navigate} />}
           {nav.page === "debrief" && <DebriefPage flightId={nav.debriefFlightId} navigate={navigate} />}
           {nav.page === "expenses" && <ExpensesPage navigate={navigate} />}

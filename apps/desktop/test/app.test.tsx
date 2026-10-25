@@ -32,7 +32,7 @@ describe("navigation", () => {
     await renderApp();
     const nav = screen.getByRole("navigation", { name: "Primary" });
     const items = within(nav).getAllByRole("button");
-    expect(items.map((b) => b.textContent?.replace(/Alt\+\d/, ""))).toEqual(["Connection", "Dispatch", "Live Flight", "Flight History", "Debrief", "Receipts & Expenses", "Settings"]);
+    expect(items.map((b) => b.getAttribute("aria-label"))).toEqual(["Connection", "Dispatch", "Live Flight", "Flight History", "Debrief", "Receipts & Expenses", "Settings"]);
     expect(within(nav).getByRole("button", { name: /Connection/ })).toHaveAttribute("aria-current", "page");
 
     for (const [label, heading] of [["Dispatch", "Dispatch"], ["Live Flight", "Live flight"], ["Flight History", "Flight history"], ["Debrief", "Flight debrief"], ["Receipts & Expenses", "Receipts & simulated expenses"], ["Settings", "Settings & diagnostics"], ["Connection", "Welcome & connection"]] as const) {
@@ -103,16 +103,20 @@ describe("welcome / connection", () => {
 });
 
 describe("live flight", () => {
+  const tiles = () => within(screen.getByRole("list", { name: "Key flight values" })).getAllByRole("listitem");
+  const header = () => screen.getByRole("region", { name: "Flight" });
+
   it("shows an honest empty state without telemetry", async () => {
     await renderApp({ page: "live" });
-    expect(screen.getByText("No live telemetry")).toBeInTheDocument();
-    const strip = screen.getByRole("region", { name: "Flight summary" });
-    expect(within(strip).getByText("No flight in progress")).toBeInTheDocument();
-    expect(within(strip).getByText("Not detected")).toBeInTheDocument();
-    // The operations timeline does not claim detections without a flight.
-    const milestones = screen.getByRole("list", { name: "Operational milestones" });
-    expect(within(milestones).queryByText("Not detected")).toBeNull();
-    expect(within(milestones).getAllByText("No flight in progress")).toHaveLength(4);
+    expect(within(header()).getAllByText("Not recording").length).toBeGreaterThan(0);
+    expect(within(header()).getByText("Simulator not connected")).toBeInTheDocument();
+    expect(within(header()).getByRole("button", { name: "Go to connection" })).toBeInTheDocument();
+    // Tiles say there is no data rather than showing zeros.
+    expect(tiles()[1]).toHaveTextContent("Unavailable");
+    expect(tiles()[1]).toHaveTextContent("No data from the simulator yet");
+    // The milestones claim no detections without a flight.
+    const cells = within(screen.getByRole("list", { name: "OUT, OFF, ON and IN" })).getAllByRole("listitem");
+    expect(cells.map((c) => c.textContent)).toEqual(["OUT—No flight in progress", "OFF—No flight in progress", "ON—No flight in progress", "IN—No flight in progress"]);
   });
 
   it("shows values with units and Unavailable for missing readings", async () => {
@@ -126,37 +130,45 @@ describe("live flight", () => {
         d.readings.radio_altitude_ft = { value: 0, unit: "ft", quality: "ok" };
       }),
     );
-    const fuel = screen.getByText("Total fuel on board").closest(".metric")!;
+    const fuel = tiles()[1]!;
     expect(fuel).toHaveTextContent("Unavailable");
-    expect(fuel).not.toHaveTextContent("0");
-    expect(screen.getByText(/does not report fuel quantity/)).toBeInTheDocument();
-    const alt = screen.getByText("Indicated altitude").closest(".metric")!;
-    expect(alt).toHaveTextContent("433");
-    expect(alt).toHaveTextContent("ft");
-    expect(screen.getByText("Radio altitude").closest(".metric")).toHaveTextContent("0 ft");
-    expect(screen.getByText(/2026-10-10 21:00:00Z/)).toBeInTheDocument();
-    expect(screen.getByText(/^Live · updated/)).toBeInTheDocument();
+    expect(fuel).not.toHaveTextContent(/\b0\b/);
+    expect(fuel).toHaveTextContent("This aircraft doesn't report fuel quantity. Fuel is never estimated.");
+    // Every reading, with units, is under Flight details; a real 0 stays 0.
+    const details = screen.getByText("Flight details").closest("details")!;
+    await act(async () => {
+      details.open = true;
+      details.dispatchEvent(new Event("toggle"));
+    });
+    const row = (label: string) => within(details).getByRole("rowheader", { name: label }).closest("tr")!;
+    expect(row("Indicated altitude")).toHaveTextContent(/433 ft/);
+    expect(row("Radio altitude")).toHaveTextContent("0 ftMeasured");
+    expect(row("Total fuel on board")).toHaveTextContent("UnavailableNot reported");
+    expect(within(details).getByText(/observed 2026-10-10 21:00:00Z · Live · updated/)).toBeInTheDocument();
   });
 
   it("marks telemetry stale when the bridge reports STALE", async () => {
     const { transport } = await renderApp({ page: "live" });
     await send(transport, helloOk(), connState("CONNECTED"), frame(1), connState("STALE", { since: "2026-10-10T21:00:05Z", reason: { code: "frame_timeout", message: "No telemetry for 2 s." } }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Telemetry is stale");
-    expect(screen.getByText(/^Stale · last update/)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/No new data from the simulator for .*Values shown are the last ones received and are marked as old/);
+    expect(tiles()[2]).toHaveTextContent(/s old/);
   });
 
   it("does not present the last frame as current after the bridge process drops", async () => {
     const { transport } = await renderApp({ page: "live" });
     await send(transport, helloOk(), connState("CONNECTED"), frame(1));
     await act(async () => transport.emitShell({ state: "restarting", message: "Sim bridge exited", attempt: 1 }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Telemetry is stale");
-    expect(screen.getByText(/simulator not connected/)).toBeInTheDocument();
+    expect(within(header()).getByText("Simulator not connected")).toBeInTheDocument();
+    expect(within(header()).getByRole("button", { name: "Go to connection" })).toBeInTheDocument();
+    expect(tiles()[2]).toHaveTextContent(/s old/); // the last value stays visible, marked as old
+    expect(screen.getByRole("button", { name: "Go to connection" })).toBeInTheDocument();
   });
 
   it("drops invalid frames instead of rendering them", async () => {
     const { transport } = await renderApp({ page: "live" });
     await send(transport, helloOk(), connState("CONNECTED"), frame(1, (d) => (d.readings.lat_deg = { value: 91, unit: "deg", quality: "ok" })));
-    expect(screen.getByText("No live telemetry")).toBeInTheDocument();
+    expect(tiles()[1]).toHaveTextContent("No data from the simulator yet");
+    expect(screen.queryByRole("button", { name: "Start flight" })).toBeNull();
   });
 });
 
@@ -345,27 +357,32 @@ describe("flight lifecycle controls", () => {
     return { ...r, store };
   }
 
+  const more = () => {
+    fireEvent.click(screen.getByRole("button", { name: "More ▾" }));
+    return screen.getByRole("list", { name: "More flight actions" });
+  };
+
   it("enables Start only with live telemetry and a ready database, then records the flight", async () => {
     const { transport, store } = await connected();
     const start = screen.getByRole("button", { name: "Start flight" });
     expect(start).toBeEnabled();
-    expect(screen.queryByRole("button", { name: /End flight/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "More ▾" })).toBeNull(); // nothing else to do before a flight
     expect(screen.queryByRole("button", { name: "Confirm completion" })).toBeNull();
     fireEvent.click(start);
     await act(flush);
     await send(transport, liveFrame(2));
-    expect(screen.getByText("● RECORDING")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "End flight…" })).toBeEnabled();
+    expect(screen.getByText(/^● Recording/)).toBeInTheDocument();
+    expect(within(more()).getByRole("button", { name: "End flight…" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "Start flight" })).toBeNull();
     expect(store.flights.size).toBe(1);
-    expect(screen.getByText("Preparing (detected)")).toBeInTheDocument();
+    expect(screen.getByText("At gate")).toBeInTheDocument(); // detected phase, shown as an operational phase
   });
 
   it("asks for explicit confirmation before completing a flight without landing evidence", async () => {
     const { store } = await connected();
     fireEvent.click(screen.getByRole("button", { name: "Start flight" }));
     await act(flush);
-    fireEvent.click(screen.getByRole("button", { name: "End flight…" }));
+    fireEvent.click(within(more()).getByRole("button", { name: "End flight…" }));
     const dialog = screen.getByRole("dialog", { name: "End this flight?" });
     expect(dialog).toHaveTextContent("No takeoff or landing was detected.");
     const markAnyway = within(dialog).getByRole("button", { name: "Mark completed anyway" });
@@ -374,20 +391,22 @@ describe("flight lifecycle controls", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect([...store.flights.values()][0]!.status).toBe("active");
 
-    fireEvent.click(screen.getByRole("button", { name: "End flight…" }));
+    fireEvent.click(within(more()).getByRole("button", { name: "End flight…" }));
     fireEvent.click(screen.getByRole("checkbox", { name: /I confirm this flight was completed/ }));
     fireEvent.click(screen.getByRole("button", { name: "Mark completed anyway" }));
     await act(flush);
     await act(flush);
     expect([...store.flights.values()][0]).toMatchObject({ status: "completed", completion: "user_confirmed_without_evidence" });
-    expect(screen.getByRole("button", { name: "View debrief" })).toBeInTheDocument();
+    // The flight is closed: the phase says so, a new flight can start, and the debrief is one click away.
+    expect(screen.getByText("Last flight completed")).toBeInTheDocument();
+    expect(within(more()).getByRole("button", { name: "Open debrief" })).toBeInTheDocument();
   });
 
   it("can end a flight as incomplete", async () => {
     const { store } = await connected();
     fireEvent.click(screen.getByRole("button", { name: "Start flight" }));
     await act(flush);
-    fireEvent.click(screen.getByRole("button", { name: "End flight…" }));
+    fireEvent.click(within(more()).getByRole("button", { name: "End flight…" }));
     fireEvent.click(screen.getByRole("button", { name: "End as incomplete" }));
     await act(flush);
     await act(flush);
@@ -436,8 +455,8 @@ describe("flight lifecycle controls", () => {
     store.statusValue = { state: "unavailable", kind: "corrupt", message: "The flight database is damaged and cannot be read.", location: "C:/Users/p/AppData/Roaming/dev.flightsimapp.desktop/flightsim.db", canReset: true };
     const { transport } = await renderApp({ page: "live", store });
     await send(transport, helloOk(), connState("CONNECTED"), liveFrame(1));
-    expect(screen.getByText(/Flight recording is unavailable/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start flight" })).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent(/Flight recording is unavailable/);
+    expect(screen.queryByRole("button", { name: "Start flight" })).toBeNull(); // not offered without a database
     fireEvent.click(screen.getByRole("button", { name: "Move damaged database aside…" }));
     expect(screen.getByRole("dialog")).toHaveTextContent("renamed (not deleted)");
     fireEvent.click(screen.getByRole("button", { name: "Move aside and start a new database" }));

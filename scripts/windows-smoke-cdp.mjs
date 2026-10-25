@@ -71,7 +71,8 @@ const textIncludes = (s) => `document.body.innerText.includes(${JSON.stringify(s
 async function click(label) {
   const ok = await evaluate(`(() => {
     const els = [...document.querySelectorAll('button, a, label')];
-    const el = els.find((e) => e.innerText.trim() === ${JSON.stringify(label)} || e.innerText.trim().startsWith(${JSON.stringify(label)}));
+    // Visible text, or the accessible name (the side navigation shows short labels below 1440 px).
+    const el = els.find((e) => e.getAttribute("aria-label") === ${JSON.stringify(label)} || e.innerText.trim() === ${JSON.stringify(label)} || e.innerText.trim().startsWith(${JSON.stringify(label)}));
     if (!el || el.disabled) return false;
     el.click();
     return true;
@@ -83,7 +84,7 @@ async function screenshot(name) {
   const r = await send("Page.captureScreenshot", { format: "png" });
   if (r.result?.data) writeFileSync(join(outDir, `${name}.png`), Buffer.from(r.result.data, "base64"));
 }
-const nav = (page) => click(page); // sidebar buttons: "Connection", "Live Flight", "Flight History", "Debrief", "Settings"
+const nav = (page) => click(page); // sidebar buttons by name: "Connection", "Live Flight", "Flight History", "Debrief", "Settings"
 // Settings keeps the diagnostic report and raw adapter status in a collapsed section; open it when it is closed.
 async function showDiagnostics() {
   if (await evaluate(textIncludes("Show advanced diagnostics"))) await click("Show advanced diagnostics");
@@ -121,10 +122,12 @@ try {
     await click("Start flight");
     result.checks.flight_started = true;
     await screenshot("03-flight-started");
-    await waitFor("arrival detected (Confirm completion offered)", `[...document.querySelectorAll('button')].some((b) => b.innerText.trim() === 'Confirm completion')`, 9 * 60_000);
+    // Parked after landing, Record IN (on-block) is the primary action and Confirm completion is under More.
+    await waitFor("arrival detected (Record IN or Confirm completion offered)", `[...document.querySelectorAll('button')].some((b) => ['Confirm completion', 'Record IN (on-block)'].includes(b.innerText.trim()))`, 9 * 60_000);
     await screenshot("04-arrival-detected");
+    if (!(await evaluate(`[...document.querySelectorAll('button')].some((b) => b.innerText.trim() === 'Confirm completion')`))) await click("More ▾");
     await click("Confirm completion");
-    await waitFor("flight completed", textIncludes("Completed") || textIncludes("completed"), 30_000);
+    await waitFor("flight completed", `${textIncludes("Last flight completed")} || ${textIncludes("Flight completed and saved.")}`, 30_000);
     await nav("Flight History");
     await waitFor("history lists a completed flight", textIncludes("Completed"), 30_000);
     result.checks.flight_completed_and_listed = true;

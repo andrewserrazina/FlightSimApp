@@ -86,12 +86,6 @@ export function SettingsPage() {
             description={`If no frame arrives for this long, values are shown as stale (${STALE_MIN_S}–${STALE_MAX_S} s). The bridge also reports STALE on its own.`}
           />
           <CheckboxField label="Show local time next to UTC" checked={preferences.showLocalTime} onChange={(v) => update({ showLocalTime: v })} description="UTC is always shown. All recorded times are stored in UTC." />
-          <CheckboxField
-            label="New Live Flight layout (preview)"
-            checked={preferences.opsCenterLayout}
-            onChange={(v) => update({ opsCenterLayout: v })}
-            description="Try the operations-center layout for Live Flight while it is being built. Off by default; the classic layout stays available."
-          />
           <p className="muted" role="status">
             {persisted ? (stored ? "Preferences are saved on this computer." : "Using defaults. Changes are saved automatically.") : "Preferences could not be saved on this computer."}
           </p>

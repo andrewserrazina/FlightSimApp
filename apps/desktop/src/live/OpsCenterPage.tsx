@@ -1,9 +1,7 @@
 /**
- * Live Flight, operations-center preview (Ops Center L4–L5, opt-in). The header, metric tiles,
- * route card and milestone strip replace the classic Operations, Route monitoring and live-reading
- * panels, and the Ground services card (L6) replaces the classic Turnaround panel; the aircraft, the
- * plan baseline and every raw reading stay available under Flight details (L7). The classic page
- * stays the default.
+ * Live Flight (Ops Center layout; the default since L8). Header with identity, one primary action
+ * and operational health; metric tiles, route card and milestone strip; the Ground services card;
+ * and Flight details with the aircraft, the plan baseline and every raw reading.
  */
 import type { NavigateFn } from "../app/navigation";
 import { ErrorBoundary } from "../ui/ErrorBoundary";
@@ -53,7 +51,6 @@ function OpsCenterBody({ navigate }: { navigate: NavigateFn }) {
           </ErrorBoundary>
         </div>
       </div>
-      <p className="ops-preview-note">Preview layout. The classic Live Flight page remains the default.</p>
     </>
   );
 }
